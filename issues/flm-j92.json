@@ -2,13 +2,14 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-01T21:39:47Z",
   "created": "2026-05-01T19:28:20Z",
   "description": "A test support library that lets Filament components be tested at four levels of fidelity:\n\n  Rung 1 — Domain logic: plain ExUnit, pure OTP. No Filament infrastructure needed.\n             (Not a track ticket — already covered by unit tests in Tracks B/C/D/E.)\n\n  Rung 2 — Component isolated (F1): mount a single fiber, drive it with\n             click/submit, assert on rendered HTML. No WebSocket. Observable\n             dependencies replaced by stubs (F4).\n\n  Rung 3 — Subtree + real observable (F2): like Rung 2 but with a real\n             (test-started) observable GenServer. update/1 drains messages;\n             eventually/2 retries assertions with a timeout.\n\n  Rung 4 — End-to-end (F3): thin wrapper around Phoenix.LiveViewTest for\n             full LiveView integration tests.\n\n  Stub builder (F4): Filament.Test.StubObservable + Filament.Test.Stub API +\n             observable_stubs injection at mount time.\n\nExecution order: F4 (stub infra) → F1 (Rung 2) → F2 (Rung 3) → F3 (Rung 4).\n\nBuild plan: filament/.tmp/plan.html § Track F\n\nPrerequisites:\n  Track B fully merged (flm-t8j — all closed ✓)\n  Track C fully merged (flm-oue — all closed ✓)\n  Track D D4 merged (flm-hom.4) before F4 can modify use_observable/3\n  Track E E3 merged (flm-zoc.3) before F1 can test event dispatch\n\nF is on the critical path — Track H (tests) imports Track G (examples) which use\nthe Filament.Test API delivered here.",
   "id": "flm-j92",
   "labels": [],
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Track F: Test harness — four-rung test API for Filament components",
   "type": "task",
-  "updated_at": "2026-05-01T21:01:24Z"
+  "updated_at": "2026-05-01T21:39:47Z"
 }
