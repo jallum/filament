@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-01T17:49:11Z",
+  "description": "Implements the three UI-state hooks that give Filament components local, ephemeral state: use_state, use_memo, and use_effect. These hooks are SERVER-SIDE equivalents of React hooks — they run during the component render pass on the LiveView process, store state in the fiber tree, and trigger re-renders by messaging the owning LiveView process.\n\nTRACK C ONLY COVERS UI STATE. Domain state (GenServer observations) is Track D.\n\n## Prerequisites — Track B must be fully merged before any C ticket begins\n\nTrack B delivers these files (DO NOT recreate them — modify in place):\n  lib/filament/fiber.ex           — %Filament.Fiber{} struct\n  lib/filament/vnode.ex           — VNode IR types\n  lib/filament/component.ex       — defcomponent macro, Filament.Component behaviour\n  lib/filament/sigil_f.ex         — ~F sigil\n  lib/filament/html_engine.ex     — Filament.HTMLEngine tag handler\n  lib/filament/render_context.ex  — %Filament.RenderContext{}\n  lib/filament/renderer.ex        — Filament.Renderer.render/3\n  lib/filament/reconciler.ex      — Filament.Reconciler (mount/2, update/3, unmount/1)\n  lib/filament/reconciler_error.ex\n  lib/filament/live_view.ex       — Filament.LiveView adapter (use Filament.LiveView)\n  test/support/fixtures/          — HelloComponent, WrapperComponent, CounterComponent, ParentComponent\n\n## Project root\n/Users/j5n/Workspace/filament/filament/\n\n## Key LiveView API used in this track\n  attach_hook(socket, :filament_effects, :after_render, fn socket -\u003e socket end)\n  Attaches a lifecycle hook. The function receives and must return the socket.\n  Available since phoenix_live_view 0.20. Confirmed present in ~\u003e 1.0.\n  Source: deps/phoenix_live_view/lib/phoenix_live_view/lifecycle.ex\n\n## The hooks rules (document in Filament.Hooks moduledoc)\n  1. Only call hooks at the top level of render/1 — never inside conditionals or loops.\n  2. Only call hooks during a component render pass — never in event handlers or effect bodies.\n  3. Hooks are identified by call ORDER. The same hook called in the same position always\n     receives the same slot index. Violating rule 1 shifts all subsequent indices.\n  Track C does not enforce these rules at runtime (deferred). They are documented and trusted.\n\n## Delivery order\n  C1 (slot infrastructure) → C2 (use_state) and C3 (use_memo) in parallel → C4 (use_effect)\n\n## Deviation policy\n  Any deviation from a ticket's spec requires prior approval. Stop work, run\n  'bw comment \u003cid\u003e \"...\"' describing the conflict, set the ticket back to open with\n  'bw reopen \u003cid\u003e', and await guidance. Do not improvise.",
+  "id": "flm-oue",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "Track C: UI state hooks",
+  "type": "epic",
+  "updated_at": "2026-05-01T17:49:11Z"
+}
