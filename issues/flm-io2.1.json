@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-01T14:55:03Z",
   "created": "2026-05-01T14:30:38Z",
   "description": "Run `mix new filament --module Filament`. Set up the supervision tree (Filament.Application), pin dependencies (phoenix_live_view, phoenix), configure mix.exs with the correct Elixir/OTP version floors (Elixir ~\u003e 1.17, OTP 26+). Add .gitignore covering .tmp/, _build/, deps/. Verify `mix compile` is clean.",
   "id": "flm-io2.1",
   "labels": [],
   "parent": "flm-io2",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "A1: Mix project scaffold",
   "type": "task",
-  "updated_at": "2026-05-01T14:53:10Z"
+  "updated_at": "2026-05-01T14:55:03Z"
 }
