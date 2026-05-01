@@ -1,6 +1,19 @@
 defmodule Filament.LiveViewTest do
   use ExUnit.Case, async: false
 
+  alias Phoenix.LiveView.Socket
+
+  # Helper: create a socket with proper lifecycle structures for attach_hook
+  defp test_socket(assigns) do
+    %Socket{
+      assigns: Map.merge(%{__changed__: %{}}, assigns),
+      private: %{
+        live_temp: %{},
+        lifecycle: Phoenix.LiveView.Lifecycle.__struct__()
+      }
+    }
+  end
+
   # Define test modules inline
   defmodule CounterComponent do
     use Filament.Component
@@ -52,9 +65,7 @@ defmodule Filament.LiveViewTest do
   describe "render/1" do
     test "returns valid Phoenix.LiveView.Rendered struct" do
       # Simulate mount
-      socket = %Phoenix.LiveView.Socket{
-        assigns: %{count: 5, __changed__: %{}}
-      }
+      socket = test_socket(%{count: 5})
 
       {:ok, socket} = CounterLiveView.mount(%{}, %{}, socket)
 
@@ -67,9 +78,7 @@ defmodule Filament.LiveViewTest do
     end
 
     test "rendered html contains no filament debug artifacts" do
-      socket = %Phoenix.LiveView.Socket{
-        assigns: %{count: 0, __changed__: %{}}
-      }
+      socket = test_socket(%{count: 0})
 
       {:ok, socket} = CounterLiveView.mount(%{}, %{}, socket)
 
@@ -83,9 +92,7 @@ defmodule Filament.LiveViewTest do
 
   describe "mount/3" do
     test "assigns _filament_tree and _filament_rendered" do
-      socket = %Phoenix.LiveView.Socket{
-        assigns: %{count: 0, __changed__: %{}}
-      }
+      socket = test_socket(%{count: 0})
 
       {:ok, socket} = CounterLiveView.mount(%{}, %{}, socket)
 
@@ -95,12 +102,13 @@ defmodule Filament.LiveViewTest do
 
       assert Map.has_key?(socket.assigns, :_filament_rendered)
       assert %Phoenix.LiveView.Rendered{} = socket.assigns._filament_rendered
+
+      assert Map.has_key?(socket.assigns, :_filament_pending_effects)
+      assert socket.assigns._filament_pending_effects == []
     end
 
     test "passes props from socket.assigns to component" do
-      socket = %Phoenix.LiveView.Socket{
-        assigns: %{count: 42, __changed__: %{}}
-      }
+      socket = test_socket(%{count: 42})
 
       {:ok, socket} = CounterLiveView.mount(%{}, %{}, socket)
 
@@ -116,7 +124,8 @@ defmodule Filament.LiveViewTest do
           _filament_tree: %{},
           _filament_rendered: %Phoenix.LiveView.Rendered{},
           __changed__: %{}
-        }
+        },
+        private: %{live_temp: %{}, lifecycle: Phoenix.LiveView.Lifecycle.__struct__()}
       }
 
       assert {:noreply, _socket} = CounterLiveView.handle_event("filament:test", %{}, socket)
@@ -128,8 +137,10 @@ defmodule Filament.LiveViewTest do
           count: 0,
           _filament_tree: %{"root" => %{component: CounterComponent.Counter, props: %{count: 0}}},
           _filament_rendered: %Phoenix.LiveView.Rendered{},
+          _filament_pending_effects: [],
           __changed__: %{}
-        }
+        },
+        private: %{live_temp: %{}, lifecycle: Phoenix.LiveView.Lifecycle.__struct__()}
       }
 
       # Counter component doesn't define handle_event, so this should be a noop
@@ -145,7 +156,8 @@ defmodule Filament.LiveViewTest do
           _filament_tree: %{},
           _filament_rendered: %Phoenix.LiveView.Rendered{},
           __changed__: %{}
-        }
+        },
+        private: %{live_temp: %{}, lifecycle: Phoenix.LiveView.Lifecycle.__struct__()}
       }
 
       assert {:noreply, _socket} =

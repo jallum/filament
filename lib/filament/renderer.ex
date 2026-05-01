@@ -14,46 +14,54 @@ defmodule Filament.Renderer do
 
   ## Algorithm
   1. Validate props via __validate_props__!
-  2. Set render context in process dictionary
+  2. Set render context in process dictionary (reset hook_index, new_hook_slots, pending_effects)
   3. Call component.render(props)
-  4. Collect new fibers from context
+  4. Collect new fibers, hook slots, and effects from context
   5. Clear render context
-  6. Return %Phoenix.LiveView.Rendered{}
+  6. Return {Rendered, new_hook_slots, pending_effects, new_fibers}
   """
-  @spec render(module(), map(), RenderContext.t()) :: Phoenix.LiveView.Rendered.t()
+  @spec render(module(), map(), RenderContext.t()) ::
+          {Phoenix.LiveView.Rendered.t(), %{non_neg_integer() => term()}, list(),
+           %{String.t() => Fiber.t()}}
   def render(component_module, props, %RenderContext{} = context) do
     # Validate props
     if function_exported?(component_module, :__validate_props__!, 1) do
       component_module.__validate_props__!(props)
     end
 
-    # Save current context (if any) and set new context
-    previous_context = Process.get(:filament_render_context)
-    Process.put(:filament_render_context, %{context | hook_index: 0})
+    # Save current context (if any) and set new context with reset state
+    Process.put(:filament_render_context, %{
+      context
+      | hook_index: 0,
+        new_hook_slots: %{},
+        pending_effects: []
+    })
 
     try do
       # Call render/1
       result = component_module.render(props)
 
       # If render returns a vnode instead of Rendered, recursively render it
-      case result do
-        %Phoenix.LiveView.Rendered{} ->
-          result
+      rendered =
+        case result do
+          %Phoenix.LiveView.Rendered{} ->
+            result
 
-        vnode when is_tuple(vnode) ->
-          render_vnode(vnode, context)
+          vnode when is_tuple(vnode) ->
+            render_vnode(vnode, context)
 
-        _ ->
-          raise ArgumentError,
-                "render/1 must return %Phoenix.LiveView.Rendered{} or vnode, got: #{inspect(result)}"
-      end
+          _ ->
+            raise ArgumentError,
+                  "render/1 must return %Phoenix.LiveView.Rendered{} or vnode, got: #{inspect(result)}"
+        end
+
+      # Harvest context fields
+      final_ctx = Process.get(:filament_render_context)
+
+      {rendered, final_ctx.new_hook_slots, final_ctx.pending_effects, final_ctx.new_fibers}
     after
-      # Restore or clear context
-      if previous_context do
-        Process.put(:filament_render_context, previous_context)
-      else
-        Process.delete(:filament_render_context)
-      end
+      # Always clear render context after render
+      Process.delete(:filament_render_context)
     end
   end
 
@@ -72,7 +80,9 @@ defmodule Filament.Renderer do
   def render_vnode({:component, mod, props, key}, context) do
     # Generate child fiber ID
     parent_fiber = %Fiber{id: context.fiber_id, component: context.fiber_id}
-    child_id = Fiber.child_id(parent_fiber, mod, if(key, do: {:key, key}, else: {:index, 0}))
+
+    child_id =
+      Fiber.child_id(parent_fiber, mod, if(key, do: {:key, key}, else: {:index, 0}))
 
     # Create child context
     child_context = %{context | fiber_id: child_id}
@@ -109,9 +119,9 @@ defmodule Filament.Renderer do
       iex> {index, _ctx} = Filament.Renderer.next_hook_slot()
       iex> index
       0
-      
+
       iex> {index, _ctx} = Filament.Renderer.next_hook_slot()
-      iex> index  
+      iex> index
       1
   """
   @spec next_hook_slot() :: {non_neg_integer(), RenderContext.t()}

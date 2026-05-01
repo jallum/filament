@@ -17,7 +17,7 @@ defmodule Filament.FiberTest do
           component: TestComponent,
           key: "test-key",
           props: %{value: "test"},
-          hook_slots: [{0, :slot_value}],
+          hook_slots: %{0 => :slot_value},
           children: ["child1", "child2"],
           parent_id: "parent",
           status: :stable
@@ -27,7 +27,7 @@ defmodule Filament.FiberTest do
       assert fiber.component == TestComponent
       assert fiber.key == "test-key"
       assert fiber.props == %{value: "test"}
-      assert fiber.hook_slots == [{0, :slot_value}]
+      assert fiber.hook_slots == %{0 => :slot_value}
       assert fiber.children == ["child1", "child2"]
       assert fiber.parent_id == "parent"
       assert fiber.status == :stable
@@ -40,7 +40,7 @@ defmodule Filament.FiberTest do
       assert fiber.component == TestComponent
       assert fiber.key == nil
       assert fiber.props == %{}
-      assert fiber.hook_slots == []
+      assert fiber.hook_slots == %{}
       assert fiber.children == []
       assert fiber.parent_id == nil
       assert fiber.status == :mounting

@@ -1,4 +1,5 @@
 Code.require_file("../fixtures/counter_component.ex", __DIR__)
+
 defmodule Filament.ReconcilerTest do
   use ExUnit.Case, async: true
 
@@ -7,7 +8,7 @@ defmodule Filament.ReconcilerTest do
 
   describe "mount/2" do
     test "creates initial fiber tree with root fiber" do
-      {tree, rendered} = Reconciler.mount(CounterComponent.Counter, %{count: 0})
+      {tree, rendered, pending_effects} = Reconciler.mount(CounterComponent.Counter, %{count: 0})
 
       assert %{} = tree
       assert Map.has_key?(tree, "root")
@@ -17,10 +18,12 @@ defmodule Filament.ReconcilerTest do
       assert tree["root"].id == "root"
 
       assert %Phoenix.LiveView.Rendered{} = rendered
+      assert pending_effects == []
     end
 
     test "rendered output contains initial state" do
-      {_tree, rendered} = Reconciler.mount(CounterComponent.Counter, %{count: 42})
+      {_tree, rendered, _pending_effects} =
+        Reconciler.mount(CounterComponent.Counter, %{count: 42})
 
       iodata = Phoenix.HTML.Safe.to_iodata(rendered)
       html = IO.iodata_to_binary(iodata)
@@ -29,7 +32,8 @@ defmodule Filament.ReconcilerTest do
     end
 
     test "tree is stable after mount" do
-      {tree, _rendered} = Reconciler.mount(CounterComponent.Counter, %{count: 0})
+      {tree, _rendered, _pending_effects} =
+        Reconciler.mount(CounterComponent.Counter, %{count: 0})
 
       assert tree["root"].status == :stable
     end
@@ -37,9 +41,10 @@ defmodule Filament.ReconcilerTest do
 
   describe "update/3" do
     test "updates fiber props and re-renders" do
-      {tree, _rendered} = Reconciler.mount(CounterComponent.Counter, %{count: 0})
+      {tree, _rendered, _pending_effects1} =
+        Reconciler.mount(CounterComponent.Counter, %{count: 0})
 
-      {new_tree, new_rendered} = Reconciler.update(tree, "root", %{count: 1})
+      {new_tree, new_rendered, _pending_effects2} = Reconciler.update(tree, "root", %{count: 1})
 
       # Check fiber was updated
       assert new_tree["root"].props == %{count: 1}
@@ -52,9 +57,10 @@ defmodule Filament.ReconcilerTest do
     end
 
     test "updates with same props produces stable result" do
-      {tree, rendered1} = Reconciler.mount(CounterComponent.Counter, %{count: 5})
+      {tree, rendered1, _pending_effects1} =
+        Reconciler.mount(CounterComponent.Counter, %{count: 5})
 
-      {new_tree, rendered2} = Reconciler.update(tree, "root", %{count: 5})
+      {new_tree, rendered2, _pending_effects2} = Reconciler.update(tree, "root", %{count: 5})
 
       # Rendered should be equivalent
       html1 = Phoenix.HTML.Safe.to_iodata(rendered1) |> IO.iodata_to_binary()
@@ -78,7 +84,8 @@ defmodule Filament.ReconcilerTest do
     test "tracks children in render context" do
       # This would require a parent component that renders children
       # For B6, we test the basic infrastructure is in place
-      {tree, _rendered} = Reconciler.mount(CounterComponent.Counter, %{count: 0})
+      {tree, _rendered, _pending_effects} =
+        Reconciler.mount(CounterComponent.Counter, %{count: 0})
 
       assert tree["root"].children == []
     end
@@ -86,7 +93,8 @@ defmodule Filament.ReconcilerTest do
 
   describe "update with children" do
     test "captures new fibers from context" do
-      {tree, _rendered} = Reconciler.mount(CounterComponent.Counter, %{count: 0})
+      {tree, _rendered, _pending_effects} =
+        Reconciler.mount(CounterComponent.Counter, %{count: 0})
 
       # Currently new_fibers is not populated by ~F templates
       # This is a known limitation for B6 - child components are resolved inline
@@ -97,7 +105,8 @@ defmodule Filament.ReconcilerTest do
 
   describe "unmount/1" do
     test "returns :ok" do
-      {tree, _rendered} = Reconciler.mount(CounterComponent.Counter, %{count: 0})
+      {tree, _rendered, _pending_effects} =
+        Reconciler.mount(CounterComponent.Counter, %{count: 0})
 
       assert :ok = Reconciler.unmount(tree)
     end

@@ -16,7 +16,7 @@ defmodule Filament.Fiber do
     :component,
     # map()             — current props passed to this fiber
     :props,
-    # list()            — [{slot_index, value}]
+    # %{non_neg_integer() => term()} — hook slot state map
     :hook_slots,
     # [String.t()]      — ordered child fiber IDs
     :children,
@@ -31,7 +31,7 @@ defmodule Filament.Fiber do
           key: term() | nil,
           component: module(),
           props: map(),
-          hook_slots: [{non_neg_integer(), term()}],
+          hook_slots: %{non_neg_integer() => term()},
           children: [String.t()],
           parent_id: String.t() | nil,
           status: :mounting | :stable | :updating | :unmounting
@@ -60,7 +60,7 @@ defmodule Filament.Fiber do
   """
   def new(opts) when is_list(opts) do
     props = Keyword.get(opts, :props, %{})
-    hook_slots = Keyword.get(opts, :hook_slots, [])
+    hook_slots = Keyword.get(opts, :hook_slots, %{})
     children = Keyword.get(opts, :children, [])
     key = Keyword.get(opts, :key)
     parent_id = Keyword.get(opts, :parent_id)

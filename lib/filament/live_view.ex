@@ -16,7 +16,47 @@ defmodule Filament.LiveView do
       end
   """
 
+  alias Filament.Reconciler
+
   @callback root_component() :: module()
+
+  @doc """
+  Runs pending effects accumulated during the render pass.
+  Attached via attach_hook as an :after_render callback.
+  """
+  def run_pending_effects(socket) do
+    effects = Map.get(socket.assigns, :_filament_pending_effects, [])
+
+    if effects == [] do
+      socket
+    else
+      # Run each effect and collect cleanup functions
+      {cleanups, socket} =
+        Enum.reduce(effects, {[], socket}, fn
+          {slot_index, fiber_id, effect_fn, deps}, {acc_cleanups, acc_socket} ->
+            cleanup = effect_fn.()
+            {[{slot_index, fiber_id, cleanup, deps} | acc_cleanups], acc_socket}
+        end)
+
+      # Store cleanup fns back into hook_slots of their respective fibers
+      tree = socket.assigns._filament_tree
+
+      new_tree =
+        Enum.reduce(cleanups, tree, fn
+          {_index, _fiber_id, nil, _deps}, t ->
+            t
+
+          {index, fiber_id, cleanup_fn, deps}, t ->
+            fiber = t[fiber_id]
+            new_slots = Map.put(fiber.hook_slots, index, {deps, cleanup_fn})
+            Map.put(t, fiber_id, %{fiber | hook_slots: new_slots})
+        end)
+
+      socket
+      |> Phoenix.Component.assign(:_filament_tree, new_tree)
+      |> Phoenix.Component.assign(:_filament_pending_effects, [])
+    end
+  end
 
   defmacro __using__(_opts) do
     quote do
@@ -29,12 +69,21 @@ defmodule Filament.LiveView do
       def mount(_params, _session, socket) do
         component = root_component()
         props = build_props(socket)
-        {tree, rendered} = Filament.Reconciler.mount(component, props)
+        {tree, rendered, pending_effects} = Reconciler.mount(component, props, owner_pid: self())
 
         socket =
           socket
           |> Phoenix.Component.assign(:_filament_tree, tree)
           |> Phoenix.Component.assign(:_filament_rendered, rendered)
+          |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)
+
+        socket =
+          Phoenix.LiveView.attach_hook(
+            socket,
+            :filament_effects,
+            :after_render,
+            &Filament.LiveView.run_pending_effects/1
+          )
 
         {:ok, socket}
       end
@@ -44,6 +93,7 @@ defmodule Filament.LiveView do
         excludes = [
           :_filament_tree,
           :_filament_rendered,
+          :_filament_pending_effects,
           :flash,
           :live_action,
           :socket,
@@ -83,13 +133,14 @@ defmodule Filament.LiveView do
                 {new_props, _} =
                   root_fiber.component.handle_event(event, params, root_fiber.props)
 
-                {new_tree, rendered} = Filament.Reconciler.update(tree, "root", new_props)
+                {new_tree, rendered, pending_effects} =
+                  Reconciler.update(tree, "root", new_props, owner_pid: self())
 
                 {:noreply,
-                 Phoenix.Component.assign(socket,
-                   _filament_tree: new_tree,
-                   _filament_rendered: rendered
-                 )}
+                 socket
+                 |> Phoenix.Component.assign(:_filament_tree, new_tree)
+                 |> Phoenix.Component.assign(:_filament_rendered, rendered)
+                 |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
 
               false ->
                 {:noreply, socket}

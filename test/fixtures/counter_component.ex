@@ -5,7 +5,7 @@ defmodule Filament.Fixtures.CounterComponent do
   use Filament.Component
 
   defcomponent Counter do
-    prop :count, :integer, required: true
+    prop(:count, :integer, required: true)
 
     def render(assigns) do
       ~F"""

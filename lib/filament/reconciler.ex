@@ -12,9 +12,15 @@ defmodule Filament.Reconciler do
 
   @doc """
   Mounts the root component and creates the initial fiber tree.
+
+  ## Options
+    * `:owner_pid` - the LiveView process that owns this render tree (default: nil)
   """
-  @spec mount(module(), map()) :: {fiber_tree(), Phoenix.LiveView.Rendered.t()}
-  def mount(root_component, props) do
+  @spec mount(module(), map(), keyword()) ::
+          {fiber_tree(), Phoenix.LiveView.Rendered.t(), list()}
+  def mount(root_component, props, opts \\ []) do
+    owner_pid = Keyword.get(opts, :owner_pid)
+
     # Create root fiber
     root_fiber =
       Fiber.new(
@@ -28,29 +34,38 @@ defmodule Filament.Reconciler do
     context = %RenderContext{
       fiber_id: "root",
       fiber_tree: %{},
-      new_fibers: %{}
+      owner_pid: owner_pid
     }
 
     # Render the component
-    rendered = Renderer.render(root_component, props, context)
+    {rendered, new_hook_slots, pending_effects, new_fibers} =
+      Renderer.render(root_component, props, context)
 
     # Build initial tree with root and any discovered children
+    root_fiber = %{root_fiber | hook_slots: new_hook_slots, status: :stable}
+
     tree =
-      %{"root" => %{root_fiber | status: :stable}}
-      |> Map.merge(context.new_fibers)
+      %{"root" => root_fiber}
+      |> Map.merge(new_fibers)
       |> Enum.map(fn {id, fiber} ->
         {id, %{fiber | status: :stable}}
       end)
       |> Map.new()
 
-    {tree, rendered}
+    {tree, rendered, pending_effects}
   end
 
   @doc """
   Updates a fiber with new props and reconciles children.
+
+  ## Options
+    * `:owner_pid` - the LiveView process that owns this render tree (default: nil)
   """
-  @spec update(fiber_tree(), String.t(), map()) :: {fiber_tree(), Phoenix.LiveView.Rendered.t()}
-  def update(tree, fiber_id, new_props) do
+  @spec update(fiber_tree(), String.t(), map(), keyword()) ::
+          {fiber_tree(), Phoenix.LiveView.Rendered.t(), list()}
+  def update(tree, fiber_id, new_props, opts \\ []) do
+    owner_pid = Keyword.get(opts, :owner_pid)
+
     # Fetch fiber
     fiber =
       Map.get(tree, fiber_id) ||
@@ -63,21 +78,25 @@ defmodule Filament.Reconciler do
     context = %RenderContext{
       fiber_id: fiber_id,
       fiber_tree: tree,
-      new_fibers: %{}
+      owner_pid: owner_pid
     }
 
     # Re-render component
-    rendered = Renderer.render(fiber.component, new_props, context)
+    {rendered, new_hook_slots, pending_effects, new_fibers} =
+      Renderer.render(fiber.component, new_props, context)
+
+    # Commit hook slots
+    updated_fiber = %{updated_fiber | hook_slots: new_hook_slots}
 
     # Create new tree with updated fiber
     new_tree = Map.put(tree, fiber_id, updated_fiber)
 
     # Reconcile children
     final_tree =
-      reconcile_children(new_tree, fiber_id, updated_fiber, context)
+      reconcile_children(new_tree, fiber_id, updated_fiber, new_fibers)
       |> Map.update!(fiber_id, &%{&1 | status: :stable})
 
-    {final_tree, rendered}
+    {final_tree, rendered, pending_effects}
   end
 
   @doc """
@@ -96,12 +115,12 @@ defmodule Filament.Reconciler do
 
   # Private reconciliation functions
 
-  defp reconcile_children(tree, parent_id, parent_fiber, context) do
+  defp reconcile_children(tree, parent_id, parent_fiber, new_fibers) do
     # For now, we rely on components registering themselves during render
     # In a full implementation, we'd parse the rendered output to find child components
 
     new_children =
-      context.new_fibers
+      new_fibers
       |> Map.new(fn {id, fiber} ->
         {id, %{fiber | parent_id: parent_id, status: :stable}}
       end)
