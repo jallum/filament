@@ -24,6 +24,20 @@ defmodule Filament.Renderer do
           {Phoenix.LiveView.Rendered.t(), %{non_neg_integer() => term()}, list(),
            %{String.t() => Fiber.t()}, %{non_neg_integer() => function()}}
   def render(component_module, props, %RenderContext{} = context) do
+    # Apply prop defaults for any props not supplied
+    props =
+      if function_exported?(component_module, :__props__, 0) do
+        Enum.reduce(component_module.__props__(), props, fn {name, meta}, acc ->
+          if Map.has_key?(acc, name) or meta.default == :__NO_DEFAULT__ do
+            acc
+          else
+            Map.put(acc, name, meta.default)
+          end
+        end)
+      else
+        props
+      end
+
     # Validate props
     if function_exported?(component_module, :__validate_props__!, 1) do
       component_module.__validate_props__!(props)
