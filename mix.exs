@@ -9,9 +9,14 @@ defmodule Filament.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       docs: docs(),
-      package: package()
+      package: package(),
+      elixirc_paths: elixirc_paths(Mix.env())
     ]
   end
+
+  # Include test/support for all Mix environments to avoid ExUnit pattern warnings
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   # Configure test paths to avoid ExUnit warnings for fixture/support files
   def cli do

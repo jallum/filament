@@ -289,8 +289,8 @@ defmodule Filament.Observable.GenServerTest do
   test "13. multiple subscribers with different projections" do
     {:ok, pid} = ProjectionCounter.start_link(0)
 
-    # Use a separate process as one subscriber so both are stored
-    {:ok, agent} = Agent.start(fn -> nil end)
+    # Use a simple sleeping process as one subscriber so both are stored
+    other = spawn(fn -> Process.sleep(:infinity) end)
 
     # Subscriber A: pass-through (via self)
     assert {:ok, _} =
@@ -301,10 +301,10 @@ defmodule Filament.Observable.GenServerTest do
                project: & &1
              })
 
-    # Subscriber B: bool projection (via agent)
+    # Subscriber B: bool projection (via sleeping process)
     assert {:ok, _} =
              Observable.subscribe(pid, :any, %Subscriber{
-               pid: agent,
+               pid: other,
                fiber_id: :b,
                slot_index: 0,
                project: fn n -> n > 5 end
@@ -317,23 +317,14 @@ defmodule Filament.Observable.GenServerTest do
     # Nothing else for us
     refute_receive {:filament_observable_update, :me, 0, _}, 50
 
-    # Set to 4: me gets update (4 !== 3), B's agent gets nothing (false === false)
+    # Set to 4: me gets update (4 !== 3), B's other process gets nothing (false === false)
     ProjectionCounter.set(pid, 4)
     assert_receive {:filament_observable_update, :me, 0, 4}, 200
+
+    Process.exit(other, :kill)
   end
 
   # --- Helpers ---
-
-  defp collect_messages(n, timeout) do
-    for _i <- 1..n do
-      receive do
-        {:filament_observable_update, _, _, _} = msg -> msg
-      after
-        timeout -> nil
-      end
-    end
-    |> Enum.reject(&is_nil/1)
-  end
 
   defp spawn_receiver(parent, _id) do
     spawn(fn ->

@@ -1,5 +1,3 @@
-Code.require_file("../fixtures/counter_component.ex", __DIR__)
-
 defmodule Filament.ReconcilerTest do
   use ExUnit.Case, async: true
 

@@ -123,9 +123,15 @@ defmodule Filament.Observable.GenServer do
             if saturated?(depth_result) do
               require Logger
 
+              depth_str =
+                case depth_result do
+                  nil -> "dead"
+                  {:message_queue_len, n} -> "#{n}"
+                end
+
               Logger.warning(
                 "[Filament.Observable] subscriber #{inspect(subscriber.pid)} " <>
-                  "mailbox saturated (depth=#{inspect(depth_result)}), " <>
+                  "mailbox saturated (depth=#{depth_str}/#{@max_mailbox_depth}), " <>
                   "dropping update for fiber #{inspect(subscriber.fiber_id)} slot #{subscriber.slot_index}"
               )
 
