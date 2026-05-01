@@ -101,6 +101,8 @@ defmodule Filament.Observable.GenServer do
 
       # ── notify_observers/1 ───────────────────────────────────────────────
 
+      @max_mailbox_depth Application.compile_env(:filament, :observable_max_mailbox_depth, 100)
+
       @doc """
       Notify all subscribers of a new state value.
 
@@ -116,24 +118,48 @@ defmodule Filament.Observable.GenServer do
 
         new_subs =
           Map.new(subs, fn {pid, subscriber} ->
-            new_projected = subscriber.project.(new_state)
+            depth_result = Process.info(subscriber.pid, :message_queue_len)
 
-            if new_projected !== subscriber.last_projected do
-              send(
-                subscriber.pid,
-                {:filament_observable_update, subscriber.fiber_id, subscriber.slot_index,
-                 new_projected}
+            if saturated?(depth_result) do
+              require Logger
+
+              Logger.warning(
+                "[Filament.Observable] subscriber #{inspect(subscriber.pid)} " <>
+                  "mailbox saturated (depth=#{inspect(depth_result)}), " <>
+                  "dropping update for fiber #{inspect(subscriber.fiber_id)} slot #{subscriber.slot_index}"
               )
 
-              {pid, %{subscriber | last_projected: new_projected}}
-            else
+              send(
+                subscriber.pid,
+                {:filament_observable_resubscribe, subscriber.fiber_id, subscriber.slot_index}
+              )
+
+              # Do NOT update last_projected — next real notification must fire
               {pid, subscriber}
+            else
+              new_projected = subscriber.project.(new_state)
+
+              if new_projected !== subscriber.last_projected do
+                send(
+                  subscriber.pid,
+                  {:filament_observable_update, subscriber.fiber_id, subscriber.slot_index,
+                   new_projected}
+                )
+
+                {pid, %{subscriber | last_projected: new_projected}}
+              else
+                {pid, subscriber}
+              end
             end
           end)
 
         Process.put(:__filament_subscribers__, new_subs)
         :ok
       end
+
+      defp saturated?(nil), do: true
+      defp saturated?({:message_queue_len, n}) when n >= @max_mailbox_depth, do: true
+      defp saturated?(_), do: false
     end
   end
 end

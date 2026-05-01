@@ -217,6 +217,32 @@ defmodule Filament.LiveView do
         end
       end
 
+      @doc """
+      Phoenix LiveView info handler for observable resubscribe signals.
+      Triggered when a subscriber's mailbox is saturated; forces re-subscription on next render.
+      """
+      def handle_info({:filament_observable_resubscribe, fiber_id, slot_index}, socket) do
+        tree = socket.assigns._filament_tree
+
+        case Map.get(tree, fiber_id) do
+          nil ->
+            {:noreply, socket}
+
+          fiber ->
+            new_slots = Map.put(fiber.hook_slots, slot_index, :needs_resubscribe)
+            tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
+
+            {new_tree, rendered, pending_effects} =
+              Reconciler.update(tree, fiber_id, fiber.props, owner_pid: self())
+
+            {:noreply,
+             socket
+             |> Phoenix.Component.assign(:_filament_tree, new_tree)
+             |> Phoenix.Component.assign(:_filament_rendered, rendered)
+             |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
+        end
+      end
+
       # Ensure render/1 is defined
       defoverridable mount: 3, render: 1, handle_event: 3, handle_info: 2
     end
