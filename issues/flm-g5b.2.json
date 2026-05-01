@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-g5b.1"
   ],
@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "flm-g5b",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "G2: Cart \u0026 Checkout example — use_observable with projections, Cart.Server, CartBadge vs CartView",
   "type": "task",
-  "updated_at": "2026-05-01T20:51:28Z"
+  "updated_at": "2026-05-01T23:42:50Z"
 }
