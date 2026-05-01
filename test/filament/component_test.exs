@@ -5,7 +5,7 @@ defmodule Filament.ComponentTest do
     use Filament.Component
 
     defcomponent MinimalComponent do
-      prop :value, :string, required: true
+      prop(:value, :string, required: true)
 
       def render(%{value: value}) do
         # In a real implementation, this would return %Phoenix.LiveView.Rendered{}
@@ -19,9 +19,9 @@ defmodule Filament.ComponentTest do
     end
 
     defcomponent ComponentWithDefaults do
-      prop :required_prop, :string, required: true
-      prop :optional_prop, :string, default: "default-value"
-      prop :another_optional, :integer, default: 42
+      prop(:required_prop, :string, required: true)
+      prop(:optional_prop, :string, default: "default-value")
+      prop(:another_optional, :integer, default: 42)
 
       def render(props) do
         %Phoenix.LiveView.Rendered{
@@ -68,13 +68,13 @@ defmodule Filament.ComponentTest do
 
     test "includes default values in metadata" do
       props = TestComponents.ComponentWithDefaults.__props__()
-      
+
       assert props[:required_prop].required == true
       assert props[:required_prop].default == :__NO_DEFAULT__
-      
+
       assert props[:optional_prop].required == false
       assert props[:optional_prop].default == "default-value"
-      
+
       assert props[:another_optional].required == false
       assert props[:another_optional].default == 42
     end
@@ -94,9 +94,10 @@ defmodule Filament.ComponentTest do
     test "accepts empty map when all props have defaults" do
       # This should work because required_prop is actually required
       # So let's use a component where all are optional
-      assert :ok = TestComponents.ComponentWithDefaults.__validate_props__!(%{
-        required_prop: "provided"
-      })
+      assert :ok =
+               TestComponents.ComponentWithDefaults.__validate_props__!(%{
+                 required_prop: "provided"
+               })
     end
 
     test "uses default values when not provided" do
@@ -121,9 +122,9 @@ defmodule Filament.ComponentTest do
       use Filament.Component
 
       defcomponent MultiProp do
-        prop :prop1, :string, required: true
-        prop :prop2, :string, required: true
-        prop :prop3, :string, default: "optional"
+        prop(:prop1, :string, required: true)
+        prop(:prop2, :string, required: true)
+        prop(:prop3, :string, default: "optional")
 
         def render(_props) do
           %Phoenix.LiveView.Rendered{
@@ -143,10 +144,11 @@ defmodule Filament.ComponentTest do
     end
 
     test "accepts when all required props present" do
-      assert :ok = MultiPropComponent.MultiProp.__validate_props__!(%{
-        prop1: "value1",
-        prop2: "value2"
-      })
+      assert :ok =
+               MultiPropComponent.MultiProp.__validate_props__!(%{
+                 prop1: "value1",
+                 prop2: "value2"
+               })
     end
   end
 

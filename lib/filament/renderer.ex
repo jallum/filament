@@ -37,9 +37,15 @@ defmodule Filament.Renderer do
 
       # If render returns a vnode instead of Rendered, recursively render it
       case result do
-        %Phoenix.LiveView.Rendered{} -> result
-        vnode when is_tuple(vnode) -> render_vnode(vnode, context)
-        _ -> raise ArgumentError, "render/1 must return %Phoenix.LiveView.Rendered{} or vnode, got: #{inspect(result)}"
+        %Phoenix.LiveView.Rendered{} ->
+          result
+
+        vnode when is_tuple(vnode) ->
+          render_vnode(vnode, context)
+
+        _ ->
+          raise ArgumentError,
+                "render/1 must return %Phoenix.LiveView.Rendered{} or vnode, got: #{inspect(result)}"
       end
     after
       # Restore or clear context
@@ -110,8 +116,9 @@ defmodule Filament.Renderer do
   """
   @spec next_hook_slot() :: {non_neg_integer(), RenderContext.t()}
   def next_hook_slot do
-    context = Process.get(:filament_render_context) ||
-      raise "hook called outside render context"
+    context =
+      Process.get(:filament_render_context) ||
+        raise "hook called outside render context"
 
     index = context.hook_index
     new_context = %{context | hook_index: index + 1}

@@ -76,6 +76,7 @@ defmodule B0RenderedIRSpikeTest do
     ~H"""
     <p><%= @text %></p>
     """
+
     # When we inspect the result, we can see the structure
     # (This would show the actual Rendered struct in practice)
 
@@ -129,7 +130,8 @@ defmodule B0RenderedIRSpikeTest do
       static: ["<span>", "</span>"],
       dynamic: fn _changed? -> ["nested content"] end,
       fingerprint: 11111,
-      root: false  # This is NOT the root template
+      # This is NOT the root template
+      root: false
     }
 
     # Parent template that includes the nested Rendered struct in its dynamic section
@@ -144,7 +146,8 @@ defmodule B0RenderedIRSpikeTest do
         [nested_rendered]
       end,
       fingerprint: 22222,
-      root: true  # This IS the root template
+      # This IS the root template
+      root: true
     }
 
     # The renderer recursively processes nested Rendered structs
@@ -219,23 +222,29 @@ defmodule B0RenderedIRSpikeTest do
     # Each entry in a comprehension has: {key, vars_map, render_function}
     entries = [
       # First item
-      {0, %{}, fn _vars_changed, _changed? ->
-        [%Phoenix.LiveView.Rendered{
-          static: ["<li>", "</li>"],
-          dynamic: fn _ -> ["Item 1"] end,
-          fingerprint: 55555,
-          root: false
-        }]
-      end},
+      {0, %{},
+       fn _vars_changed, _changed? ->
+         [
+           %Phoenix.LiveView.Rendered{
+             static: ["<li>", "</li>"],
+             dynamic: fn _ -> ["Item 1"] end,
+             fingerprint: 55555,
+             root: false
+           }
+         ]
+       end},
       # Second item
-      {1, %{}, fn _vars_changed, _changed? ->
-        [%Phoenix.LiveView.Rendered{
-          static: ["<li>", "</li>"],
-          dynamic: fn _ -> ["Item 2"] end,
-          fingerprint: 55555,
-          root: false
-        }]
-      end}
+      {1, %{},
+       fn _vars_changed, _changed? ->
+         [
+           %Phoenix.LiveView.Rendered{
+             static: ["<li>", "</li>"],
+             dynamic: fn _ -> ["Item 2"] end,
+             fingerprint: 55555,
+             root: false
+           }
+         ]
+       end}
     ]
 
     comprehension = %Phoenix.LiveView.Comprehension{
@@ -257,13 +266,13 @@ defmodule B0RenderedIRSpikeTest do
     iodata = Phoenix.HTML.Safe.to_iodata(rendered)
     # The comprehension is rendered as nested lists with recursive processing
     assert iodata == [
-      "",
-      [
-        ["<ul>", ["<li>", "Item 1", "</li>"], "</ul>"],
-        ["<ul>", ["<li>", "Item 2", "</li>"], "</ul>"]
-      ],
-      ""
-    ]
+             "",
+             [
+               ["<ul>", ["<li>", "Item 1", "</li>"], "</ul>"],
+               ["<ul>", ["<li>", "Item 2", "</li>"], "</ul>"]
+             ],
+             ""
+           ]
   end
 
   @doc """

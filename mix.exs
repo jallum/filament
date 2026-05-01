@@ -13,6 +13,13 @@ defmodule Filament.MixProject do
     ]
   end
 
+  # Configure test paths to avoid ExUnit warnings for fixture/support files
+  def cli do
+    [
+      preferred_cli_env: [test: :test]
+    ]
+  end
+
   # Run "mix help compile.app" to learn about applications.
   def application do
     [

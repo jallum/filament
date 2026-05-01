@@ -6,6 +6,7 @@ defmodule Filament.SigilFPhase1Test do
   describe "~F sigil Phase 1: basic functionality" do
     test "static template produces Rendered struct" do
       assigns = %{}
+
       result = ~F"""
       <div>hello</div>
       """
@@ -18,6 +19,7 @@ defmodule Filament.SigilFPhase1Test do
 
     test "template with one interpolation" do
       assigns = %{text: "world"}
+
       result = ~F"""
       <p>{@text}</p>
       """
@@ -29,6 +31,7 @@ defmodule Filament.SigilFPhase1Test do
 
     test "fingerprint is generated" do
       assigns = %{text: "test"}
+
       result = ~F"""
       <div>Stable {@text}</div>
       """
@@ -39,11 +42,13 @@ defmodule Filament.SigilFPhase1Test do
 
     test "different templates have different fingerprints" do
       assigns = %{}
+
       result1 = ~F"""
       <div>Template 1</div>
       """
 
       assigns = %{}
+
       result2 = ~F"""
       <div>Template 2</div>
       """
@@ -53,7 +58,7 @@ defmodule Filament.SigilFPhase1Test do
 
     test "template with multiple interpolations" do
       assigns = %{name: "Alice", count: 42}
-      
+
       result = ~F"""
       <div>
         <h1>Hello {@name}</h1>
@@ -69,7 +74,7 @@ defmodule Filament.SigilFPhase1Test do
 
     test "element with event handler attribute compiles" do
       assigns = %{}
-      
+
       result = ~F"""
       <button on_click={fn -> :clicked end}>
         Click me
@@ -82,18 +87,18 @@ defmodule Filament.SigilFPhase1Test do
 
     test "wire output matches ~H for static HTML" do
       assigns = %{}
-      
+
       filament_result = ~F"""
       <div class="test"><span>Content</span></div>
       """
-      
+
       heex_result = ~H"""
       <div class="test"><span>Content</span></div>
       """
 
       filament_iodata = Phoenix.HTML.Safe.to_iodata(filament_result)
       heex_iodata = Phoenix.HTML.Safe.to_iodata(heex_result)
-      
+
       assert filament_iodata == heex_iodata
     end
   end

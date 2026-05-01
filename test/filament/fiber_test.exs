@@ -11,7 +11,7 @@ defmodule Filament.FiberTest do
 
   describe "new/1" do
     test "creates fiber with all fields" do
-      fiber = 
+      fiber =
         Fiber.new(
           id: "root",
           component: TestComponent,
@@ -135,9 +135,13 @@ defmodule Filament.FiberTest do
     end
 
     test "works with complex parent IDs" do
-      parent = Fiber.new(id: "root.MyComponent[0].Child[1]", component: TestComponent, status: :stable)
+      parent =
+        Fiber.new(id: "root.MyComponent[0].Child[1]", component: TestComponent, status: :stable)
+
       child_id = Fiber.child_id(parent, AnotherComponent, {:key, "nested"})
-      assert child_id == ~S<root.MyComponent[0].Child[1].Elixir.Filament.FiberTest.AnotherComponent[key="nested"]>
+
+      assert child_id ==
+               ~S<root.MyComponent[0].Child[1].Elixir.Filament.FiberTest.AnotherComponent[key="nested"]>
     end
   end
 end

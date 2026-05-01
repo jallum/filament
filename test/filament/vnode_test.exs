@@ -36,6 +36,7 @@ defmodule Filament.VNodeTest do
           {:text, "more text"}
         ]
       }
+
       assert VNode.validate!(vnode) == vnode
     end
 
@@ -62,6 +63,7 @@ defmodule Filament.VNodeTest do
           {:element, "p", [], [{:text, "Text"}]}
         ]
       }
+
       assert VNode.validate!(vnode) == vnode
     end
 
@@ -73,6 +75,7 @@ defmodule Filament.VNodeTest do
           {2, {:text, "second"}}
         ]
       }
+
       assert VNode.validate!(vnode) == vnode
     end
   end
@@ -87,6 +90,7 @@ defmodule Filament.VNodeTest do
           {:c, {:text, "third"}}
         ]
       }
+
       assert VNode.validate!(vnode) == vnode
     end
 
@@ -114,9 +118,11 @@ defmodule Filament.VNodeTest do
         ]
       }
 
-      assert_raise VNode.Error, ~r/component .*TestComponent.* inside keyed_list must have a non-nil key/, fn ->
-        VNode.validate!(vnode)
-      end
+      assert_raise VNode.Error,
+                   ~r/component .*TestComponent.* inside keyed_list must have a non-nil key/,
+                   fn ->
+                     VNode.validate!(vnode)
+                   end
     end
 
     test "accepts component with nil key when NOT inside keyed_list" do
@@ -132,6 +138,7 @@ defmodule Filament.VNodeTest do
           {2, {:element, "li", [], [{:text, "Item 2"}]}}
         ]
       }
+
       assert VNode.validate!(vnode) == vnode
     end
 
@@ -143,6 +150,7 @@ defmodule Filament.VNodeTest do
           {:b, {:fragment, [{:text, "C"}]}}
         ]
       }
+
       assert VNode.validate!(vnode) == vnode
     end
 
@@ -166,18 +174,15 @@ defmodule Filament.VNodeTest do
       vnode = {
         :fragment,
         [
-          {:element, "div",
-            [{"class", "container"}],
-            [
-              {:element, "h1", [], [{:text, "Title"}]},
-              {:element, "ul", [],
-                [
-                  {:element, "li", [], [{:text, "Item 1"}]},
-                  {:element, "li", [], [{:text, "Item 2"}]}
-                ]
-              }
-            ]
-          }
+          {:element, "div", [{"class", "container"}],
+           [
+             {:element, "h1", [], [{:text, "Title"}]},
+             {:element, "ul", [],
+              [
+                {:element, "li", [], [{:text, "Item 1"}]},
+                {:element, "li", [], [{:text, "Item 2"}]}
+              ]}
+           ]}
         ]
       }
 
@@ -190,11 +195,10 @@ defmodule Filament.VNodeTest do
         [
           {:component, TestComponent, %{header: true}, nil},
           {:element, "div", [],
-            [
-              {:component, TestComponent, %{content: "main"}, "content-1"},
-              {:component, TestComponent, %{content: "footer"}, "content-2"}
-            ]
-          }
+           [
+             {:component, TestComponent, %{content: "main"}, "content-1"},
+             {:component, TestComponent, %{content: "footer"}, "content-2"}
+           ]}
         ]
       }
 
@@ -258,9 +262,10 @@ defmodule Filament.VNodeTest do
         {:component, TestComponent, %{prop: "value"}, nil}
       ]
     }
-    
+
     result = VNode.validate!(vnode)
     assert result == vnode
-    assert result === vnode  # Same reference, not just equal
+    # Same reference, not just equal
+    assert result === vnode
   end
 end

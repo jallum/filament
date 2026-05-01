@@ -8,26 +8,34 @@ defmodule Filament.Fiber do
 
   @enforce_keys [:id, :component]
   defstruct [
-    :id,          # String.t()        — stable path-based identifier
-    :key,         # term() | nil      — explicit :key from parent
-    :component,   # module()          — the component module (implements render/1)
-    :props,       # map()             — current props passed to this fiber
-    :hook_slots,  # list()            — [{slot_index, value}]
-    :children,    # [String.t()]      — ordered child fiber IDs
-    :parent_id,   # String.t() | nil  — nil for the root fiber
-    :status       # :mounting | :stable | :updating | :unmounting
+    # String.t()        — stable path-based identifier
+    :id,
+    # term() | nil      — explicit :key from parent
+    :key,
+    # module()          — the component module (implements render/1)
+    :component,
+    # map()             — current props passed to this fiber
+    :props,
+    # list()            — [{slot_index, value}]
+    :hook_slots,
+    # [String.t()]      — ordered child fiber IDs
+    :children,
+    # String.t() | nil  — nil for the root fiber
+    :parent_id,
+    # :mounting | :stable | :updating | :unmounting
+    :status
   ]
 
   @type t :: %__MODULE__{
-    id: String.t(),
-    key: term() | nil,
-    component: module(),
-    props: map(),
-    hook_slots: [{non_neg_integer(), term()}],
-    children: [String.t()],
-    parent_id: String.t() | nil,
-    status: :mounting | :stable | :updating | :unmounting
-  }
+          id: String.t(),
+          key: term() | nil,
+          component: module(),
+          props: map(),
+          hook_slots: [{non_neg_integer(), term()}],
+          children: [String.t()],
+          parent_id: String.t() | nil,
+          status: :mounting | :stable | :updating | :unmounting
+        }
 
   @doc """
   Creates a new fiber struct with defaults for optional fields.
@@ -87,7 +95,8 @@ defmodule Filament.Fiber do
       "root.MyApp.CartView[0]"
   """
   def child_id(parent_fiber, component_module, {:index, index})
-      when is_struct(parent_fiber, __MODULE__) and is_atom(component_module) and is_integer(index) and index >= 0 do
+      when is_struct(parent_fiber, __MODULE__) and is_atom(component_module) and is_integer(index) and
+             index >= 0 do
     "#{parent_fiber.id}.#{component_module}[#{index}]"
   end
 

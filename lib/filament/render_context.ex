@@ -9,16 +9,20 @@ defmodule Filament.RenderContext do
 
   @enforce_keys [:fiber_id, :fiber_tree]
   defstruct [
-    :fiber_id,      # String.t() - current fiber being rendered
-    :fiber_tree,    # %{String.t() => Filament.Fiber.t()} - full tree (read-only)
-    hook_index: 0,  # non_neg_integer() - current hook slot index
-    new_fibers: %{} # %{String.t() => Filament.Fiber.t()} - fibers discovered this pass
+    # String.t() - current fiber being rendered
+    :fiber_id,
+    # %{String.t() => Filament.Fiber.t()} - full tree (read-only)
+    :fiber_tree,
+    # non_neg_integer() - current hook slot index
+    hook_index: 0,
+    # %{String.t() => Filament.Fiber.t()} - fibers discovered this pass
+    new_fibers: %{}
   ]
 
   @type t :: %__MODULE__{
-    fiber_id: String.t(),
-    fiber_tree: %{String.t() => Filament.Fiber.t()},
-    hook_index: non_neg_integer(),
-    new_fibers: %{String.t() => Filament.Fiber.t()}
-  }
+          fiber_id: String.t(),
+          fiber_tree: %{String.t() => Filament.Fiber.t()},
+          hook_index: non_neg_integer(),
+          new_fibers: %{String.t() => Filament.Fiber.t()}
+        }
 end

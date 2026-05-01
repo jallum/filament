@@ -16,12 +16,13 @@ defmodule Filament.Reconciler do
   @spec mount(module(), map()) :: {fiber_tree(), Phoenix.LiveView.Rendered.t()}
   def mount(root_component, props) do
     # Create root fiber
-    root_fiber = Fiber.new(
-      id: "root",
-      component: root_component,
-      props: props,
-      status: :mounting
-    )
+    root_fiber =
+      Fiber.new(
+        id: "root",
+        component: root_component,
+        props: props,
+        status: :mounting
+      )
 
     # Create initial context
     context = %RenderContext{
@@ -34,12 +35,13 @@ defmodule Filament.Reconciler do
     rendered = Renderer.render(root_component, props, context)
 
     # Build initial tree with root and any discovered children
-    tree = %{"root" => %{root_fiber | status: :stable}}
-    |> Map.merge(context.new_fibers)
-    |> Enum.map(fn {id, fiber} ->
-      {id, %{fiber | status: :stable}}
-    end)
-    |> Map.new()
+    tree =
+      %{"root" => %{root_fiber | status: :stable}}
+      |> Map.merge(context.new_fibers)
+      |> Enum.map(fn {id, fiber} ->
+        {id, %{fiber | status: :stable}}
+      end)
+      |> Map.new()
 
     {tree, rendered}
   end
@@ -50,8 +52,9 @@ defmodule Filament.Reconciler do
   @spec update(fiber_tree(), String.t(), map()) :: {fiber_tree(), Phoenix.LiveView.Rendered.t()}
   def update(tree, fiber_id, new_props) do
     # Fetch fiber
-    fiber = Map.get(tree, fiber_id) ||
-      raise ReconcilerError, "fiber #{inspect(fiber_id)} not found in tree"
+    fiber =
+      Map.get(tree, fiber_id) ||
+        raise ReconcilerError, "fiber #{inspect(fiber_id)} not found in tree"
 
     # Update fiber props and status
     updated_fiber = %{fiber | props: new_props, status: :updating}
@@ -68,10 +71,11 @@ defmodule Filament.Reconciler do
 
     # Create new tree with updated fiber
     new_tree = Map.put(tree, fiber_id, updated_fiber)
-    
+
     # Reconcile children
-    final_tree = reconcile_children(new_tree, fiber_id, updated_fiber, context)
-    |> Map.update!(fiber_id, &%{&1 | status: :stable})
+    final_tree =
+      reconcile_children(new_tree, fiber_id, updated_fiber, context)
+      |> Map.update!(fiber_id, &%{&1 | status: :stable})
 
     {final_tree, rendered}
   end
@@ -95,26 +99,28 @@ defmodule Filament.Reconciler do
   defp reconcile_children(tree, parent_id, parent_fiber, context) do
     # For now, we rely on components registering themselves during render
     # In a full implementation, we'd parse the rendered output to find child components
-    
-    new_children = context.new_fibers
-    |> Map.new(fn {id, fiber} ->
-      {id, %{fiber | parent_id: parent_id, status: :stable}}
-    end)
+
+    new_children =
+      context.new_fibers
+      |> Map.new(fn {id, fiber} ->
+        {id, %{fiber | parent_id: parent_id, status: :stable}}
+      end)
 
     # Remove old children that aren't in new children
     old_children = parent_fiber.children || []
     new_child_ids = Map.keys(new_children)
 
-    tree_without_old = Enum.reduce(old_children, tree, fn child_id, acc ->
-      if child_id not in new_child_ids do
-        # Mark as unmounting
-        Map.update(acc, child_id, nil, fn fiber ->
-          %{fiber | status: :unmounting}
-        end)
-      else
-        acc
-      end
-    end)
+    tree_without_old =
+      Enum.reduce(old_children, tree, fn child_id, acc ->
+        if child_id not in new_child_ids do
+          # Mark as unmounting
+          Map.update(acc, child_id, nil, fn fiber ->
+            %{fiber | status: :unmounting}
+          end)
+        else
+          acc
+        end
+      end)
 
     # Add new children
     tree_without_old

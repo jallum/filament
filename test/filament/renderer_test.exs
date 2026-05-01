@@ -8,7 +8,7 @@ defmodule Filament.RendererTest do
     use Filament.Component
 
     defcomponent TestHello do
-      prop :name, :string, required: true
+      prop(:name, :string, required: true)
 
       def render(assigns) do
         ~F"""
@@ -129,10 +129,14 @@ defmodule Filament.RendererTest do
 
     test "renders :keyed_list vnode" do
       context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
-      vnode = {:keyed_list, [
-        {:a, {:text, "First"}},
-        {:b, {:text, "Second"}}
-      ]}
+
+      vnode =
+        {:keyed_list,
+         [
+           {:a, {:text, "First"}},
+           {:b, {:text, "Second"}}
+         ]}
+
       result = Renderer.render_vnode(vnode, context)
       assert result == ["First", "Second"]
     end

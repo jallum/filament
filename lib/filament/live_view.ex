@@ -30,18 +30,26 @@ defmodule Filament.LiveView do
         component = root_component()
         props = build_props(socket)
         {tree, rendered} = Filament.Reconciler.mount(component, props)
-        socket = socket
-        |> Phoenix.Component.assign(:_filament_tree, tree)
-        |> Phoenix.Component.assign(:_filament_rendered, rendered)
+
+        socket =
+          socket
+          |> Phoenix.Component.assign(:_filament_tree, tree)
+          |> Phoenix.Component.assign(:_filament_rendered, rendered)
+
         {:ok, socket}
       end
 
-      @doc """
-      Converts socket assigns to props map for the root component.
-      """
+      # Converts socket assigns to props map for the root component.
       defp build_props(socket) do
-        excludes = [:_filament_tree, :_filament_rendered, :flash, :live_action, :socket, :__changed__]
-        
+        excludes = [
+          :_filament_tree,
+          :_filament_rendered,
+          :flash,
+          :live_action,
+          :socket,
+          :__changed__
+        ]
+
         socket.assigns
         |> Map.reject(fn {k, _v} -> k in excludes end)
         |> Map.new()
@@ -64,16 +72,25 @@ defmodule Filament.LiveView do
           ["filament" | _rest] ->
             # Filament internal events - currently noop
             {:noreply, socket}
+
           _ ->
             # Regular Phoenix events - forward to root component if defined
             tree = socket.assigns._filament_tree
             root_fiber = tree["root"]
-            
+
             case function_exported?(root_fiber.component, :handle_event, 3) do
               true ->
-                {new_props, _} = root_fiber.component.handle_event(event, params, root_fiber.props)
+                {new_props, _} =
+                  root_fiber.component.handle_event(event, params, root_fiber.props)
+
                 {new_tree, rendered} = Filament.Reconciler.update(tree, "root", new_props)
-                {:noreply, Phoenix.Component.assign(socket, _filament_tree: new_tree, _filament_rendered: rendered)}
+
+                {:noreply,
+                 Phoenix.Component.assign(socket,
+                   _filament_tree: new_tree,
+                   _filament_rendered: rendered
+                 )}
+
               false ->
                 {:noreply, socket}
             end
