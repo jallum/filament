@@ -5,22 +5,6 @@ defmodule Filament.Component do
   Components are modules that implement the render/1 callback and can be
   composed together to build UIs. The defcomponent macro provides convenient
   syntax for prop declarations and validation.
-
-  ## Example
-
-      defmodule MyApp.TodoItem do
-        use Filament.Component
-
-        defcomponent TodoItem do
-          prop :todo, Todo, required: true
-          prop :on_toggle, :function, required: true
-          prop :class, :string, default: ""
-
-          def render(%{todo: todo, on_toggle: on_toggle, class: class}) do
-            # Render implementation
-          end
-        end
-      end
   """
 
   @type props() :: map()
@@ -42,6 +26,7 @@ defmodule Filament.Component do
   defmacro __using__(_opts) do
     quote do
       import Filament.Defcomponent
+      import Filament.SigilF
     end
   end
 end
