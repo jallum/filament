@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-hom.3",
     "flm-oue.1"
@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "flm-hom",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "D4: Implement use_observable/3 hook — subscribe on mount, return projected value, handle_info path",
   "type": "task",
-  "updated_at": "2026-05-01T18:07:00Z"
+  "updated_at": "2026-05-01T18:54:01Z"
 }
