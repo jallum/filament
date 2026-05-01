@@ -20,6 +20,31 @@ defmodule Filament.LiveView do
 
   @callback root_component() :: module()
 
+  @doc false
+  def apply_effects(pending_effects, fiber_tree) do
+    Enum.reduce(pending_effects, {fiber_tree, 0}, fn
+      {_slot_index, fiber_id, _effect_fn, _deps, _old_cleanup}, {acc_tree, count}
+      when not is_map_key(acc_tree, fiber_id) ->
+        {acc_tree, count}
+
+      {slot_index, fiber_id, effect_fn, deps, old_cleanup}, {acc_tree, count} ->
+        # Run old cleanup if present
+        if is_function(old_cleanup, 0), do: old_cleanup.()
+
+        # Run the new effect
+        new_cleanup = effect_fn.()
+        new_cleanup = if is_function(new_cleanup, 0), do: new_cleanup, else: nil
+
+        # Store {deps, new_cleanup} back into the fiber's hook_slots
+        fiber = acc_tree[fiber_id]
+
+        new_slots = Map.put(fiber.hook_slots, slot_index, {deps, new_cleanup})
+        new_tree = Map.put(acc_tree, fiber_id, %{fiber | hook_slots: new_slots})
+
+        {new_tree, count + 1}
+    end)
+  end
+
   @doc """
   Runs pending effects accumulated during the render pass.
   Attached via attach_hook as an :after_render callback.
@@ -30,27 +55,8 @@ defmodule Filament.LiveView do
     if effects == [] do
       socket
     else
-      # Run each effect and collect cleanup functions
-      {cleanups, socket} =
-        Enum.reduce(effects, {[], socket}, fn
-          {slot_index, fiber_id, effect_fn, deps}, {acc_cleanups, acc_socket} ->
-            cleanup = effect_fn.()
-            {[{slot_index, fiber_id, cleanup, deps} | acc_cleanups], acc_socket}
-        end)
-
-      # Store cleanup fns back into hook_slots of their respective fibers
       tree = socket.assigns._filament_tree
-
-      new_tree =
-        Enum.reduce(cleanups, tree, fn
-          {_index, _fiber_id, nil, _deps}, t ->
-            t
-
-          {index, fiber_id, cleanup_fn, deps}, t ->
-            fiber = t[fiber_id]
-            new_slots = Map.put(fiber.hook_slots, index, {deps, cleanup_fn})
-            Map.put(t, fiber_id, %{fiber | hook_slots: new_slots})
-        end)
+      {new_tree, _ran} = apply_effects(effects, tree)
 
       socket
       |> Phoenix.Component.assign(:_filament_tree, new_tree)

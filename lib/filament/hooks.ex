@@ -128,4 +128,57 @@ defmodule Filament.Hooks do
     commit_slot(index, {stored_deps, value})
     value
   end
+
+  @doc """
+  Schedules a side effect to run after the render completes.
+
+  effect_fn is called after the component renders. It may return a cleanup function
+  (zero-arity fn returning :ok or any term) that is called:
+  - Before the next time the effect runs (when deps change), OR
+  - When the fiber unmounts
+
+  deps controls when the effect re-runs:
+  - [] — run once on mount, cleanup on unmount
+  - [dep1, dep2] — run when any dep changes (Kernel.== comparison), cleanup before re-run
+  - :always — run on every render
+
+  Rules: call only at the top level of render/1.
+  """
+  @spec use_effect((-> (-> term()) | nil), deps :: [term()] | :always) :: :ok
+  def use_effect(effect_fn, deps) when is_function(effect_fn, 0) do
+    {index, previous, ctx} = use_slot(:__unset__)
+
+    deps_changed? =
+      case previous do
+        :__unset__ -> true
+        {_prev_deps, _} when deps == :always -> true
+        {prev_deps, _} -> prev_deps != deps
+        _ -> true
+      end
+
+    if deps_changed? do
+      old_cleanup =
+        case previous do
+          {_prev_deps, cleanup} when is_function(cleanup, 0) -> cleanup
+          _ -> nil
+        end
+
+      effect_entry = {index, ctx.fiber_id, effect_fn, deps, old_cleanup}
+      ctx = Process.get(:filament_render_context)
+
+      Process.put(
+        :filament_render_context,
+        %{ctx | pending_effects: [effect_entry | ctx.pending_effects]}
+      )
+    end
+
+    current_cleanup =
+      case previous do
+        {_prev_deps, cleanup} -> cleanup
+        _ -> nil
+      end
+
+    commit_slot(index, {deps, current_cleanup})
+    :ok
+  end
 end

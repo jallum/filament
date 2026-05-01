@@ -100,13 +100,18 @@ defmodule Filament.Reconciler do
   end
 
   @doc """
-  Marks all fibers as unmounting.
+  Marks all fibers as unmounting and runs cleanup functions.
   """
   @spec unmount(fiber_tree()) :: :ok
   def unmount(tree) do
     tree
     |> Map.values()
     |> Enum.each(fn fiber ->
+      Enum.each(fiber.hook_slots, fn
+        {_index, {_deps, cleanup}} when is_function(cleanup, 0) -> cleanup.()
+        _ -> :ok
+      end)
+
       %{fiber | status: :unmounting}
     end)
 
