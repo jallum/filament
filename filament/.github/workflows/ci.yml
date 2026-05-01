@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        elixir: ["1.17", "1.18"]
+        otp: ["26", "27"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-
+
+      - name: Install dependencies
+        run: cd filament && mix deps.get
+
+      - name: Compile
+        run: cd filament && mix compile --warnings-as-undef
+
+      - name: Run tests
+        run: cd filament && mix test
+
+      - name: Credo
+        run: cd filament && mix credo --strict
+
+      - name: Dialyzer
+        run: cd filament && mix dialyzer
