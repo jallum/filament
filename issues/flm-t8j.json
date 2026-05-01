@@ -4,13 +4,14 @@
   "blocks": [
     "flm-oue"
   ],
+  "closed_at": "2026-05-01T17:58:12Z",
   "created": "2026-05-01T15:25:33Z",
   "description": "Core runtime for Filament. Builds the fiber tree data structures, the defcomponent macro, the ~F sigil, a pure render walk, the reconciler, and finally the LiveView adapter that plugs it all in.\n\nThis epic is the critical path for the entire project. Nothing else in tracks C–I can begin until B7 is merged.\n\nProject root: /Users/j5n/Workspace/filament/filament/\nPhoenix LiveView target: ~\u003e 1.0 (phoenix_live_view 1.0.x)\nElixir target: ~\u003e 1.17\n\nDelivery order: B0 → B1, B2 (parallel) → B3 → B4 → B5 → B6 → B7",
   "id": "flm-t8j",
   "labels": [],
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Track B: Fiber runtime and reconciler",
   "type": "epic",
-  "updated_at": "2026-05-01T17:49:11Z"
+  "updated_at": "2026-05-01T17:58:12Z"
 }
