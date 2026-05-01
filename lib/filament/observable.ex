@@ -1,0 +1,62 @@
+defmodule Filament.Observable do
+  @moduledoc """
+  Behaviour for observable GenServer processes.
+
+  A GenServer that `use`s `Filament.Observable.GenServer` automatically satisfies
+  this behaviour. Implement the optional callbacks to customise subscription
+  acceptance and teardown.
+  """
+
+  alias Filament.Observable.Subscriber
+
+  @doc """
+  Called when a new subscriber requests a subscription.
+
+  Return `{:ok, initial_value, new_state}` to accept.
+  `initial_value` is sent back to the subscriber as the starting projected value.
+
+  Return `{:error, reason, new_state}` to reject.
+  """
+  @callback handle_subscribe(
+              request :: term(),
+              subscriber :: Subscriber.t(),
+              state :: term()
+            ) ::
+              {:ok, initial_value :: term(), new_state :: term()}
+              | {:error, reason :: term(), new_state :: term()}
+
+  @doc """
+  Called when a subscriber unsubscribes or its process terminates.
+  """
+  @callback handle_unsubscribe(subscriber :: Subscriber.t(), state :: term()) ::
+              {:ok, new_state :: term()}
+
+  @optional_callbacks handle_subscribe: 3, handle_unsubscribe: 2
+
+  # ── Public API ──────────────────────────────────────────────────────────────
+
+  @doc """
+  Subscribe `subscriber` to `observable`, passing `request` to `handle_subscribe/3`.
+
+  Returns `{:ok, initial_projected_value}` or `{:error, reason}`.
+  Called by `use_observable/3` (D4). Do NOT call directly from application code.
+  """
+  @spec subscribe(
+          observable :: GenServer.server(),
+          request :: term(),
+          subscriber :: Subscriber.t()
+        ) ::
+          {:ok, term()} | {:error, term()}
+  def subscribe(observable, request, subscriber) do
+    GenServer.call(observable, {:filament_subscribe, request, subscriber})
+  end
+
+  @doc """
+  Unsubscribe `subscriber_pid` from `observable`.
+  Called on fiber unmount. Do NOT call directly from application code.
+  """
+  @spec unsubscribe(observable :: GenServer.server(), subscriber_pid :: pid()) :: :ok
+  def unsubscribe(observable, subscriber_pid) do
+    GenServer.cast(observable, {:filament_unsubscribe, subscriber_pid})
+  end
+end
