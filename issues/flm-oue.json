@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-t8j"
   ],
@@ -9,8 +9,8 @@
   "id": "flm-oue",
   "labels": [],
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Track C: UI state hooks",
   "type": "epic",
-  "updated_at": "2026-05-01T17:49:11Z"
+  "updated_at": "2026-05-01T18:00:30Z"
 }
