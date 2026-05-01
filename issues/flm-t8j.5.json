@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-t8j.1",
     "flm-t8j.3",
@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "flm-t8j",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "B4: Implement ~F sigil — HEEx template compiler for Filament",
   "type": "task",
-  "updated_at": "2026-05-01T15:25:33Z"
+  "updated_at": "2026-05-01T16:09:38Z"
 }
