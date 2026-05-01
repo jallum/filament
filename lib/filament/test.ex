@@ -144,6 +144,44 @@ defmodule Filament.Test do
     flush_messages(view)
   end
 
+  @doc """
+  Assert that `assertion_fn.()` returns a truthy value within `timeout` milliseconds.
+  Retries every `interval` ms. Raises `ExUnit.AssertionError` on timeout.
+
+  The assertion function must be a zero-arity function. For assertions that need
+  to first call `update/1`, include that call inside the fn and use the returned
+  view for the assertion:
+
+      Filament.Test.eventually(fn ->
+        view = Filament.Test.update(view)
+        render_text(view) =~ "Count: 5"
+      end, timeout: 500)
+  """
+  @spec eventually(assertion_fn :: (-> term()), opts :: keyword()) :: :ok
+  def eventually(assertion_fn, opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, 1_000)
+    interval = Keyword.get(opts, :interval, 50)
+    deadline = System.monotonic_time(:millisecond) + timeout
+
+    do_eventually(assertion_fn, deadline, interval, timeout)
+  end
+
+  defp do_eventually(fun, deadline, interval, original_timeout) do
+    if fun.() do
+      :ok
+    else
+      remaining = deadline - System.monotonic_time(:millisecond)
+
+      if remaining <= 0 do
+        raise RuntimeError,
+          message: "Filament.Test.eventually/2 timed out after #{original_timeout}ms"
+      else
+        Process.sleep(min(interval, remaining))
+        do_eventually(fun, deadline, interval, original_timeout)
+      end
+    end
+  end
+
   # ── HTML rendering helpers ────────────────────────────────────────────────
 
   @doc false
