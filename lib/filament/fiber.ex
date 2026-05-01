@@ -18,6 +18,8 @@ defmodule Filament.Fiber do
     :props,
     # %{non_neg_integer() => term()} — hook slot state map
     :hook_slots,
+    # %{non_neg_integer() => function()} — event handlers registered this render
+    :event_handlers,
     # [String.t()]      — ordered child fiber IDs
     :children,
     # String.t() | nil  — nil for the root fiber
@@ -32,6 +34,7 @@ defmodule Filament.Fiber do
           component: module(),
           props: map(),
           hook_slots: %{non_neg_integer() => term()},
+          event_handlers: %{non_neg_integer() => function()},
           children: [String.t()],
           parent_id: String.t() | nil,
           status: :mounting | :stable | :updating | :unmounting
@@ -61,6 +64,7 @@ defmodule Filament.Fiber do
   def new(opts) when is_list(opts) do
     props = Keyword.get(opts, :props, %{})
     hook_slots = Keyword.get(opts, :hook_slots, %{})
+    event_handlers = Keyword.get(opts, :event_handlers, %{})
     children = Keyword.get(opts, :children, [])
     key = Keyword.get(opts, :key)
     parent_id = Keyword.get(opts, :parent_id)
@@ -75,6 +79,7 @@ defmodule Filament.Fiber do
       component: component,
       props: props,
       hook_slots: hook_slots,
+      event_handlers: event_handlers,
       children: children,
       parent_id: parent_id,
       status: status

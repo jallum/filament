@@ -25,13 +25,14 @@ defmodule Filament.RendererTest do
         fiber_tree: %{}
       }
 
-      {result, hook_slots, pending_effects, new_fibers} =
+      {result, hook_slots, pending_effects, new_fibers, event_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "world"}, context)
 
       assert %Phoenix.LiveView.Rendered{} = result
       assert hook_slots == %{}
       assert pending_effects == []
       assert new_fibers == %{}
+      assert event_handlers == %{}
     end
 
     test "produces HTML containing rendered content" do
@@ -40,7 +41,7 @@ defmodule Filament.RendererTest do
         fiber_tree: %{}
       }
 
-      {result, _hook_slots, _pending_effects, _new_fibers} =
+      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "Alice"}, context)
 
       iodata = Phoenix.HTML.Safe.to_iodata(result)
@@ -66,7 +67,7 @@ defmodule Filament.RendererTest do
         fiber_tree: %{}
       }
 
-      {result, _hook_slots, _pending_effects, _new_fibers} =
+      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "Bob"}, context)
 
       iodata = Phoenix.HTML.Safe.to_iodata(result)
@@ -130,7 +131,9 @@ defmodule Filament.RendererTest do
     test "renders :component vnode" do
       context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
       vnode = {:component, TestHello.TestHello, %{name: "vnode"}, nil}
-      {result, _hook_slots, _pending_effects, _new_fibers} = Renderer.render_vnode(vnode, context)
+
+      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers} =
+        Renderer.render_vnode(vnode, context)
 
       assert %Phoenix.LiveView.Rendered{} = result
       html = Phoenix.HTML.Safe.to_iodata(result) |> IO.iodata_to_binary()

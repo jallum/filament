@@ -121,36 +121,58 @@ defmodule Filament.LiveView do
 
       @doc """
       Phoenix LiveView event handler.
-      Forwards events to root component if it defines handle_event/3.
+      Routes filament: events to registered fiber handlers; forwards all other
+      events to the root component if it defines handle_event/3.
       """
-      def handle_event(event, params, socket) do
-        case String.split(event, ":") do
-          ["filament" | _rest] ->
-            # Filament internal events - currently noop
-            {:noreply, socket}
-
-          _ ->
-            # Regular Phoenix events - forward to root component if defined
+      def handle_event("filament:" <> ref, params, socket) do
+        case String.split(ref, ":", parts: 2) do
+          [fiber_id_str, index_str] ->
+            handler_index = String.to_integer(index_str)
             tree = socket.assigns._filament_tree
-            root_fiber = tree["root"]
+            handler = Filament.FiberTree.get_event_handler(tree, fiber_id_str, handler_index)
 
-            case function_exported?(root_fiber.component, :handle_event, 3) do
-              true ->
-                {new_props, _} =
-                  root_fiber.component.handle_event(event, params, root_fiber.props)
+            case handler do
+              nil ->
+                # Stale ref (fiber unmounted between render and click)
+                {:noreply, socket}
 
-                {new_tree, rendered, pending_effects} =
-                  Reconciler.update(tree, "root", new_props, owner_pid: self())
+              fun when is_function(fun, 0) ->
+                fun.()
+                {:noreply, socket}
 
-                {:noreply,
-                 socket
-                 |> Phoenix.Component.assign(:_filament_tree, new_tree)
-                 |> Phoenix.Component.assign(:_filament_rendered, rendered)
-                 |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
+              fun when is_function(fun, 1) ->
+                fun.(params)
+                {:noreply, socket}
 
-              false ->
+              _other ->
                 {:noreply, socket}
             end
+
+          _other ->
+            {:noreply, socket}
+        end
+      end
+
+      def handle_event(event, params, socket) do
+        tree = socket.assigns._filament_tree
+        root_fiber = tree["root"]
+
+        case function_exported?(root_fiber.component, :handle_event, 3) do
+          true ->
+            {new_props, _} =
+              root_fiber.component.handle_event(event, params, root_fiber.props)
+
+            {new_tree, rendered, pending_effects} =
+              Reconciler.update(tree, "root", new_props, owner_pid: self())
+
+            {:noreply,
+             socket
+             |> Phoenix.Component.assign(:_filament_tree, new_tree)
+             |> Phoenix.Component.assign(:_filament_rendered, rendered)
+             |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
+
+          false ->
+            {:noreply, socket}
         end
       end
 

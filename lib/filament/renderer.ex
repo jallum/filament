@@ -22,7 +22,7 @@ defmodule Filament.Renderer do
   """
   @spec render(module(), map(), RenderContext.t()) ::
           {Phoenix.LiveView.Rendered.t(), %{non_neg_integer() => term()}, list(),
-           %{String.t() => Fiber.t()}}
+           %{String.t() => Fiber.t()}, %{non_neg_integer() => function()}}
   def render(component_module, props, %RenderContext{} = context) do
     # Validate props
     if function_exported?(component_module, :__validate_props__!, 1) do
@@ -34,7 +34,9 @@ defmodule Filament.Renderer do
       context
       | hook_index: 0,
         new_hook_slots: %{},
-        pending_effects: []
+        pending_effects: [],
+        event_handler_index: 0,
+        new_event_handlers: %{}
     })
 
     try do
@@ -58,7 +60,8 @@ defmodule Filament.Renderer do
       # Harvest context fields
       final_ctx = Process.get(:filament_render_context)
 
-      {rendered, final_ctx.new_hook_slots, final_ctx.pending_effects, final_ctx.new_fibers}
+      {rendered, final_ctx.new_hook_slots, final_ctx.pending_effects, final_ctx.new_fibers,
+       final_ctx.new_event_handlers}
     after
       # Always clear render context after render
       Process.delete(:filament_render_context)

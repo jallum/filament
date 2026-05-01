@@ -311,4 +311,30 @@ defmodule Filament.Hooks do
           reason: reason
     end
   end
+
+  @doc """
+  Register an event handler function for the current fiber at the current render index.
+  Returns the wire ref string `"fiber_id:handler_index"` to embed in phx-click/phx-submit.
+
+  Called at render time by the `~F` template engine — do not call directly.
+  """
+  @spec register_event_handler(handler :: function()) :: wire_ref :: String.t()
+  def register_event_handler(handler) when is_function(handler) do
+    ctx =
+      Process.get(:filament_render_context) ||
+        raise ArgumentError,
+              "register_event_handler called outside a render pass"
+
+    idx = ctx.event_handler_index
+    fiber_id_str = to_string(ctx.fiber_id)
+
+    new_ctx = %{
+      ctx
+      | event_handler_index: idx + 1,
+        new_event_handlers: Map.put(ctx.new_event_handlers, idx, handler)
+    }
+
+    Process.put(:filament_render_context, new_ctx)
+    "#{fiber_id_str}:#{idx}"
+  end
 end

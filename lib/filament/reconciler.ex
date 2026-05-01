@@ -38,11 +38,16 @@ defmodule Filament.Reconciler do
     }
 
     # Render the component
-    {rendered, new_hook_slots, pending_effects, new_fibers} =
+    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers} =
       Renderer.render(root_component, props, context)
 
     # Build initial tree with root and any discovered children
-    root_fiber = %{root_fiber | hook_slots: new_hook_slots, status: :stable}
+    root_fiber = %{
+      root_fiber
+      | hook_slots: new_hook_slots,
+        event_handlers: new_event_handlers,
+        status: :stable
+    }
 
     tree =
       %{"root" => root_fiber}
@@ -82,11 +87,15 @@ defmodule Filament.Reconciler do
     }
 
     # Re-render component
-    {rendered, new_hook_slots, pending_effects, new_fibers} =
+    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers} =
       Renderer.render(fiber.component, new_props, context)
 
-    # Commit hook slots
-    updated_fiber = %{updated_fiber | hook_slots: new_hook_slots}
+    # Commit hook slots and event handlers
+    updated_fiber = %{
+      updated_fiber
+      | hook_slots: new_hook_slots,
+        event_handlers: new_event_handlers
+    }
 
     # Create new tree with updated fiber
     new_tree = Map.put(tree, fiber_id, updated_fiber)

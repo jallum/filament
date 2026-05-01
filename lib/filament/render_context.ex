@@ -22,7 +22,11 @@ defmodule Filament.RenderContext do
     # %{non_neg_integer() => term()} - accumulates new slot values written during render
     new_hook_slots: %{},
     # [{index, effect_fn, deps}] - effects accumulated during render
-    pending_effects: []
+    pending_effects: [],
+    # non_neg_integer() - current event handler index
+    event_handler_index: 0,
+    # %{non_neg_integer() => function()} - event handlers registered this render
+    new_event_handlers: %{}
   ]
 
   @type t :: %__MODULE__{
@@ -32,6 +36,8 @@ defmodule Filament.RenderContext do
           new_fibers: %{String.t() => Filament.Fiber.t()},
           owner_pid: pid() | nil,
           new_hook_slots: %{non_neg_integer() => term()},
-          pending_effects: [{non_neg_integer(), (-> (-> :ok) | nil), term() | :no_deps}]
+          pending_effects: [{non_neg_integer(), (-> (-> :ok) | nil), term() | :no_deps}],
+          event_handler_index: non_neg_integer(),
+          new_event_handlers: %{non_neg_integer() => function()}
         }
 end
