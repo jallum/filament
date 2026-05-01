@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-01T18:34:31Z",
+  "description": "Three tickets completing the client–server interaction model:\n\n  E1 — use_hold/3 hook + Filament.Hold.GenServer macro\n       Acquires a server-side resource hold on mount; released automatically\n       via BEAM :DOWN monitoring when the LiveView disconnects or the fiber unmounts.\n\n  E2 — defevent macro\n       Generates a typed event struct with encode/1, decode/1, @type t, and\n       compile-time field validation. The primitive for typed browser→server payloads.\n\n  E3 — Event closures on fibers\n       on_click / on_submit attributes in ~F templates register handler fns on the\n       fiber at render time. The ~F compiler emits phx-click=\"filament:ref\" wire\n       attributes. LiveView routes the incoming event to the registered closure.\n\nBuild plan: filament/.tmp/plan.html § Track E\n\nPrerequisites:\n  Track B fully merged (flm-t8j — all closed ✓)\n  Track C fully merged (flm-oue — all closed ✓)\n  E2 must be merged before E3 (E3 integrates defevent for typed payloads).",
+  "id": "flm-zoc",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "Track E: Resource holds and typed event dispatch",
+  "type": "task",
+  "updated_at": "2026-05-01T18:34:31Z"
+}
