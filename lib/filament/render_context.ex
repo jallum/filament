@@ -26,7 +26,9 @@ defmodule Filament.RenderContext do
     # non_neg_integer() - current event handler index
     event_handler_index: 0,
     # %{non_neg_integer() => function()} - event handlers registered this render
-    new_event_handlers: %{}
+    new_event_handlers: %{},
+    # %{term() => pid()} - observable stubs for test isolation
+    observable_stubs: %{}
   ]
 
   @type t :: %__MODULE__{
@@ -38,6 +40,7 @@ defmodule Filament.RenderContext do
           new_hook_slots: %{non_neg_integer() => term()},
           pending_effects: [{non_neg_integer(), (-> (-> :ok) | nil), term() | :no_deps}],
           event_handler_index: non_neg_integer(),
-          new_event_handlers: %{non_neg_integer() => function()}
+          new_event_handlers: %{non_neg_integer() => function()},
+          observable_stubs: %{term() => pid()}
         }
 end

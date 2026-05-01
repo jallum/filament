@@ -205,6 +205,7 @@ defmodule Filament.Hooks do
   def use_observable(server, request \\ nil, opts \\ []) do
     project = Keyword.get(opts, :project, &Function.identity/1)
     {slot_index, previous, ctx} = use_slot(:uninitialized)
+    server = Map.get(ctx.observable_stubs, server, server)
 
     value =
       case previous do
