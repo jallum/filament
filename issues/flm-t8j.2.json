@@ -4,14 +4,15 @@
   "blocks": [
     "flm-t8j.4"
   ],
+  "closed_at": "2026-05-01T15:50:43Z",
   "created": "2026-05-01T15:25:33Z",
   "description": "## Goal\n\nCreate lib/filament/fiber.ex defining the %Filament.Fiber{} struct. This is the core in-memory node in the fiber tree — one per mounted component instance.\n\nNo dependency on the spike (B0) — can run in parallel with it.\n\n## The struct\n\ndefmodule Filament.Fiber do\n  @enforce_keys [:id, :component]\n  defstruct [\n    :id,          # String.t()        — stable path-based identifier, see below\n    :key,         # term() | nil      — explicit :key from parent, used by reconciler\n    :component,   # module()          — the component module (implements render/1)\n    :props,       # map()             — current props passed to this fiber, default %{}\n    :hook_slots,  # list()            — [{slot_index :: non_neg_integer(), value :: term()}], default []\n    :children,    # [String.t()]      — ordered child fiber IDs, default []\n    :parent_id,   # String.t() | nil  — nil for the root fiber\n    :status       # :mounting | :stable | :updating | :unmounting — default :mounting\n  ]\nend\n\nAdd a @type t :: %__MODULE__{...} with full field types.\n\n## ID generation\n\nFiber IDs are path-based strings, not random UUIDs. Stability across re-renders is required for the reconciler to match instances.\n\nRules:\n- Root fiber: \"root\"\n- Indexed child (no key): parent_id \u003c\u003e \".\" \u003c\u003e to_string(component) \u003c\u003e \"[\" \u003c\u003e to_string(index) \u003c\u003e \"]\"\n  e.g. \"root.Elixir.CartView[0]\"\n- Keyed child: parent_id \u003c\u003e \".\" \u003c\u003e to_string(component) \u003c\u003e \"[key=\" \u003c\u003e inspect(key) \u003c\u003e \"]\"\n  e.g. \"root.Elixir.CartView[key=42]\"\n\nImplement:\n  Filament.Fiber.new/1  — accepts keyword list, validates @enforce_keys, sets defaults\n  Filament.Fiber.child_id/3  — child_id(parent_fiber, component_module, key_or_index)\n    where key_or_index is {:key, term()} | {:index, non_neg_integer()}\n\n## Tests\n\nCreate test/filament/fiber_test.exs. Cover:\n  1. new/1 with all fields — struct is created correctly\n  2. new/1 without :id raises KeyError (enforce_keys)\n  3. new/1 without :component raises KeyError (enforce_keys)\n  4. new/1 sets :status default to :mounting\n  5. child_id/3 with {:index, 0} produces deterministic string\n  6. child_id/3 with {:key, \"abc\"} produces deterministic string\n  7. child_id/3 called twice with same args produces identical ID (idempotent)\n  8. child_id/3 with different keys produces different IDs\n\n## Acceptance criteria\n\n- mix test test/filament/fiber_test.exs passes with zero failures\n- mix compile --warnings-as-errors passes\n- dialyzer passes on lib/filament/fiber.ex (run: mix dialyzer)",
   "id": "flm-t8j.2",
   "labels": [],
   "parent": "flm-t8j",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "B1: Define Filament.Fiber struct and typespecs",
   "type": "task",
-  "updated_at": "2026-05-01T15:44:10Z"
+  "updated_at": "2026-05-01T15:50:43Z"
 }
