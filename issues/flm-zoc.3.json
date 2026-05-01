@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-zoc.2"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "flm-zoc",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "E3: Event closures on fibers — on_click/on_submit in ~F templates, wire encoding, LiveView dispatch",
   "type": "task",
-  "updated_at": "2026-05-01T19:28:21Z"
+  "updated_at": "2026-05-01T20:42:56Z"
 }
