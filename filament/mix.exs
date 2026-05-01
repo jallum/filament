@@ -34,6 +34,8 @@ defmodule Filament.MixProject do
       main: "Filament",
       logo: ".tmp/logo.png",
       extras: [
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
         "guides/Getting Started.md",
         "guides/Observables.md",
         "guides/Resource Holds.md",
