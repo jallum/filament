@@ -2,13 +2,14 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-01T15:13:01Z",
   "created": "2026-05-01T14:30:26Z",
   "description": "Everything needed before a line of framework code ships: Mix project layout, CI, Hex publishing config, ExDoc skeleton. No upstream dependencies — this is the root of the build graph.",
   "id": "flm-io2",
   "labels": [],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Track A: Infrastructure",
   "type": "epic",
-  "updated_at": "2026-05-01T14:53:03Z"
+  "updated_at": "2026-05-01T15:13:01Z"
 }
