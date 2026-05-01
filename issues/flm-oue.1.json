@@ -2,6 +2,7 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
+    "flm-hom.4",
     "flm-oue.2",
     "flm-oue.3",
     "flm-oue.4"
@@ -15,5 +16,5 @@
   "status": "in_progress",
   "title": "C1: Hook slot infrastructure — RenderContext, Filament.Hooks, wiring",
   "type": "task",
-  "updated_at": "2026-05-01T18:00:50Z"
+  "updated_at": "2026-05-01T18:07:00Z"
 }
