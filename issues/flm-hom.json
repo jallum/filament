@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-01T18:07:00Z",
+  "description": "Observable infrastructure that lets fiber-based components subscribe to live GenServer processes and receive reactive updates.\n\nTracks B and C are prerequisites. Track B must be fully merged before starting this track. C1 (hook slot infrastructure) must be complete before D4 (use_observable hook).\n\nTrack D delivers five focused tickets:\n  D1 — Filament.Observable behaviour (callbacks + public subscribe/unsubscribe API)\n  D2 — Filament.Observable.GenServer macro (subscriber tracking, monitors, notify_observers/1)\n  D3 — Projection support + change-or-bust (per-subscriber project fn, skip unchanged)\n  D4 — use_observable/3 hook (subscribe on mount, return projected value, handle_info update path)\n  D5 — Backpressure (detect saturated mailbox, drop + signal resubscribe on next render)\n\nBuild plan: filament/.tmp/plan.html § Track D",
+  "id": "flm-hom",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "Track D: Domain state subscriptions — Observable behaviour, GenServer macro, use_observable hook",
+  "type": "task",
+  "updated_at": "2026-05-01T18:07:00Z"
+}
