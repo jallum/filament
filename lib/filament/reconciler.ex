@@ -34,7 +34,8 @@ defmodule Filament.Reconciler do
     context = %RenderContext{
       fiber_id: "root",
       fiber_tree: %{},
-      owner_pid: owner_pid
+      owner_pid: owner_pid,
+      observable_stubs: Keyword.get(opts, :observable_stubs, %{})
     }
 
     # Render the component
@@ -83,7 +84,8 @@ defmodule Filament.Reconciler do
     context = %RenderContext{
       fiber_id: fiber_id,
       fiber_tree: tree,
-      owner_pid: owner_pid
+      owner_pid: owner_pid,
+      observable_stubs: Keyword.get(opts, :observable_stubs, %{})
     }
 
     # Re-render component

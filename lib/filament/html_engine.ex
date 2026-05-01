@@ -19,9 +19,8 @@ defmodule Filament.HTMLEngine do
     Phoenix.LiveView.HTMLEngine.handle_attributes(ast, meta)
   end
 
-  defp transform_event_attrs({:{}, _, _} = tuple) do
-    # Static attribute list — unlikely at top level, pass through
-    tuple
+  defp transform_event_attrs(list) when is_list(list) do
+    Enum.map(list, &transform_event_pair/1)
   end
 
   defp transform_event_attrs({:%{}, meta, pairs}) do
@@ -37,10 +36,11 @@ defmodule Filament.HTMLEngine do
   defp transform_event_pair({k, v}) do
     case k do
       "on_click" ->
-        {"phx-click", quote(do: Filament.Hooks.register_event_handler(unquote(v)))}
+        {"phx-click", quote(do: "filament:" <> Filament.Hooks.register_event_handler(unquote(v)))}
 
       "on_submit" ->
-        {"phx-submit", quote(do: Filament.Hooks.register_event_handler(unquote(v)))}
+        {"phx-submit",
+         quote(do: "filament:" <> Filament.Hooks.register_event_handler(unquote(v)))}
 
       _other ->
         {k, v}

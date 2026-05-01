@@ -57,6 +57,10 @@ defmodule Filament.Renderer do
                   "render/1 must return %Phoenix.LiveView.Rendered{} or vnode, got: #{inspect(result)}"
         end
 
+      # Force evaluation of dynamic expressions so side effects like
+      # register_event_handler run while the render context is active.
+      _ = Phoenix.HTML.Safe.to_iodata(rendered)
+
       # Harvest context fields
       final_ctx = Process.get(:filament_render_context)
 
