@@ -81,7 +81,10 @@ defmodule Filament.Observable.BackpressureTest do
     # Flood the subscriber's mailbox to >= threshold of 100
     flood_mailbox(sub_pid, 110)
 
-    PressureCounter.set(observable, 2)
+    capture_log(fn ->
+      PressureCounter.set(observable, 2)
+      Logger.flush()
+    end)
 
     {:messages, msgs} = Process.info(sub_pid, :messages)
 
@@ -125,7 +128,10 @@ defmodule Filament.Observable.BackpressureTest do
 
     flood_mailbox(sub_pid2, 110)
 
-    PressureCounter.set(observable, 2)
+    capture_log(fn ->
+      PressureCounter.set(observable, 2)
+      Logger.flush()
+    end)
 
     # last_projected should still be :unset (never updated)
     sub_after = get_subscriber_state(observable, sub_pid2)
@@ -150,7 +156,10 @@ defmodule Filament.Observable.BackpressureTest do
     Process.sleep(50)
 
     # This used to crash with a FunctionClauseError on nil if not handled
-    assert :ok = PressureCounter.set(observable, 99)
+    capture_log(fn ->
+      assert :ok = PressureCounter.set(observable, 99)
+      Logger.flush()
+    end)
   end
 
   test "5. warning logged on saturation" do
@@ -169,6 +178,7 @@ defmodule Filament.Observable.BackpressureTest do
     logs =
       capture_log(fn ->
         PressureCounter.set(observable, 2)
+        Logger.flush()
       end)
 
     assert logs =~ "subscriber"
