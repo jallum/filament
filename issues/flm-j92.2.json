@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-j92.1",
     "flm-zoc.3"
@@ -15,8 +15,8 @@
   "labels": [],
   "parent": "flm-j92",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "F1: Filament.Test — Rung 2 isolated component test API (mount, click, submit, render_text, has_class?)",
   "type": "task",
-  "updated_at": "2026-05-01T20:51:28Z"
+  "updated_at": "2026-05-01T21:12:07Z"
 }
