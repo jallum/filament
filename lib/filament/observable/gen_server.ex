@@ -114,15 +114,24 @@ defmodule Filament.Observable.GenServer do
       def notify_observers(new_state) do
         subs = Process.get(:__filament_subscribers__, %{})
 
-        for {_pid, subscriber} <- subs do
-          projected = subscriber.project.(new_state)
+        new_subs =
+          Map.new(subs, fn {pid, subscriber} ->
+            new_projected = subscriber.project.(new_state)
 
-          send(
-            subscriber.pid,
-            {:filament_observable_update, subscriber.fiber_id, subscriber.slot_index, projected}
-          )
-        end
+            if new_projected !== subscriber.last_projected do
+              send(
+                subscriber.pid,
+                {:filament_observable_update, subscriber.fiber_id, subscriber.slot_index,
+                 new_projected}
+              )
 
+              {pid, %{subscriber | last_projected: new_projected}}
+            else
+              {pid, subscriber}
+            end
+          end)
+
+        Process.put(:__filament_subscribers__, new_subs)
         :ok
       end
     end

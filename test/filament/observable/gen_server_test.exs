@@ -201,7 +201,139 @@ defmodule Filament.Observable.GenServerTest do
     assert Process.alive?(pid)
   end
 
+  # --- Projection tests (D3) ---
+
+  defmodule ProjectionCounter do
+    use Observable.GenServer
+
+    def start_link(n), do: GenServer.start_link(__MODULE__, n)
+    def init(n), do: {:ok, n}
+    def set(pid, n), do: GenServer.call(pid, {:set, n})
+
+    def handle_call({:set, n}, _from, _state) do
+      notify_observers(n)
+      {:reply, :ok, n}
+    end
+  end
+
+  test "9. first notification always fires (last_projected == :unset)" do
+    {:ok, pid} = ProjectionCounter.start_link(0)
+
+    assert {:ok, _} =
+             Observable.subscribe(pid, :any, %Subscriber{
+               pid: self(),
+               fiber_id: :root,
+               slot_index: 0,
+               project: fn n -> n > 5 end
+             })
+
+    ProjectionCounter.set(pid, 3)
+    assert_receive {:filament_observable_update, :root, 0, false}
+  end
+
+  test "10. change triggers notification" do
+    {:ok, pid} = ProjectionCounter.start_link(0)
+
+    assert {:ok, _} =
+             Observable.subscribe(pid, :any, %Subscriber{
+               pid: self(),
+               fiber_id: :root,
+               slot_index: 0,
+               project: fn n -> n > 5 end
+             })
+
+    ProjectionCounter.set(pid, 3)
+    assert_receive {:filament_observable_update, :root, 0, false}
+
+    ProjectionCounter.set(pid, 10)
+    assert_receive {:filament_observable_update, :root, 0, true}
+  end
+
+  test "11. no-change skips notification" do
+    {:ok, pid} = ProjectionCounter.start_link(0)
+
+    assert {:ok, _} =
+             Observable.subscribe(pid, :any, %Subscriber{
+               pid: self(),
+               fiber_id: :root,
+               slot_index: 0,
+               project: fn n -> n > 5 end
+             })
+
+    ProjectionCounter.set(pid, 1)
+    assert_receive {:filament_observable_update, :root, 0, false}
+
+    # Still false → skip
+    ProjectionCounter.set(pid, 2)
+    refute_receive {:filament_observable_update, :root, 0, false}, 50
+  end
+
+  test "12. nil projection survives" do
+    {:ok, pid} = ProjectionCounter.start_link(0)
+
+    assert {:ok, _} =
+             Observable.subscribe(pid, :any, %Subscriber{
+               pid: self(),
+               fiber_id: :root,
+               slot_index: 0,
+               project: fn _ -> nil end
+             })
+
+    ProjectionCounter.set(pid, 1)
+    assert_receive {:filament_observable_update, :root, 0, nil}
+
+    ProjectionCounter.set(pid, 2)
+    refute_receive {:filament_observable_update, :root, 0, nil}, 50
+  end
+
+  test "13. multiple subscribers with different projections" do
+    {:ok, pid} = ProjectionCounter.start_link(0)
+
+    # Use a separate process as one subscriber so both are stored
+    {:ok, agent} = Agent.start(fn -> nil end)
+
+    # Subscriber A: pass-through (via self)
+    assert {:ok, _} =
+             Observable.subscribe(pid, :any, %Subscriber{
+               pid: self(),
+               fiber_id: :me,
+               slot_index: 0,
+               project: & &1
+             })
+
+    # Subscriber B: bool projection (via agent)
+    assert {:ok, _} =
+             Observable.subscribe(pid, :any, %Subscriber{
+               pid: agent,
+               fiber_id: :b,
+               slot_index: 0,
+               project: fn n -> n > 5 end
+             })
+
+    # Set to 3 — both subscribers get first update
+    ProjectionCounter.set(pid, 3)
+    assert_receive {:filament_observable_update, :me, 0, 3}, 200
+
+    # Nothing else for us
+    refute_receive {:filament_observable_update, :me, 0, _}, 50
+
+    # Set to 4: me gets update (4 !== 3), B's agent gets nothing (false === false)
+    ProjectionCounter.set(pid, 4)
+    assert_receive {:filament_observable_update, :me, 0, 4}, 200
+  end
+
   # --- Helpers ---
+
+  defp collect_messages(n, timeout) do
+    for _i <- 1..n do
+      receive do
+        {:filament_observable_update, _, _, _} = msg -> msg
+      after
+        timeout -> nil
+      end
+    end
+    |> Enum.reject(&is_nil/1)
+  end
 
   defp spawn_receiver(parent, _id) do
     spawn(fn ->
