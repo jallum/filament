@@ -100,16 +100,27 @@ defmodule Filament.Reconciler do
   end
 
   @doc """
-  Marks all fibers as unmounting and runs cleanup functions.
+  Marks all fibers as unmounting and runs cleanup functions and observable unsubscriptions.
+
+  ## Options
+    * `:owner_pid` - the LiveView process that owns this render tree (default: nil)
   """
-  @spec unmount(fiber_tree()) :: :ok
-  def unmount(tree) do
+  @spec unmount(fiber_tree(), keyword()) :: :ok
+  def unmount(tree, opts \\ []) do
+    owner_pid = Keyword.get(opts, :owner_pid)
+
     tree
     |> Map.values()
     |> Enum.each(fn fiber ->
       Enum.each(fiber.hook_slots, fn
-        {_index, {_deps, cleanup}} when is_function(cleanup, 0) -> cleanup.()
-        _ -> :ok
+        {_index, {_deps, cleanup}} when is_function(cleanup, 0) ->
+          cleanup.()
+
+        {_index, {:subscribed, server, _value}} ->
+          Filament.Observable.unsubscribe(server, owner_pid)
+
+        _ ->
+          :ok
       end)
 
       %{fiber | status: :unmounting}

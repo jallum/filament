@@ -185,9 +185,36 @@ defmodule Filament.LiveView do
       @doc """
       Phoenix LiveView info handler for observable updates.
       """
-      def handle_info({:filament_update, _fiber_id, _new_state}, socket) do
-        # Track D will implement observable updates
-        {:noreply, socket}
+      def handle_info({:filament_observable_update, fiber_id, slot_index, new_value}, socket) do
+        tree = socket.assigns._filament_tree
+
+        case Map.get(tree, fiber_id) do
+          nil ->
+            {:noreply, socket}
+
+          fiber ->
+            # Preserve the observable server (stored in the slot) while updating the value
+            existing = Map.get(fiber.hook_slots, slot_index, :uninitialized)
+
+            server =
+              case existing do
+                {:subscribed, s, _v} -> s
+                _ -> nil
+              end
+
+            new_slots = Map.put(fiber.hook_slots, slot_index, {:subscribed, server, new_value})
+            tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
+
+            # Re-render the fiber with its current props
+            {new_tree, rendered, pending_effects} =
+              Reconciler.update(tree, fiber_id, fiber.props, owner_pid: self())
+
+            {:noreply,
+             socket
+             |> Phoenix.Component.assign(:_filament_tree, new_tree)
+             |> Phoenix.Component.assign(:_filament_rendered, rendered)
+             |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
+        end
       end
 
       # Ensure render/1 is defined

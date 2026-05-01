@@ -181,4 +181,79 @@ defmodule Filament.Hooks do
     commit_slot(index, {deps, current_cleanup})
     :ok
   end
+
+  @doc """
+  Subscribe this fiber to `server`, returning the current projected value.
+
+  - `server`  — PID or registered name of the observable GenServer
+  - `request` — passed to `handle_subscribe/3` (default `nil`)
+  - `opts`    — keyword list:
+      `:project` — `(state :: term() -> term())` projection function (default identity)
+
+  Must be called at the top level of a component's `render/1`, in consistent order
+  across renders (like all hooks). Do not call inside conditionals or loops.
+
+  ## Examples
+
+      counter = use_observable(CounterServer, nil, project: fn s -> s.count end)
+  """
+  @spec use_observable(
+          server :: GenServer.server(),
+          request :: term(),
+          opts :: [project: (term() -> term())]
+        ) :: term()
+  def use_observable(server, request \\ nil, opts \\ []) do
+    project = Keyword.get(opts, :project, &Function.identity/1)
+    {slot_index, previous, ctx} = use_slot(:uninitialized)
+
+    value =
+      case previous do
+        :uninitialized ->
+          do_subscribe(server, request, project, ctx, slot_index)
+
+        {:subscribed, ^server, _current} ->
+          # Same server — value comes from handle_info updates, just read it.
+          # The current value was stored by handle_info during the last update.
+          Map.get(ctx.new_hook_slots, slot_index, previous)
+          |> case do
+            {:subscribed, ^server, current} -> current
+            value -> value
+          end
+
+        {:subscribed, old_server, _current} ->
+          # Server changed — unsubscribe from old, subscribe to new
+          if is_map_key(ctx.fiber_tree, ctx.fiber_id) do
+            parent_pid = ctx.owner_pid || self()
+            Filament.Observable.unsubscribe(old_server, parent_pid)
+          end
+
+          do_subscribe(server, request, project, ctx, slot_index)
+
+        :needs_resubscribe ->
+          do_subscribe(server, request, project, ctx, slot_index)
+      end
+
+    commit_slot(slot_index, {:subscribed, server, value})
+    value
+  end
+
+  defp do_subscribe(server, request, project, ctx, slot_index) do
+    subscriber = %Filament.Observable.Subscriber{
+      pid: ctx.owner_pid,
+      fiber_id: ctx.fiber_id,
+      slot_index: slot_index,
+      project: project
+    }
+
+    case Filament.Observable.subscribe(server, request, subscriber) do
+      {:ok, initial_value} ->
+        initial_value
+
+      {:error, reason} ->
+        raise Filament.ObservableError,
+          message: "use_observable subscription rejected: #{inspect(reason)}",
+          observable: server,
+          reason: reason
+    end
+  end
 end
