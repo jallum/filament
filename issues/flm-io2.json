@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-01T14:30:26Z",
+  "description": "Everything needed before a line of framework code ships: Mix project layout, CI, Hex publishing config, ExDoc skeleton. No upstream dependencies — this is the root of the build graph.",
+  "id": "flm-io2",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "Track A: Infrastructure",
+  "type": "epic",
+  "updated_at": "2026-05-01T14:30:26Z"
+}
