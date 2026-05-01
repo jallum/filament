@@ -119,6 +119,9 @@ defmodule Filament.Reconciler do
         {_index, {:subscribed, server, _value}} ->
           Filament.Observable.unsubscribe(server, owner_pid)
 
+        {_index, {:held, server, _token}} ->
+          Filament.Hold.release(server, owner_pid)
+
         _ ->
           :ok
       end)

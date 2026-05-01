@@ -256,4 +256,59 @@ defmodule Filament.Hooks do
           reason: reason
     end
   end
+
+  @doc """
+  Acquire a resource hold on `server` on behalf of this fiber's LiveView process.
+  Released automatically when the LiveView disconnects (:DOWN) or the fiber unmounts.
+
+  - `server`  — PID or registered name of a `Filament.Hold.GenServer`
+  - `request` — passed to `handle_acquire/3` on the server (default `nil`)
+  - `opts`    — reserved for future use (default `[]`)
+
+  Returns the opaque token from `handle_acquire/3`.
+  Raises `Filament.HoldError` if the server rejects the request.
+  """
+  @spec use_hold(server :: GenServer.server(), request :: term(), opts :: keyword()) ::
+          token :: term()
+  def use_hold(server, request \\ nil, opts \\ []) do
+    _ = opts
+    {slot_index, previous, ctx} = use_slot(:uninitialized)
+
+    token =
+      case previous do
+        :uninitialized ->
+          do_acquire(server, request, ctx.owner_pid)
+
+        {:held, ^server, current_token} ->
+          current_token
+
+        {:held, old_server, _current_token} ->
+          # Server changed between renders — release old hold, acquire new one
+          if is_map_key(ctx.fiber_tree, ctx.fiber_id) do
+            parent_pid = ctx.owner_pid || self()
+            Filament.Hold.release(old_server, parent_pid)
+          end
+
+          do_acquire(server, request, ctx.owner_pid)
+
+        :needs_reacquire ->
+          do_acquire(server, request, ctx.owner_pid)
+      end
+
+    commit_slot(slot_index, {:held, server, token})
+    token
+  end
+
+  defp do_acquire(server, request, holder_pid) do
+    case Filament.Hold.acquire(server, request, holder_pid) do
+      {:ok, token} ->
+        token
+
+      {:error, reason} ->
+        raise Filament.HoldError,
+          message: "use_hold acquisition rejected by #{inspect(server)}: #{inspect(reason)}",
+          server: server,
+          reason: reason
+    end
+  end
 end
