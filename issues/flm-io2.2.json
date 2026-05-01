@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-01T15:10:49Z",
   "created": "2026-05-01T14:30:38Z",
   "description": "GitHub Actions workflow: matrix over Elixir 1.17/1.18 × OTP 26/27. Steps: deps restore (cache by mix.lock), compile --warnings-as-errors, dialyzer (PLT cached), credo --strict. Fail fast on the compile step so dialyzer only runs on clean builds.",
   "id": "flm-io2.2",
   "labels": [],
   "parent": "flm-io2",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "A2: CI — GitHub Actions matrix",
   "type": "task",
-  "updated_at": "2026-05-01T14:55:06Z"
+  "updated_at": "2026-05-01T15:10:49Z"
 }
