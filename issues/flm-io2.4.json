@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-01T15:12:57Z",
   "created": "2026-05-01T14:30:38Z",
   "description": "Add CHANGELOG.md with an Unreleased section following Keep a Changelog format. Add CONTRIBUTING.md covering: dev setup, running tests, dialyzer, credo, how to open a PR. Both should be wired into ex_doc extras so they appear in the generated docs.",
   "id": "flm-io2.4",
   "labels": [],
   "parent": "flm-io2",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "A4: CHANGELOG and CONTRIBUTING",
   "type": "task",
-  "updated_at": "2026-05-01T15:12:06Z"
+  "updated_at": "2026-05-01T15:12:57Z"
 }
