@@ -30,8 +30,13 @@ defmodule Filament.Hooks.UseObservableTest do
     def init(:ok), do: {:ok, :ok}
 
     @impl Filament.Observable
-    def handle_subscribe(_request, _subscriber, state) do
+    def handle_subscribe(:reject_me, _subscriber, state) do
       {:error, :not_allowed, state}
+    end
+
+    # Fallback to satisfy the behaviour type (never hit by tests)
+    def handle_subscribe(_request, _subscriber, state) do
+      {:ok, state, state}
     end
   end
 
@@ -135,7 +140,7 @@ defmodule Filament.Hooks.UseObservableTest do
 
     assert_raise Filament.ObservableError, ~r/subscription rejected/, fn ->
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->
-        Hooks.use_observable(rejecting, nil, project: & &1)
+        Hooks.use_observable(rejecting, :reject_me, project: & &1)
       end)
     end
   end

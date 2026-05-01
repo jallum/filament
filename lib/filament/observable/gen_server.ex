@@ -55,7 +55,10 @@ defmodule Filament.Observable.GenServer do
             last_projected: :unset
         }
 
-        case handle_subscribe(request, subscriber, state) do
+        # Use apply/3 to disable Elixir's strict type-checker from seeing
+        # the concrete return type at compile time, preventing dead-branch
+        # warnings in modules that override handle_subscribe with a fixed return.
+        case apply(__MODULE__, :handle_subscribe, [request, subscriber, state]) do
           {:ok, initial_value, new_state} ->
             subs = Process.get(:__filament_subscribers__, %{})
             Process.put(:__filament_subscribers__, Map.put(subs, subscriber_pid, subscriber))

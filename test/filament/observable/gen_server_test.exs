@@ -33,8 +33,13 @@ defmodule Filament.Observable.GenServerTest do
     def init(:ok), do: {:ok, :no_state}
 
     @impl Filament.Observable
-    def handle_subscribe(_request, _subscriber, state) do
+    def handle_subscribe(:reject_me, _subscriber, state) do
       {:error, :rejected, state}
+    end
+
+    # Fallback to satisfy the behaviour type (never hit by tests)
+    def handle_subscribe(_request, _subscriber, state) do
+      {:ok, state, state}
     end
   end
 
@@ -192,7 +197,7 @@ defmodule Filament.Observable.GenServerTest do
       project: & &1
     }
 
-    assert {:error, :rejected} = Observable.subscribe(pid, :any, sub)
+    assert {:error, :rejected} = Observable.subscribe(pid, :reject_me, sub)
     assert Process.alive?(pid)
   end
 
