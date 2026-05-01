@@ -58,4 +58,35 @@ defmodule Filament.Hooks do
   """
   @spec current_context() :: RenderContext.t() | nil
   def current_context, do: Process.get(:filament_render_context)
+
+  @doc """
+  Returns the current state value and a setter function.
+
+  On the first render of this fiber, returns {initial, setter}.
+  On subsequent renders, returns the most recently set value (or initial if never changed).
+
+  The setter is a closure. Call it from event handlers or effects to trigger a re-render.
+  Calling the setter sends a message to the owning LiveView process, which re-renders
+  the affected fiber.
+
+  Rules: call only at the top level of render/1. Do not call inside conditionals.
+  """
+  @spec use_state(initial :: term()) :: {value :: term(), setter :: (term() -> :ok)}
+  def use_state(initial) do
+    {index, previous, ctx} = use_slot(initial)
+    setter = build_setter(ctx.fiber_id, index, ctx.owner_pid)
+    commit_slot(index, previous)
+    {previous, setter}
+  end
+
+  defp build_setter(fiber_id, slot_index, owner_pid) when is_pid(owner_pid) do
+    fn new_value ->
+      send(owner_pid, {:filament_set_state, fiber_id, slot_index, new_value})
+      :ok
+    end
+  end
+
+  defp build_setter(_fiber_id, _slot_index, nil) do
+    fn _new_value -> :ok end
+  end
 end
