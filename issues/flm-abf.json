@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-01T20:59:03Z",
+  "description": "Documentation, guides, and the LiveView interop adapter. Opens after all four Track H\ntest suites are green on CI.\n\n  I1 — HexDocs foundation\n       All public modules documented with @moduledoc/@doc/@spec. dialyzer clean.\n       mix docs generates without errors. Required before any guide work.\n\n  I2 — Guide: \"Getting Started\"\n       Fills in guides/Getting Started.md. Walks through the TodoList example\n       (G1): defcomponent, props, use_state, event closures, keyed list, rung-2 test.\n\n  I3 — Guide: \"Observables\"\n       Fills in guides/Observables.md. Walks through the Cart example (G2):\n       Observable.GenServer, use_observable, projections, change-or-bust,\n       two-projection demo (CartBadge vs CartView), rung-3 test.\n\n  I4 — Guide: \"Resource Holds\"\n       Fills in guides/Resource Holds.md. Walks through the Inventory example (G3):\n       Hold.GenServer, use_hold, :DOWN → release lifecycle, out-of-stock UX,\n       process-death test. Includes Collaboration example as an advanced aside.\n\n  I5 — LiveView interop adapter\n       Filament.LiveComponent: embed a Filament component subtree inside a regular\n       Phoenix LiveView as a Phoenix.LiveComponent. One direction only (Filament\n       inside LiveView). The reverse (Filament hosting a LiveComponent) is Phase 2.\n\n  I6 — Migration guide\n       Fills in guides/Migration Guide.md. Phased codemods for lifting LiveView\n       assigns into GenServer + Filament observables. References I2–I4 guides.\n\nPrerequisites (all must be merged before any I ticket can start):\n  Track H (flm-yj9) — all four test suites passing on CI.\n  This implies Track G (examples), Track F (test harness), and all upstream tracks.\n\nDependency order within Track I:\n  I1 → I2, I3, I4, I5 (parallel)\n  I2 + I3 + I4 → I6\n\nBuild plan: filament/.tmp/plan.html §02 Track I section",
+  "id": "flm-abf",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "Track I: Docs \u0026 Interop — HexDocs, narrative guides, LiveView interop adapter",
+  "type": "task",
+  "updated_at": "2026-05-01T20:59:03Z"
+}
