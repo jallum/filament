@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "flm-t8j.5"
@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "flm-t8j",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "B0: Spike — add LiveView deps and document Rendered IR",
   "type": "task",
-  "updated_at": "2026-05-01T15:25:33Z"
+  "updated_at": "2026-05-01T15:26:53Z"
 }
