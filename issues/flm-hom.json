@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-01T18:07:00Z",
@@ -7,8 +7,8 @@
   "id": "flm-hom",
   "labels": [],
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Track D: Domain state subscriptions — Observable behaviour, GenServer macro, use_observable hook",
   "type": "task",
-  "updated_at": "2026-05-01T18:07:00Z"
+  "updated_at": "2026-05-01T18:32:40Z"
 }
