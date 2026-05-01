@@ -5,7 +5,8 @@
     "flm-oue.1"
   ],
   "blocks": [
-    "flm-hom.5"
+    "flm-hom.5",
+    "flm-j92.1"
   ],
   "closed_at": "2026-05-01T18:59:32Z",
   "created": "2026-05-01T18:07:00Z",
@@ -17,5 +18,5 @@
   "status": "closed",
   "title": "D4: Implement use_observable/3 hook — subscribe on mount, return projected value, handle_info path",
   "type": "task",
-  "updated_at": "2026-05-01T18:59:32Z"
+  "updated_at": "2026-05-01T19:28:21Z"
 }
