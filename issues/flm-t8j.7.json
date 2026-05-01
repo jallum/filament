@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-t8j.6"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "flm-t8j",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "B6: Implement Filament.Reconciler — fiber tree mount/update/unmount",
   "type": "task",
-  "updated_at": "2026-05-01T15:25:33Z"
+  "updated_at": "2026-05-01T17:00:55Z"
 }
