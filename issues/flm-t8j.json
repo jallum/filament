@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-01T15:25:33Z",
@@ -7,8 +7,8 @@
   "id": "flm-t8j",
   "labels": [],
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Track B: Fiber runtime and reconciler",
   "type": "epic",
-  "updated_at": "2026-05-01T15:25:33Z"
+  "updated_at": "2026-05-01T15:26:45Z"
 }
