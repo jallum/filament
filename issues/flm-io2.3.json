@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-01T15:12:03Z",
   "created": "2026-05-01T14:30:38Z",
   "description": "Add ex_doc to dev/docs deps. Configure :docs in mix.exs: main module, logo placeholder, extras/ list (Getting Started, Observables, Resource Holds, Migration Guide — empty stubs). Verify `mix docs` produces a site locally. Add hex.pm :package metadata (description, licenses: [\"Apache-2.0\"], links).",
   "id": "flm-io2.3",
   "labels": [],
   "parent": "flm-io2",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "A3: ExDoc config and guides skeleton",
   "type": "task",
-  "updated_at": "2026-05-01T15:10:54Z"
+  "updated_at": "2026-05-01T15:12:03Z"
 }
