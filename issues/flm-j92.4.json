@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-j92.2"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "flm-j92",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "F3: Rung 4 — Filament.Test.LiveView thin wrapper around Phoenix.LiveViewTest",
   "type": "task",
-  "updated_at": "2026-05-01T20:51:28Z"
+  "updated_at": "2026-05-01T21:38:16Z"
 }
