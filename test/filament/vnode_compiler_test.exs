@@ -61,7 +61,6 @@ defmodule Filament.VNodeCompilerTest do
     test "multiple handlers keep stable slot indices across re-renders" do
       defmodule MultiHandlerComp do
         use Filament.Component
-        import Filament.Hooks
 
         defcomponent MultiHandler do
           def render(assigns) do
@@ -109,7 +108,6 @@ defmodule Filament.VNodeCompilerTest do
     test "stable closure produces identical fn reference across renders" do
       defmodule StableClosureComp do
         use Filament.Component
-        import Filament.Hooks
 
         defcomponent StableClosure do
           def render(assigns) do
@@ -138,7 +136,6 @@ defmodule Filament.VNodeCompilerTest do
     test "reactive closure produces new fn reference when dep changes" do
       defmodule ReactiveClosureComp do
         use Filament.Component
-        import Filament.Hooks
 
         defcomponent ReactiveClosure do
           def render(assigns) do
@@ -169,7 +166,6 @@ defmodule Filament.VNodeCompilerTest do
     test "reactive closure reuses fn reference when dep unchanged" do
       defmodule ReactiveClosureStableComp do
         use Filament.Component
-        import Filament.Hooks
 
         defcomponent ReactiveClosureStable do
           def render(assigns) do
@@ -190,6 +186,93 @@ defmodule Filament.VNodeCompilerTest do
 
       assert handler1 === handler2,
              "expected reactive closure fn to be reused when count did not change"
+    end
+  end
+
+  describe "comprehension memoization" do
+    test "for-loop with handlers reuses result when outer-scope deps unchanged" do
+      defmodule CompMemoComp do
+        use Filament.Component
+
+        defcomponent CompMemo do
+          def render(assigns) do
+            {_sel, set_sel} = use_state(:all)
+
+            ~F"""
+            <ul>
+              {for {val, label} <- assigns.items do}
+                <li><a on_click={fn -> set_sel.(val) end}>{label}</a></li>
+              {end}
+            </ul>
+            """
+          end
+        end
+      end
+
+      items = [{:all, "All"}, {:active, "Active"}, {:done, "Done"}]
+
+      {tree1, _rendered1, _} =
+        Reconciler.mount(CompMemoComp.CompMemo, %{items: items}, owner_pid: self())
+
+      h1_slot0 = FiberTree.get_event_handler(tree1, "root", 0)
+      h1_slot1 = FiberTree.get_event_handler(tree1, "root", 1)
+      h1_slot2 = FiberTree.get_event_handler(tree1, "root", 2)
+
+      assert is_function(h1_slot0)
+      assert is_function(h1_slot1)
+      assert is_function(h1_slot2)
+
+      # Re-render with same items — comprehension memo deps unchanged, handlers reused
+      {tree2, _rendered2, _} =
+        Reconciler.update(tree1, "root", %{items: items}, owner_pid: self())
+
+      h2_slot0 = FiberTree.get_event_handler(tree2, "root", 0)
+      h2_slot1 = FiberTree.get_event_handler(tree2, "root", 1)
+      h2_slot2 = FiberTree.get_event_handler(tree2, "root", 2)
+
+      assert h1_slot0 === h2_slot0, "handler 0 should be reused when deps stable"
+      assert h1_slot1 === h2_slot1, "handler 1 should be reused when deps stable"
+      assert h1_slot2 === h2_slot2, "handler 2 should be reused when deps stable"
+    end
+
+    test "for-loop with handlers recomputes when items prop changes" do
+      defmodule CompMemoRebuildComp do
+        use Filament.Component
+
+        defcomponent CompMemoRebuild do
+          def render(assigns) do
+            {_sel, set_sel} = use_state(:all)
+
+            ~F"""
+            <ul>
+              {for {val, label} <- assigns.items do}
+                <li><a on_click={fn -> set_sel.(val) end}>{label}</a></li>
+              {end}
+            </ul>
+            """
+          end
+        end
+      end
+
+      items1 = [{:all, "All"}, {:active, "Active"}]
+      items2 = [{:all, "All"}, {:done, "Done"}, {:extra, "Extra"}]
+
+      {tree1, _, _} =
+        Reconciler.mount(CompMemoRebuildComp.CompMemoRebuild, %{items: items1}, owner_pid: self())
+
+      h1 = FiberTree.get_event_handler(tree1, "root", 0)
+      assert is_function(h1)
+
+      # Re-render with different items — deps changed, handlers recomputed
+      {tree2, _, _} =
+        Reconciler.update(tree1, "root", %{items: items2}, owner_pid: self())
+
+      h2 = FiberTree.get_event_handler(tree2, "root", 0)
+      assert is_function(h2)
+
+      # Different items list → new handlers
+      assert FiberTree.get_event_handler(tree2, "root", 2) != nil,
+             "third handler exists after items expanded"
     end
   end
 end

@@ -321,6 +321,27 @@ defmodule Filament.VNodeCompiler do
     Enum.map_reduce(list, counters, &do_walk(&1, rv, &2))
   end
 
+  # For-loops containing register_event_handler calls are wrapped in a single
+  # memo_at slot. Deps = all outer-scope vars referenced in the loop (including
+  # inside fn bodies) minus loop-pattern-bound vars.  This rebuilds entry-fn
+  # closures whenever any captured value changes (e.g. `current`, `filters`).
+  defp do_walk({:for, meta, args} = node, rv, {t_ctr, e_ctr}) do
+    if has_register_event_handler?(args) do
+      dep_vars = for_loop_outer_vars(node)
+
+      wrapped =
+        quote do:
+                Filament.Hooks.memo_at({:t, unquote(t_ctr)}, unquote(dep_vars), fn ->
+                  unquote(node)
+                end)
+
+      {wrapped, {t_ctr + 1, e_ctr}}
+    else
+      {new_args, counters} = do_walk(args, rv, {t_ctr, e_ctr})
+      emit_if_needed({:for, meta, new_args}, rv, counters)
+    end
+  end
+
   defp do_walk({tag, meta, args}, rv, counters) when is_list(args) do
     {new_args, counters} = do_walk(args, rv, counters)
     emit_if_needed({tag, meta, new_args}, rv, counters)
@@ -386,6 +407,95 @@ defmodule Filament.VNodeCompiler do
   end
 
   defp emit_if_needed(node, _rv, counters), do: {node, counters}
+
+  defp has_register_event_handler?(ast) do
+    {_, found} =
+      Macro.prewalk(ast, false, fn
+        {{:., _, [{:__aliases__, _, [:Filament, :Hooks]}, :register_event_handler]}, _, _} = node,
+        _ ->
+          {node, true}
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    found
+  end
+
+  # Returns outer-scope variable AST nodes to use as memo_at deps for a for-loop.
+  #
+  # Two kinds of deps:
+  # 1. Generator collections — PLV hoists `assigns.items` to a PLV-context var like
+  #    {:for, [counter: N], Phoenix.LiveView.Engine}. Extracting these directly gives
+  #    us the right dep regardless of context or name (`:for` would be excluded by
+  #    valid_variable_name? if we collected it as a plain var).
+  # 2. Nil-context user vars referenced in the loop (excluding generator-pattern-bound
+  #    and for-body-local vars). These cover outer reactive vars like `current`.
+  defp for_loop_outer_vars({:for, _, args} = for_ast) do
+    gen_collections =
+      Enum.flat_map(args, fn
+        {:<-, _, [_pattern, {name, meta, ctx}]} when is_atom(name) -> [{name, meta, ctx}]
+        _ -> []
+      end)
+
+    gen_nil_names =
+      Enum.reduce(args, MapSet.new(), fn
+        {:<-, _, [pattern, _]}, acc -> MapSet.union(acc, collect_nil_names(pattern))
+        _, acc -> acc
+      end)
+
+    body_nil_names =
+      Enum.reduce(args, MapSet.new(), fn
+        [do: body], acc -> MapSet.union(acc, collect_body_nil_names(body))
+        _, acc -> acc
+      end)
+
+    outer_nil_vars =
+      for_ast
+      |> collect_nil_names()
+      |> MapSet.difference(gen_nil_names)
+      |> MapSet.difference(body_nil_names)
+      |> Enum.map(fn name -> {name, [], nil} end)
+
+    (gen_collections ++ outer_nil_vars) |> Enum.uniq()
+  end
+
+  # Collect all nil-context variable names from an AST (descends into fn literals
+  # to capture vars referenced by event handler closures like set_sel, on_change).
+  defp collect_nil_names(ast) do
+    {_, names} =
+      Macro.prewalk(ast, MapSet.new(), fn
+        {name, _meta, nil} = node, acc when is_atom(name) ->
+          if valid_variable_name?(name),
+            do: {node, MapSet.put(acc, name)},
+            else: {node, acc}
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    names
+  end
+
+  # Collect nil-context var names bound by := at the top level of a block
+  # (does not descend into fn literals — those bindings are fn-local).
+  defp collect_body_nil_names(ast) do
+    {_, names} =
+      Macro.prewalk(ast, MapSet.new(), fn
+        {:fn, _, _} = node, acc ->
+          {node, acc}
+
+        {:=, _, [{name, _, nil}, _]} = node, acc when is_atom(name) ->
+          if valid_variable_name?(name),
+            do: {node, MapSet.put(acc, name)},
+            else: {node, acc}
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    names
+  end
 
   # ─── Dependency computation ───────────────────────────────────────────────────
 

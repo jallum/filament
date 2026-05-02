@@ -329,10 +329,31 @@ defmodule Filament.Hooks do
               "hook called outside a render pass — hooks may only be called from render/1"
 
     previous = read_slot_at(ctx, slot)
-    {value, stored_deps} = resolve_memo(previous, deps, factory)
-    updated = Map.put(ctx.new_hook_slots, slot, {stored_deps, value})
-    Process.put(:filament_render_context, %{ctx | new_hook_slots: updated})
-    value
+
+    case previous do
+      {:memo, cached_deps, cached_value, handler_range}
+      when deps != :no_deps and cached_deps == deps ->
+        # Cache hit: replay event handlers registered by the factory last time
+        # so the fiber's event_handlers map stays populated without re-running factory.
+        replay_handler_range(ctx, handler_range)
+        after_ctx = Process.get(:filament_render_context)
+        slot_entry = {:memo, cached_deps, cached_value, handler_range}
+        updated = Map.put(after_ctx.new_hook_slots, slot, slot_entry)
+        Process.put(:filament_render_context, %{after_ctx | new_hook_slots: updated})
+        cached_value
+
+      _ ->
+        # Cache miss or first render: run factory, record which handler indices it used.
+        e_start = ctx.event_handler_index
+        value = factory.()
+        after_ctx = Process.get(:filament_render_context)
+        e_end = after_ctx.event_handler_index
+        stored_deps = if deps == :no_deps, do: :no_deps, else: deps
+        slot_entry = {:memo, stored_deps, value, {e_start, e_end}}
+        updated = Map.put(after_ctx.new_hook_slots, slot, slot_entry)
+        Process.put(:filament_render_context, %{after_ctx | new_hook_slots: updated})
+        value
+    end
   end
 
   defp read_slot_at(ctx, slot) do
@@ -346,15 +367,19 @@ defmodule Filament.Hooks do
     end
   end
 
-  defp resolve_memo({cached_deps, cached_value}, deps, factory) do
-    if deps != :no_deps and cached_deps == deps do
-      {cached_value, cached_deps}
-    else
-      {factory.(), deps}
+  # Replay event handlers from the previous fiber for the given auto-increment index range.
+  defp replay_handler_range(_ctx, {e_start, e_start}), do: :ok
+
+  defp replay_handler_range(ctx, {e_start, e_end}) do
+    fiber = Map.get(ctx.fiber_tree, ctx.fiber_id)
+
+    if fiber do
+      after_ctx = Process.get(:filament_render_context)
+      replayed = Map.take(fiber.event_handlers, Enum.to_list(e_start..(e_end - 1)))
+      merged = Map.merge(after_ctx.new_event_handlers, replayed)
+      Process.put(:filament_render_context, %{after_ctx | new_event_handlers: merged})
     end
   end
-
-  defp resolve_memo(_other, deps, factory), do: {factory.(), deps}
 
   @doc """
   Registers an event handler at a specific compile-time-assigned slot index.

@@ -144,7 +144,7 @@ defmodule Filament.HooksTest do
         end)
 
       assert value == :computed
-      assert new_slots[{:t, 0}] == {[], :computed}
+      assert new_slots[{:t, 0}] == {:memo, [], :computed, {0, 0}}
     end
 
     test "reuses cached value when deps unchanged" do
@@ -159,7 +159,7 @@ defmodule Filament.HooksTest do
         Fiber.new(
           id: "root",
           component: nil,
-          hook_slots: %{{:t, 0} => {[:dep], :cached}},
+          hook_slots: %{{:t, 0} => {:memo, [:dep], :cached, {0, 0}}},
           status: :stable
         )
 
@@ -177,7 +177,7 @@ defmodule Filament.HooksTest do
         Fiber.new(
           id: "root",
           component: nil,
-          hook_slots: %{{:t, 0} => {[:old], :stale}},
+          hook_slots: %{{:t, 0} => {:memo, [:old], :stale, {0, 0}}},
           status: :stable
         )
 
@@ -201,8 +201,8 @@ defmodule Filament.HooksTest do
 
       assert v1 == :plain
       assert v2 == :tagged
-      assert new_slots[0] == {[], :plain}
-      assert new_slots[{:t, 0}] == {[], :tagged}
+      assert new_slots[0] == {:memo, [], :plain, {0, 0}}
+      assert new_slots[{:t, 0}] == {:memo, [], :tagged, {0, 0}}
     end
 
     test "does not increment hook_index" do
