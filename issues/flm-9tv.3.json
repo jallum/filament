@@ -3,7 +3,9 @@
   "blocked_by": [
     "flm-9tv.2"
   ],
-  "blocks": [],
+  "blocks": [
+    "flm-9tv.4"
+  ],
   "created": "2026-05-02T20:39:42Z",
   "description": "Extend emit_slot_calls to detect register_event_handler calls inside for comprehensions in the linear body and wrap the entire loop in one memo_at slot.\n\n## Mechanism\n\nAfter hoist_comprehension_handlers, register_event_handler calls are already in the for-loop body in linear scope. emit_slot_calls detects for loops containing register_event_handler sites and wraps the whole loop:\n\n  Before:\n    for {value, label} \u003c- filters do\n      freh_N = register_event_handler(fn -\u003e set_current.(value) end)\n      {nil, %{...}, fn ... -\u003e ... end}\n    end\n\n  After:\n    memo_at({:t, 0}, [filters, on_change], fn -\u003e\n      for {value, label} \u003c- filters do\n        event_at(auto_idx, fn -\u003e set_current.(value) end)\n      end\n    end)\n\n## Dep analysis\n\nDeps for the comprehension memo are the reactive variables that the handler fns inside the loop reference. Same compute_closure_deps logic already used by wrap_in_use_memo.\n\n## Stability guarantee\n\nIf filters and on_change are stable: the whole handler list is reused, no register_event_handler calls, no hook slot writes. If either changes: all handlers recomputed. One {:t, N} slot regardless of list length.\n\n## Acceptance\n\n- Filter bar survives observable_update re-renders with no GenServer crash\n- Clicking Active/Completed filters after adding a todo does not crash\n- Adding a second todo (triggering store update) re-renders correctly with stable filter handlers when filters prop unchanged",
   "id": "flm-9tv.3",
