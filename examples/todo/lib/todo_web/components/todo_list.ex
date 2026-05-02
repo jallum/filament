@@ -22,13 +22,6 @@ defmodule TodoWeb.Components.TodoList do
       active_count = Enum.count(todos, &(!&1.completed))
       all_completed = todos != [] and Enum.all?(todos, & &1.completed)
 
-      filter_bar =
-        FilterBar.render(%{
-          filters: [all: "All", active: "Active", completed: "Completed"],
-          default: :all,
-          on_change: set_filter
-        })
-
       ~F"""
       <section class="todoapp">
         <header class="header">
@@ -43,25 +36,21 @@ defmodule TodoWeb.Components.TodoList do
           </form>
         </header>
 
-        <%= if todos != [] do %>
+        {if todos != [] do}
           <section class="main">
             <input class="toggle-all" type="checkbox" checked={all_completed} />
             <ul class="todo-list">
-              <%= for todo <- filtered do %>
-                <%= TodoItem.render(%{
-                  todo: todo,
-                  on_toggle: fn -> Todo.Store.toggle(store, todo.id) end,
-                  on_remove: fn -> Todo.Store.remove(store, todo.id) end
-                }) %>
-              <% end %>
+              {for todo <- filtered do}
+                <TodoItem todo={todo} on_toggle={fn -> Todo.Store.toggle(store, todo.id) end} on_remove={fn -> Todo.Store.remove(store, todo.id) end} />
+              {end}
             </ul>
           </section>
 
           <footer class="footer">
             <span class="todo-count"><strong>{active_count}</strong> item(s) left</span>
-            <%= filter_bar %>
+            <FilterBar filters={[all: "All", active: "Active", completed: "Completed"]} default={:all} on_change={set_filter} />
           </footer>
-        <% end %>
+        {end}
       </section>
       """
     end

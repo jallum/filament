@@ -32,7 +32,7 @@ defmodule TodoWeb.Components.FilterBar do
 
       ~F"""
       <ul class="filters">
-        <%= for {{value, label}, handler} <- Enum.zip(filters, handlers) do %>
+        {for {{value, label}, handler} <- Enum.zip(filters, handlers) do}
           <li>
             <a
               class={if current == value, do: "selected", else: ""}
@@ -40,7 +40,7 @@ defmodule TodoWeb.Components.FilterBar do
               href="#"
             >{label}</a>
           </li>
-        <% end %>
+        {end}
       </ul>
       """
     end

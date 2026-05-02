@@ -1388,13 +1388,20 @@ defmodule Filament.TagEngine do
   end
 
   defp decompose_remote_component_tag!(tag_name, tag_meta, state) do
+    %{line: line, column: column} = tag_meta
+
     case String.split(tag_name, ".") |> Enum.reverse() do
-      [<<first, _::binary>> = fun_name | rest] when first in ?a..?z ->
+      [<<first, _::binary>> = fun_name | [_ | _] = rest] when first in ?a..?z ->
+        # Standard Phoenix HEEx: <Module.function /> → Module.function(assigns)
         size = byte_size(tag_name) - byte_size(fun_name) + 1
         aliases = rest |> Enum.reverse() |> Enum.map(&String.to_atom/1)
         fun = String.to_atom(fun_name)
-        %{line: line, column: column} = tag_meta
         {{:__aliases__, [line: line, column: column], aliases}, size, fun}
+
+      [_ | _] = parts ->
+        # Filament-style: <Module /> or <Alias.Module /> → Module.render(assigns)
+        aliases = parts |> Enum.reverse() |> Enum.map(&String.to_atom/1)
+        {{:__aliases__, [line: line, column: column], aliases}, byte_size(tag_name), :render}
 
       _ ->
         message = "invalid tag <#{tag_meta.tag_name}>"

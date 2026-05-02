@@ -19,7 +19,7 @@ defmodule Filament.VNodeCompiler do
   @spec compile(String.t(), Macro.Env.t() | nil) :: term()
   def compile(source, caller) do
     quoted =
-      Filament.TagEngine.compile(source,
+      Filament.TagEngine.compile(preprocess_jsx(source),
         file: caller.file,
         line: caller.line + 1,
         caller: caller,
@@ -33,6 +33,24 @@ defmodule Filament.VNodeCompiler do
     {transformed, reactive_vars} = transform_at_assigns(hoisted, in_scope)
 
     wrap_in_use_memo(transformed, reactive_vars)
+  end
+
+  # ─── JSX preprocessor ───────────────────────────────────────────────────────
+
+  # Transform JSX-style control flow syntax into standard EEx tags:
+  #   {if cond do}…{end}      →  <%= if cond do %>…<% end %>
+  #   {for x <- list do}…{end} →  <%= for x <- list do %>…<% end %>
+  #   {else}, {end}, {rescue}  →  <% else %>, <% end %>, <% rescue %>
+  #
+  # Uses greedy `.*` so compound block conditions (like `{for {{a,b},c} <- ...`)
+  # are captured correctly. Non-dotall: patterns don't cross newlines.
+  defp preprocess_jsx(source) do
+    source
+    |> String.replace(
+      ~r/\{(if|unless|for|case|cond|with|try|receive)\b(.*)\bdo\s*\}/,
+      "<%= \\1\\2do %>"
+    )
+    |> String.replace(~r/\{(else|end|rescue|after|catch)\s*\}/, "<% \\1 %>")
   end
 
   # ─── Dynamic hoisting ────────────────────────────────────────────────────────
