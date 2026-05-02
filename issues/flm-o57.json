@@ -2,13 +2,14 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-02T20:03:34Z",
   "created": "2026-05-02T18:47:31Z",
   "description": "The ~F sigil currently delegates to Phoenix.LiveView.TagEngine, which requires an `assigns` variable in lexical scope — a vestigial artifact of Phoenix's change-tracking model that Filament does not use. The goal is to own the full rendering pipeline end-to-end.\n\nKEY ARCHITECTURAL INSIGHT: the dynamic fn in %Phoenix.LiveView.Rendered{} is re-evaluated by Phoenix's diff engine outside the Filament render context. Every workaround written so far (use_memo, hoisting child renders, assigns = {} hack) exists because work is happening inside that closure. The fix is structural: all real work — hooks, child renders, event registration — must be hoisted to the linear body of the render function, where the fiber context is active. The dynamic fn must be trivial: it only returns already-bound locals.\n\nCENTRAL FILES:\n- lib/filament/sigil_f.ex — ~F entry point; calls VNodeCompiler.compile/2\n- lib/filament/vnode_compiler.ex — current pipeline: TagEngine → transform_at_assigns → wrap_in_use_memo; emits iodata, NOT a %Rendered{} struct\n- lib/filament/html_engine.ex — thin wrapper over Phoenix.LiveView.HTMLEngine\n- lib/filament/component.ex — defcomponent macro; imports SigilF\n- deps/phoenix_live_view/lib/phoenix_live_view/tag_engine.ex — source to fork\n- deps/phoenix_live_view/lib/phoenix_live_view/html_engine.ex — source to fork\n- examples/todo/lib/todo_web/components/ — all example components to be updated\n\n%Phoenix.LiveView.Rendered{} CONTRACT:\n  static:      [String.t()]                        — compile-time constant HTML string list\n  dynamic:     fn(bool) -\u003e [dyn()] end             — bool arg is always false; each element is iodata | %Rendered{} | %Comprehension{} | nil\n  fingerprint: integer                             — MD5 of :erlang.term_to_binary([block | statics]), computed at compile time; required for diff correctness\n  root:        nil                                 — leave nil for function components\n  caller:      {module, {fn, arity}, file, line}  — from __CALLER__; enables diff-phase stack traces\n\nFingerprint algorithm (from Phoenix source):\n  \u003c\u003cfp::8*16\u003e\u003e = :erlang.md5(:erlang.term_to_binary([block | statics]))\n\nSCOPE: no backward compatibility required. ~F becomes the new behavior. No new sigil.",
   "id": "flm-o57",
   "labels": [],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Own the Renderer: fork TagEngine, emit %Rendered{} directly, JSX syntax in ~F",
   "type": "epic",
-  "updated_at": "2026-05-02T19:11:17Z"
+  "updated_at": "2026-05-02T20:03:34Z"
 }
