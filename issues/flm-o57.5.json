@@ -6,14 +6,15 @@
   "blocks": [
     "flm-o57.6"
   ],
+  "closed_at": "2026-05-02T19:58:05Z",
   "created": "2026-05-02T18:49:26Z",
   "description": "With the new codegen in place (T2), the ~F sigil no longer requires assigns in lexical scope. Remove every workaround that existed to satisfy that requirement, and tighten render function signatures across all example components.\n\nREAD FIRST:\n- lib/filament/vnode_compiler.ex  (confirm no assigns reference is generated after T2)\n- examples/todo/lib/todo_web/components/todo_list.ex\n- examples/todo/lib/todo_web/components/filter_bar.ex\n- examples/todo/lib/todo_web/components/todo_item.ex\n- test/filament/fixtures/counter_component.ex  (check for assigns usage in test fixtures)\n- test/  (grep for assigns = to find any test fixtures that need cleanup)\n\nCHANGES REQUIRED:\n\n1. examples/todo/lib/todo_web/components/todo_list.ex\n   REMOVE: assigns = {}  (line exists before the ~F block — delete it entirely)\n   The render function head is: def render(%{store: store, title: title}) do\n   This is correct — no changes to the function head needed.\n\n2. examples/todo/lib/todo_web/components/filter_bar.ex\n   The render function currently takes `assigns` and uses Map.get to extract fields.\n   Simplify to pattern match:\n   CHANGE: def render(assigns) do ... filters = Map.get(assigns, :filters) ...\n   TO:     def render(%{filters: filters, on_change: on_change, default: default}) do\n   Remove all Map.get calls. Access the extracted variables directly.\n\n3. examples/todo/lib/todo_web/components/todo_item.ex\n   The render function currently uses def render(%{todo: todo} = assigns) do\n   CHANGE: def render(%{todo: todo} = assigns) do\n   TO:     def render(%{todo: todo, on_toggle: on_toggle, on_remove: on_remove}) do\n   Inside the template, replace @on_toggle and @on_remove with on_toggle and on_remove.\n   Replace @todo.text and @todo.completed with todo.text and todo.completed.\n   No assigns in scope after this change — the ~F must compile without it.\n\n4. Scan test/filament/fixtures/ for any component that uses assigns = {} or = assigns\n   in render functions. Apply the same cleanup: pattern match props directly,\n   no assigns binding needed.\n\n5. Add a compilation test: write a test that defines a minimal component with\n   def render(%{text: text}) do ~F\"\"\"\u003cdiv\u003e{text}\u003c/div\u003e\"\"\" end\n   and confirms it compiles and renders without assigns in scope.\n   Place in test/filament/vnode_compiler_test.exs or similar.\n\nVERIFICATION:\n- grep -r \"assigns = {}\" lib/ examples/ test/ — must return no results\n- grep -r \"= assigns\" lib/ examples/ test/ -- must return no results (except genuine uses)\n- mix test passes\n\nACCEPTANCE:\n- `mix test` passes\n- Chrome: localhost:4000 — full todo demo works: add, toggle, filter\n- The server must start with no compilation warnings about unused variables\n- No assigns = {} anywhere in the codebase",
   "id": "flm-o57.5",
   "labels": [],
   "parent": "flm-o57",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Remove assigns dependency from all components; clean up render function signatures",
   "type": "task",
-  "updated_at": "2026-05-02T19:56:58Z"
+  "updated_at": "2026-05-02T19:58:05Z"
 }
