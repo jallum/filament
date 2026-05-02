@@ -12,9 +12,15 @@
   "id": "flm-40e.2",
   "labels": [],
   "parent": "flm-40e",
+  "comments": [
+    {
+      "text": "Post-close finding: VNodeCompiler.compile/2 passes the real caller env (including caller.vars) to Phoenix.LiveView.TagEngine.compile/2. TagEngine's engine.ex calls maybe_warn_taint/3 which gates on Macro.Env.has_var?(caller, {name, nil}) — so any bare variable defined in the enclosing scope triggers the 'you are accessing the variable inside a LiveView template' warning even though Filament intentionally uses lexical scoping. Fix: pass %{caller | vars: []} to TagEngine so has_var? always returns false. This is safe — TagEngine only uses the caller for this warning check; file/line are passed separately. The fix must be applied before reactive scope inference (Item 1b) can proceed cleanly.",
+      "timestamp": "2026-05-02T14:21:02Z"
+    }
+  ],
   "priority": 1,
   "status": "closed",
   "title": "Item 1a: VNodeCompiler — lexical @-variable scoping and sigil_F",
   "type": "task",
-  "updated_at": "2026-05-02T13:10:36Z"
+  "updated_at": "2026-05-02T14:21:02Z"
 }
