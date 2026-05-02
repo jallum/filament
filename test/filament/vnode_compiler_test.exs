@@ -58,6 +58,51 @@ defmodule Filament.VNodeCompilerTest do
     end
   end
 
+  describe "wire-ref stability" do
+    test "multiple handlers keep stable slot indices across re-renders" do
+      defmodule MultiHandlerComp do
+        use Filament.Component
+        import Filament.Hooks
+
+        defcomponent MultiHandler do
+          def render(assigns) do
+            {count, set_count} = use_state(0)
+
+            ~F"""
+            <div>
+              <button on_click={fn -> set_count.(@count + 1) end}>A</button>
+              <button on_click={fn -> :action2 end}>B</button>
+            </div>
+            """
+          end
+        end
+      end
+
+      {tree1, _, _} =
+        Reconciler.mount(MultiHandlerComp.MultiHandler, %{}, owner_pid: self())
+
+      h1_slot0 = FiberTree.get_event_handler(tree1, "root", 0)
+      h1_slot1 = FiberTree.get_event_handler(tree1, "root", 1)
+      assert is_function(h1_slot0) and is_function(h1_slot1)
+      refute h1_slot0 === h1_slot1, "distinct handlers must occupy distinct slots"
+
+      # Advance count: use_state is hook slot 0 — change count 0 → 1
+      updated =
+        FiberTree.update_hook_slot(tree1, "root", 0, fn {_, setter} -> {1, setter} end)
+
+      {tree2, _, _} = Reconciler.update(updated, "root", %{}, owner_pid: self())
+
+      h2_slot0 = FiberTree.get_event_handler(tree2, "root", 0)
+      h2_slot1 = FiberTree.get_event_handler(tree2, "root", 1)
+
+      # Slot 1 is a stable closure (no reactive deps) — same fn object
+      assert h1_slot1 === h2_slot1, "stable handler slot must be identical across renders"
+      # Slot 0 captures @count which changed — new fn, but SAME slot index
+      assert is_function(h2_slot0), "handler at slot 0 must still be a function after re-render"
+      refute h1_slot0 === h2_slot0, "reactive handler must change when dep changes"
+    end
+  end
+
   describe "stable closure fn identity" do
     # Closure capturing only a stable setter (not in reactive_vars because it is
     # never referenced via @) → use_memo(fn -> closure end, []) → same fn object
