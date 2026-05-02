@@ -8,7 +8,7 @@ defmodule TodoWeb.Components.TodoItem do
   """
   use Filament.Component
 
-  defcomponent TodoItem do
+  defcomponent do
     prop(:todo, :map, required: true)
     prop(:on_toggle, :function, default: nil)
     prop(:on_remove, :function, default: nil)

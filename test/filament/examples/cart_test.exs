@@ -64,7 +64,7 @@ defmodule Filament.Examples.CartTest do
       # Stub returns initial empty state. CartBadge applies count projection internally.
       {:ok, stub} = Filament.Test.Stub.start(fn _req -> %Cart.State{} end)
 
-      {:ok, view} = mount(CartWeb.Components.CartBadge.CartBadge, %{server: stub})
+      {:ok, view} = mount(CartWeb.Components.CartBadge, %{server: stub})
 
       html = view.rendered_html
       # Badge renders empty (count=0 shows nothing due to conditional in template)
@@ -75,7 +75,7 @@ defmodule Filament.Examples.CartTest do
     test "badge updates when count changes" do
       {:ok, stub} = Filament.Test.Stub.start(fn _req -> %Cart.State{} end)
 
-      {:ok, view} = mount(CartWeb.Components.CartBadge.CartBadge, %{server: stub})
+      {:ok, view} = mount(CartWeb.Components.CartBadge, %{server: stub})
       assert view.rendered_html =~ "data-count=\"0\""
 
       # Push a new state with one item
@@ -128,7 +128,7 @@ defmodule Filament.Examples.CartTest do
   describe "CartView (rung-3, real Cart.Server)" do
     setup do
       {:ok, server} = Cart.Server.start_link([])
-      {:ok, view} = mount(CartWeb.Components.CartView.CartView, %{server: server})
+      {:ok, view} = mount(CartWeb.Components.CartView, %{server: server})
       %{server: server, view: view}
     end
 

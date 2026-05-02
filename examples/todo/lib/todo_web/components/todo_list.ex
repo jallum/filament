@@ -5,10 +5,10 @@ defmodule TodoWeb.Components.TodoList do
   use Filament.Component
 
   import Filament.Hooks
-  alias TodoWeb.Components.FilterBar.FilterBar
-  alias TodoWeb.Components.TodoItem.TodoItem
+  alias TodoWeb.Components.FilterBar
+  alias TodoWeb.Components.TodoItem
 
-  defcomponent TodoList do
+  defcomponent do
     prop(:store, :any, required: true)
     prop(:title, :string, default: "Todo List")
 

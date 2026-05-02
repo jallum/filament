@@ -3,7 +3,7 @@ defmodule CartWeb.Components.CartView do
 
   alias Filament.Hooks
 
-  defcomponent CartView do
+  defcomponent do
     prop(:server, :any, default: Cart.Server)
 
     def render(assigns) do

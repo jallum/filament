@@ -65,12 +65,12 @@ defmodule Filament.Examples.TodoTest do
     setup do
       name = :"todo_store_#{System.unique_integer([:positive])}"
       {:ok, store} = Todo.Store.start_link(name: name)
-      {:ok, _view} = mount(TodoWeb.Components.TodoList.TodoList, %{store: store})
+      {:ok, _view} = mount(TodoWeb.Components.TodoList, %{store: store})
       %{store: store}
     end
 
     test "renders empty state on first mount", %{store: store} do
-      {:ok, view} = mount(TodoWeb.Components.TodoList.TodoList, %{store: store})
+      {:ok, view} = mount(TodoWeb.Components.TodoList, %{store: store})
       html = view.rendered_html
       refute html =~ "<li"
     end
@@ -80,7 +80,7 @@ defmodule Filament.Examples.TodoTest do
       :ok = Todo.Store.add(store, "Second task")
 
       # Re-mount fresh so items appear
-      {:ok, view} = mount(TodoWeb.Components.TodoList.TodoList, %{store: store})
+      {:ok, view} = mount(TodoWeb.Components.TodoList, %{store: store})
 
       text = render_text(view)
       assert text =~ "First task"
@@ -94,7 +94,7 @@ defmodule Filament.Examples.TodoTest do
       :ok = Todo.Store.toggle(store, item.id)
 
       # Mount with completed item
-      {:ok, view} = mount(TodoWeb.Components.TodoList.TodoList, %{store: store})
+      {:ok, view} = mount(TodoWeb.Components.TodoList, %{store: store})
       html = view.rendered_html
 
       # Check for completed class
@@ -103,7 +103,7 @@ defmodule Filament.Examples.TodoTest do
 
     test "filter buttons are present", %{store: store} do
       :ok = Todo.Store.add(store, "Task")
-      {:ok, view} = mount(TodoWeb.Components.TodoList.TodoList, %{store: store})
+      {:ok, view} = mount(TodoWeb.Components.TodoList, %{store: store})
 
       html = view.rendered_html
       # Filter buttons are anchor tags with on_click handlers
@@ -117,12 +117,12 @@ defmodule Filament.Examples.TodoTest do
       :ok = Todo.Store.add(store, "Persistent task")
 
       # Mount, unmount, remount
-      {:ok, view1} = mount(TodoWeb.Components.TodoList.TodoList, %{store: store})
+      {:ok, view1} = mount(TodoWeb.Components.TodoList, %{store: store})
       text1 = render_text(view1)
       assert text1 =~ "Persistent task"
 
       # Remount
-      {:ok, view2} = mount(TodoWeb.Components.TodoList.TodoList, %{store: store})
+      {:ok, view2} = mount(TodoWeb.Components.TodoList, %{store: store})
       text2 = render_text(view2)
       assert text2 =~ "Persistent task"
     end

@@ -12,5 +12,5 @@ defmodule TodoWeb.TodoLive do
     super([], %{}, socket)
   end
 
-  def root_component, do: TodoWeb.Components.TodoList.TodoList
+  def root_component, do: TodoWeb.Components.TodoList
 end

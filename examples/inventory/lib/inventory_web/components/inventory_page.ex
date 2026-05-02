@@ -1,7 +1,7 @@
 defmodule InventoryWeb.Components.InventoryPage do
   use Filament.Component
 
-  defcomponent InventoryPage do
+  defcomponent do
     prop(:server, :any, default: Inventory.Server)
 
     def render(assigns) do

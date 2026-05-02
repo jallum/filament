@@ -5,7 +5,7 @@ defmodule CartWeb.Components.CartBadge do
 
   # server prop: which Cart.Server to subscribe to (pid or registered name).
   # Defaults to Cart.Server for production; tests pass a pid for isolation.
-  defcomponent CartBadge do
+  defcomponent do
     prop(:server, :any, default: Cart.Server)
 
     def render(%{server: server} = assigns) do

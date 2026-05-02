@@ -104,7 +104,7 @@ defmodule Filament.Examples.CollaborationTest do
       {:ok, server} = Collaboration.DocumentServer.start_link(doc_id: doc_id)
 
       {:ok, view} =
-        mount(CollaborationWeb.Components.DocumentEditor.DocumentEditor, %{
+        mount(CollaborationWeb.Components.DocumentEditor, %{
           server: server,
           doc_id: doc_id
         })
@@ -132,7 +132,7 @@ defmodule Filament.Examples.CollaborationTest do
 
       # view is subscribed; drain observable updates to re-render
       {:ok, view} =
-        mount(CollaborationWeb.Components.DocumentEditor.DocumentEditor, %{
+        mount(CollaborationWeb.Components.DocumentEditor, %{
           server: server,
           doc_id: doc_id
         })
@@ -150,7 +150,7 @@ defmodule Filament.Examples.CollaborationTest do
       {:ok, server} = Collaboration.DocumentServer.start_link(doc_id: doc_id)
 
       {:ok, view} =
-        mount(CollaborationWeb.Components.DocumentEditor.DocumentEditor, %{
+        mount(CollaborationWeb.Components.DocumentEditor, %{
           server: server,
           doc_id: doc_id
         })

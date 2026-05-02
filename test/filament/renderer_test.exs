@@ -229,6 +229,7 @@ defmodule Filament.RendererTest do
 
     test "4. render_vnode :component registers child fiber in new_fibers" do
       root_fiber = Fiber.new(id: "root", component: __MODULE__)
+
       context = %RenderContext{
         fiber_id: "root",
         fiber_tree: %{"root" => root_fiber},
@@ -255,6 +256,7 @@ defmodule Filament.RendererTest do
 
     test "5. rendering a component twice with same key preserves hook_slots" do
       root_fiber = Fiber.new(id: "root", component: __MODULE__)
+
       context = %RenderContext{
         fiber_id: "root",
         fiber_tree: %{"root" => root_fiber},
@@ -266,10 +268,12 @@ defmodule Filament.RendererTest do
 
       # First render
       Process.put(:filament_render_context, context)
+
       Renderer.render_vnode(
         {:component, StatefulComp.StatefulComp, %{initial: 42}, "item"},
         context
       )
+
       first_ctx = Process.get(:filament_render_context)
       Process.delete(:filament_render_context)
 
@@ -285,10 +289,12 @@ defmodule Filament.RendererTest do
       }
 
       Process.put(:filament_render_context, context2)
+
       Renderer.render_vnode(
         {:component, StatefulComp.StatefulComp, %{initial: 42}, "item"},
         context2
       )
+
       second_ctx = Process.get(:filament_render_context)
       Process.delete(:filament_render_context)
 
@@ -299,6 +305,7 @@ defmodule Filament.RendererTest do
 
     test "6. render_vnode :keyed_list with component items registers all child fibers" do
       root_fiber = Fiber.new(id: "root", component: __MODULE__)
+
       context = %RenderContext{
         fiber_id: "root",
         fiber_tree: %{"root" => root_fiber},

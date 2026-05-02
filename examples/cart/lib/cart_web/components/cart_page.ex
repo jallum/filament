@@ -1,6 +1,7 @@
 defmodule CartWeb.Components.CartPage do
   @moduledoc """
   Root component for the cart demo.
+
   Demonstrates two use_observable subscriptions to the same Cart.Server:
   - count_projection (used for the badge): re-renders only when item count changes
   - full state (used for the cart view): re-renders on any mutation
@@ -9,7 +10,7 @@ defmodule CartWeb.Components.CartPage do
 
   alias Filament.Hooks
 
-  defcomponent CartPage do
+  defcomponent do
     prop(:server, :any, default: Cart.Server)
 
     defp products do
@@ -23,10 +24,10 @@ defmodule CartWeb.Components.CartPage do
     def render(assigns) do
       server = Map.get(assigns, :server)
 
-      # Projection: count-only — mirrors what CartBadge.CartBadge would observe.
+      # Projection: count-only — mirrors what CartBadge would observe.
       count = Hooks.use_observable(server, nil, project: &Cart.State.item_count/1)
 
-      # Full-state subscription — mirrors what CartView.CartView would observe.
+      # Full-state subscription — mirrors what CartView would observe.
       cart = Hooks.use_observable(server)
 
       items_html =

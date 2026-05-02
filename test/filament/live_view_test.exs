@@ -18,7 +18,7 @@ defmodule Filament.LiveViewTest do
   defmodule CounterComponent do
     use Filament.Component
 
-    defcomponent Counter do
+    defcomponent do
       prop(:count, :integer, required: true)
 
       def render(assigns) do
@@ -34,7 +34,7 @@ defmodule Filament.LiveViewTest do
   defmodule CounterLiveView do
     use Filament.LiveView
 
-    def root_component(), do: CounterComponent.Counter
+    def root_component(), do: CounterComponent
   end
 
   describe "module injection" do
@@ -58,7 +58,7 @@ defmodule Filament.LiveViewTest do
   describe "behaviour" do
     test "implements root_component/0 callback" do
       assert function_exported?(CounterLiveView, :root_component, 0)
-      assert CounterLiveView.root_component() == CounterComponent.Counter
+      assert CounterLiveView.root_component() == CounterComponent
     end
   end
 
@@ -135,7 +135,7 @@ defmodule Filament.LiveViewTest do
       socket = %Phoenix.LiveView.Socket{
         assigns: %{
           count: 0,
-          _filament_tree: %{"root" => %{component: CounterComponent.Counter, props: %{count: 0}}},
+          _filament_tree: %{"root" => %{component: CounterComponent, props: %{count: 0}}},
           _filament_rendered: %Phoenix.LiveView.Rendered{},
           _filament_pending_effects: [],
           __changed__: %{}

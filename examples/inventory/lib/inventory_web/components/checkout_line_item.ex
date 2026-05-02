@@ -3,7 +3,7 @@ defmodule InventoryWeb.Components.CheckoutLineItem do
 
   alias Filament.Hooks
 
-  defcomponent CheckoutLineItem do
+  defcomponent do
     prop(:item_id, :string, required: true)
     prop(:server, :any, default: Inventory.Server)
 

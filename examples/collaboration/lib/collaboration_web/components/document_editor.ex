@@ -3,7 +3,7 @@ defmodule CollaborationWeb.Components.DocumentEditor do
 
   import Filament.Hooks
 
-  defcomponent DocumentEditor do
+  defcomponent do
     prop(:doc_id, :string, required: true)
     prop(:server, :any, default: :via_registry)
 

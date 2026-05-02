@@ -20,8 +20,8 @@ defmodule Filament.Examples.TodoExampleTest do
     assert Keyword.has_key?(attributes, :vsn)
 
     # Verify component exists and is valid
-    assert {:module, TodoList.TodoList} = Code.ensure_loaded(TodoList.TodoList)
-    assert TodoList.TodoList.__filament_component__?()
+    assert {:module, TodoList} = Code.ensure_loaded(TodoList)
+    assert TodoList.__filament_component__?()
 
     # Verify LiveView exists
     assert {:module, TodoLive} = Code.ensure_loaded(TodoLive)
@@ -79,7 +79,7 @@ defmodule Filament.Examples.TodoExampleTest do
     props = %{store: store, title: "My Todos"}
 
     {_tree, rendered, _effects} =
-      Reconciler.mount(TodoList.TodoList, props, owner_pid: self())
+      Reconciler.mount(TodoList, props, owner_pid: self())
 
     # Verify it's a valid Rendered struct
     assert %Phoenix.LiveView.Rendered{} = rendered
@@ -91,12 +91,12 @@ defmodule Filament.Examples.TodoExampleTest do
   Verify that TodoList defines expected event handlers.
   """
   test "TodoList component defines required event handlers" do
-    events = TodoList.TodoList.module_info(:exports)
+    events = TodoList.module_info(:exports)
 
     assert {:handle_event, 3} in events
     assert {:render, 1} in events
-    assert TodoList.TodoList.__props__()
-    assert TodoList.TodoList.__props__()[:store]
-    assert TodoList.TodoList.__props__()[:title]
+    assert TodoList.__props__()
+    assert TodoList.__props__()[:store]
+    assert TodoList.__props__()[:title]
   end
 end

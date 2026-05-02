@@ -112,7 +112,7 @@ defmodule Filament.Examples.InventoryTest do
       {:ok, server} = Inventory.Server.start_link(items: items)
 
       {:ok, view} =
-        mount(InventoryWeb.Components.CheckoutLineItem.CheckoutLineItem, %{
+        mount(InventoryWeb.Components.CheckoutLineItem, %{
           server: server,
           item_id: "oos"
         })
@@ -129,7 +129,7 @@ defmodule Filament.Examples.InventoryTest do
       {:ok, server} = Inventory.Server.start_link(items: items)
 
       {:ok, view} =
-        mount(InventoryWeb.Components.CheckoutLineItem.CheckoutLineItem, %{
+        mount(InventoryWeb.Components.CheckoutLineItem, %{
           server: server,
           item_id: "avail"
         })
@@ -147,7 +147,7 @@ defmodule Filament.Examples.InventoryTest do
       {:ok, server} = Inventory.Server.start_link(items: items)
 
       {:ok, view1} =
-        mount(InventoryWeb.Components.CheckoutLineItem.CheckoutLineItem, %{
+        mount(InventoryWeb.Components.CheckoutLineItem, %{
           server: server,
           item_id: "last"
         })
@@ -159,7 +159,7 @@ defmodule Filament.Examples.InventoryTest do
 
       spawn(fn ->
         {:ok, view2} =
-          mount(InventoryWeb.Components.CheckoutLineItem.CheckoutLineItem, %{
+          mount(InventoryWeb.Components.CheckoutLineItem, %{
             server: server,
             item_id: "last"
           })

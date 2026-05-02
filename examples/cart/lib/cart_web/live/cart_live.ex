@@ -6,5 +6,5 @@ defmodule CartWeb.CartLive do
     super(params, session, socket)
   end
 
-  def root_component, do: CartWeb.Components.CartPage.CartPage
+  def root_component, do: CartWeb.Components.CartPage
 end

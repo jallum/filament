@@ -11,7 +11,7 @@ defmodule TodoWeb.Components.FilterBar do
 
   import Filament.Hooks
 
-  defcomponent FilterBar do
+  defcomponent do
     prop(:filters, :list, required: true)
     prop(:default, :atom, default: nil)
     prop(:on_change, :function, default: nil)
@@ -19,21 +19,16 @@ defmodule TodoWeb.Components.FilterBar do
     def render(%{filters: filters, on_change: on_change, default: default}) do
       {current, set_current} = use_state(default)
 
-      handlers =
-        Enum.map(filters, fn {value, _} ->
-          fn ->
-            set_current.(value)
-            if on_change, do: on_change.(value)
-          end
-        end)
-
       ~F"""
       <ul class="filters">
-        {for {{value, label}, handler} <- Enum.zip(filters, handlers) do}
+        {for {value, label} <- filters do}
           <li>
             <a
               class={if current == value, do: "selected", else: ""}
-              on_click={handler}
+              on_click={fn ->
+                set_current.(value)
+                if on_change, do: on_change.(value)
+              end}
               href="#"
             >{label}</a>
           </li>
