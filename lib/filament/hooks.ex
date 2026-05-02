@@ -30,8 +30,18 @@ defmodule Filament.Hooks do
               "hook called outside a render pass — hooks may only be called from render/1"
 
     index = ctx.hook_index
-    fiber = Map.get(ctx.fiber_tree, ctx.fiber_id)
-    previous = if fiber, do: Map.get(fiber.hook_slots, index, default), else: default
+
+    # Look up previous value: first from ctx.hook_slots (for new child fibers),
+    # then from fiber_tree for existing fibers being re-rendered
+    previous =
+      case Map.get(ctx.hook_slots, index) do
+        nil ->
+          fiber = Map.get(ctx.fiber_tree, ctx.fiber_id)
+          if fiber, do: Map.get(fiber.hook_slots, index, default), else: default
+
+        value ->
+          value
+      end
 
     Process.put(:filament_render_context, %{ctx | hook_index: index + 1})
     {index, previous, ctx}

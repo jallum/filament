@@ -30,7 +30,9 @@ defmodule Filament.RenderContext do
     # %{term() => pid()} - observable stubs for test isolation
     observable_stubs: %{},
     # boolean() - false during disconnected (HTTP) mounts to skip subscriptions
-    subscribe_enabled: true
+    subscribe_enabled: true,
+    # %{non_neg_integer() => term()} - existing hook slot state for new child fibers
+    hook_slots: %{}
   ]
 
   @type t :: %__MODULE__{
@@ -44,6 +46,7 @@ defmodule Filament.RenderContext do
           event_handler_index: non_neg_integer(),
           new_event_handlers: %{non_neg_integer() => function()},
           observable_stubs: %{term() => pid()},
-          subscribe_enabled: boolean()
+          subscribe_enabled: boolean(),
+          hook_slots: %{non_neg_integer() => term()}
         }
 end

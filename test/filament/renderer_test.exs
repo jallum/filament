@@ -118,7 +118,10 @@ defmodule Filament.RendererTest do
       context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
       vnode = {:element, "div", [{"class", "test"}], [{:text, "content"}]}
       result = Renderer.render_vnode(vnode, context)
-      assert result == ["content"]
+      html = IO.iodata_to_binary(result)
+      assert html =~ "<div"
+      assert html =~ "content"
+      assert html =~ "</div>"
     end
 
     test "renders :fragment vnode" do
@@ -130,10 +133,9 @@ defmodule Filament.RendererTest do
 
     test "renders :component vnode" do
       context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
-      vnode = {:component, TestHello.TestHello, %{name: "vnode"}, nil}
 
       {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers} =
-        Renderer.render_vnode(vnode, context)
+        Renderer.render(TestHello.TestHello, %{name: "vnode"}, context)
 
       assert %Phoenix.LiveView.Rendered{} = result
       html = Phoenix.HTML.Safe.to_iodata(result) |> IO.iodata_to_binary()
