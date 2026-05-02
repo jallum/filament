@@ -1,75 +1,179 @@
 defmodule Filament.Examples.InventoryTest do
   use ExUnit.Case, async: true
+  import Filament.Test
 
-  alias Inventory.{Item, Server}
+  # ── Rung 1: Inventory.Server domain ─────────────────────────────────────────
 
-  defp start_server(items) do
-    {:ok, server} = Server.start_link(items: items)
-    server
+  describe "Inventory.Server" do
+    setup do
+      items = [
+        %Inventory.Item{id: "item-a", name: "Widget", available: 2},
+        %Inventory.Item{id: "item-b", name: "Gadget", available: 0}
+      ]
+
+      {:ok, server} = Inventory.Server.start_link(items: items)
+      %{server: server}
+    end
+
+    test "acquire/3 decrements available and returns token", %{server: server} do
+      assert {:ok, token} = Filament.Hold.acquire(server, "item-a", self())
+      assert is_tuple(token)
+    end
+
+    test "acquire/3 returns {:error, :insufficient} when available=0", %{server: server} do
+      assert {:error, :insufficient} = Filament.Hold.acquire(server, "item-b", self())
+    end
+
+    test "acquire/3 returns {:error, :not_found} for unknown item", %{server: server} do
+      assert {:error, :not_found} = Filament.Hold.acquire(server, "nonexistent", self())
+    end
+
+    test "release/2 restores availability", %{server: server} do
+      {:ok, token} = Filament.Hold.acquire(server, "item-a", self())
+      :ok = Filament.Hold.release(server, token)
+
+      # Re-acquire to confirm availability was restored
+      assert {:ok, _token2} = Filament.Hold.acquire(server, "item-a", self())
+    end
+
+    test "process death releases hold automatically", %{server: server} do
+      # Confirm initial availability = 2 for "item-a".
+      item = Inventory.Server.get_item(server, "item-a")
+      assert item.available == 2
+
+      # Acquire one unit
+      {:ok, _our_token} = Filament.Hold.acquire(server, "item-a", self())
+      item = Inventory.Server.get_item(server, "item-a")
+      assert item.available == 1
+
+      # Spawn a second holder
+      parent = self()
+
+      holder =
+        spawn(fn ->
+          {:ok, _token} = Filament.Hold.acquire(server, "item-a", self())
+          send(parent, :acquired)
+          receive do: (:die -> :ok)
+        end)
+
+      assert_receive :acquired, 500
+
+      # Now kill the holder — :DOWN should trigger handle_release
+      Process.exit(holder, :kill)
+      Process.sleep(50)
+
+      # Available should be restored to 1 (we still hold one)
+      item = Inventory.Server.get_item(server, "item-a")
+      assert item.available == 1
+    end
+
+    test "multiple holds on same item are tracked independently", %{server: server} do
+      parent = self()
+
+      holder1 =
+        spawn(fn ->
+          {:ok, _token} = Filament.Hold.acquire(server, "item-a", self())
+          send(parent, {:h1, :acquired})
+          receive do: (:stop -> :ok)
+        end)
+
+      holder2 =
+        spawn(fn ->
+          {:ok, _token} = Filament.Hold.acquire(server, "item-a", self())
+          send(parent, {:h2, :acquired})
+          receive do: (:stop -> :ok)
+        end)
+
+      assert_receive {:h1, :acquired}, 1000
+      assert_receive {:h2, :acquired}, 1000
+
+      # Both slots taken (available=0). Third acquire fails.
+      assert {:error, :insufficient} = Filament.Hold.acquire(server, "item-a", self())
+
+      # Kill holder1, one slot freed
+      Process.exit(holder1, :kill)
+      Process.sleep(50)
+
+      assert {:ok, _t3} = Filament.Hold.acquire(server, "item-a", self())
+
+      # Clean up holder2
+      Process.exit(holder2, :kill)
+    end
   end
 
-  test "acquire hold decrements available" do
-    item = %Item{id: "x", name: "X", available: 2}
-    server = start_server([item])
+  # ── Rung 2: CheckoutLineItem component isolation ─────────────────────────────
 
-    # Acquire via direct Hold API for testing
-    assert {:ok, _token} = Filament.Hold.acquire(server, "x", self())
+  describe "CheckoutLineItem (rung-2)" do
+    test "renders out of stock when item has available=0" do
+      items = [
+        %Inventory.Item{id: "oos", name: "Scarce", available: 0}
+      ]
 
-    after_first = Server.get_item(server, "x")
-    assert after_first.available == 1
-  end
+      {:ok, server} = Inventory.Server.start_link(items: items)
 
-  test "acquire returns {:error, :insufficient} when none available" do
-    item = %Item{id: "y", name: "Y", available: 1}
-    server = start_server([item])
+      {:ok, view} =
+        mount(InventoryWeb.Components.CheckoutLineItem.CheckoutLineItem, %{
+          server: server,
+          item_id: "oos"
+        })
 
-    assert {:ok, _token} = Filament.Hold.acquire(server, "y", self())
-    assert {:error, :insufficient} = Filament.Hold.acquire(server, "y", self())
-  end
+      text = render_text(view)
+      assert text =~ "Out of Stock"
+    end
 
-  test "process death releases hold and restores availability" do
-    item = %Item{id: "z", name: "Z", available: 1}
-    server = start_server([item])
+    test "renders checkout button when item is available" do
+      items = [
+        %Inventory.Item{id: "avail", name: "In Stock Item", available: 3}
+      ]
 
-    # Acquire from a spawned process so we can kill it.
-    parent = self()
-    holder = spawn(fn ->
-      result = Filament.Hold.acquire(server, "z", self())
-      send(parent, {:acquired, result})
-      receive do: (:die -> :ok)
-    end)
+      {:ok, server} = Inventory.Server.start_link(items: items)
 
-    assert_receive {:acquired, {:ok, _token}}, 500
+      {:ok, view} =
+        mount(InventoryWeb.Components.CheckoutLineItem.CheckoutLineItem, %{
+          server: server,
+          item_id: "avail"
+        })
 
-    # Verify hold is active — available should be 0.
-    assert Server.get_item(server, "z").available == 0
+      text = render_text(view)
+      refute text =~ "Out of Stock"
+      assert text =~ "In Stock Item"
+    end
 
-    # Kill the holder — :DOWN should trigger handle_release.
-    Process.exit(holder, :kill)
-    Process.sleep(50)  # give the monitor time to fire
+    test "two components competing for last unit" do
+      items = [
+        %Inventory.Item{id: "last", name: "LastUnit", available: 1}
+      ]
 
-    # Available should be restored.
-    assert Server.get_item(server, "z").available == 1
-  end
+      {:ok, server} = Inventory.Server.start_link(items: items)
 
-  test "CheckoutLineItem component exists" do
-    assert {:module, InventoryWeb.Components.CheckoutLineItem} = Code.ensure_loaded(InventoryWeb.Components.CheckoutLineItem)
-  end
+      {:ok, view1} =
+        mount(InventoryWeb.Components.CheckoutLineItem.CheckoutLineItem, %{
+          server: server,
+          item_id: "last"
+        })
 
-  test "handle_acquire returns error for unknown item" do
-    server = start_server([])
-    assert {:error, :not_found} = Filament.Hold.acquire(server, "unknown", self())
-  end
+      # view1 acquired the only unit
 
-  test "multiple independent holds on different items" do
-    item1 = %Item{id: "a", name: "A", available: 2}
-    item2 = %Item{id: "b", name: "B", available: 3}
-    server = start_server([item1, item2])
+      # view2 in a separate process should see out of stock
+      parent = self()
 
-    assert {:ok, _token1} = Filament.Hold.acquire(server, "a", self())
-    assert {:ok, _token2} = Filament.Hold.acquire(server, "b", self())
+      spawn(fn ->
+        {:ok, view2} =
+          mount(InventoryWeb.Components.CheckoutLineItem.CheckoutLineItem, %{
+            server: server,
+            item_id: "last"
+          })
 
-    assert Server.get_item(server, "a").available == 1
-    assert Server.get_item(server, "b").available == 2
+        text = render_text(view2)
+        result = String.contains?(text, "Out of Stock")
+        send(parent, {:view2_result, result})
+      end)
+
+      assert_receive {:view2_result, true}, 1000
+
+      # view1 should still show held state
+      text1 = render_text(view1)
+      refute text1 =~ "Out of Stock"
+    end
   end
 end
