@@ -65,6 +65,48 @@ defmodule Filament.SigilFPhase2Test do
     end
   end
 
+  describe "~F sigil Phase 2: JSX {for} block syntax" do
+    test "{for x <- list do}…{end} produces Comprehension struct" do
+      items = ["alpha", "beta", "gamma"]
+
+      result = ~F"""
+      <ul>
+        {for item <- items do}
+          <li>{item}</li>
+        {end}
+      </ul>
+      """
+
+      assert %Phoenix.LiveView.Rendered{} = result
+      dynamic_result = result.dynamic.(false)
+
+      comprehension =
+        Enum.find(dynamic_result, fn
+          %Phoenix.LiveView.Comprehension{} -> true
+          _ -> false
+        end)
+
+      assert %Phoenix.LiveView.Comprehension{} = comprehension
+      assert length(comprehension.entries) == 3
+    end
+
+    test "{for} block renders correct HTML for each item" do
+      items = ["alpha", "beta"]
+
+      result = ~F"""
+      <ul>
+        {for item <- items do}
+          <li>{item}</li>
+        {end}
+      </ul>
+      """
+
+      html = result |> Phoenix.HTML.Safe.to_iodata() |> IO.iodata_to_binary()
+      assert html =~ "alpha"
+      assert html =~ "beta"
+    end
+  end
+
   describe "~F sigil Phase 2: Known limitations" do
     # TODO: Future enhancement for compile-time key validation
     @tag :skip
