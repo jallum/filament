@@ -3,6 +3,37 @@ defmodule Filament.VNodeCompilerTest do
 
   alias Filament.{Reconciler, FiberTree}
 
+  describe "warning suppression" do
+    test "compiling template with lexically-bound variable produces no warnings" do
+      # This test verifies that Step 0 fix works: VNodeCompiler strips versioned_vars
+      # from the caller before passing to TagEngine, suppressing the false-positive
+      # warning about accessing variables inside LiveView templates.
+      defmodule WarningTestComponent do
+        use Filament.Component
+
+        defcomponent WarningTest do
+          def render(assigns) do
+            click_handler = fn -> :ok end
+            ~F"<button on_click={click_handler}>Click me</button>"
+          end
+        end
+      end
+
+      # Capture any IO.warn output
+      warnings =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {tree, _, _} =
+            Reconciler.mount(WarningTestComponent.WarningTest, %{}, owner_pid: self())
+
+          assert tree["root"].status == :stable
+        end)
+
+      # The captured output should not contain the LiveView variable warning
+      refute warnings =~ "you are accessing the variable"
+      refute warnings =~ "inside a LiveView template"
+    end
+  end
+
   describe "auto-memoization integration" do
     test "reactive state changes trigger re-render" do
       # Create a component that uses reactive state

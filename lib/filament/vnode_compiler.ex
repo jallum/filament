@@ -25,12 +25,19 @@ defmodule Filament.VNodeCompiler do
   """
   @spec compile(String.t(), Macro.Env.t() | nil) :: term()
   def compile(source, caller) do
-    # Use Phoenix.LiveView.TagEngine which handles @var interpolation in HEEx
+    # Strip versioned_vars from caller to suppress TagEngine's false-positive warning about
+    # accessing variables in LiveView templates. TagEngine's maybe_warn_taint/3 checks
+    # Macro.Env.has_var?(caller, {name, nil}) which looks in versioned_vars.
+    # Any variable defined in scope triggers this warning. Filament intentionally uses
+    # lexical scoping; LiveView's __changed__ mechanism is irrelevant to Filament's
+    # fiber reconciler.
+    sanitized_caller = %{caller | versioned_vars: %{}}
+
     quoted =
       Phoenix.LiveView.TagEngine.compile(source,
         file: caller.file,
         line: caller.line + 1,
-        caller: caller,
+        caller: sanitized_caller,
         indentation: 0,
         tag_handler: Filament.HTMLEngine
       )
