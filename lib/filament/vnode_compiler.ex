@@ -42,67 +42,36 @@ defmodule Filament.VNodeCompiler do
         tag_handler: Filament.HTMLEngine
       )
 
-    # Transform the AST to replace assigns[:var] with bare variable var
-    transformed = transform_at_assigns(quoted)
-
-    # Detect reactive variables from use_state patterns in the caller scope
-    reactive_vars = detect_reactive_vars(caller)
+    # Transform @foo → bare variable, collecting which names were referenced via @.
+    # Those names are the reactive inputs by definition — no caller inspection needed.
+    {transformed, reactive_vars} = transform_at_assigns(quoted)
 
     # Wrap expressions in use_memo if they use reactive variables
-    wrapped = wrap_in_use_memo(transformed, reactive_vars)
-
-    wrapped
+    wrap_in_use_memo(transformed, reactive_vars)
   end
 
   # ─── AST transformation ───────────────────────────────────────────────────────
 
-  # Transform @foo AST nodes to bare variable references
+  # Transform @foo AST nodes to bare variable references, accumulating the names
+  # of all @-referenced variables as reactive_vars.
   defp transform_at_assigns(ast) do
-    Macro.postwalk(ast, &transform_node/1)
-  end
+    {transformed, reactive_names} =
+      Macro.postwalk(ast, MapSet.new(), fn
+        {{:., _, [EEx.Engine, :fetch_assign!]}, meta, [_assigns, key]}, acc ->
+          {{key, meta, nil}, MapSet.put(acc, key)}
 
-  defp transform_node({{:., _, [EEx.Engine, :fetch_assign!]}, meta, [_assigns, key]}) do
-    {key, meta, nil}
-  end
+        {{:., _, [{:__aliases__, _, [:EEx, :Engine]}, :fetch_assign!]}, meta, [_assigns, key]},
+        acc ->
+          {{key, meta, nil}, MapSet.put(acc, key)}
 
-  defp transform_node(
-         {{:., _, [{:__aliases__, _, [:EEx, :Engine]}, :fetch_assign!]}, meta, [_assigns, key]}
-       ) do
-    {key, meta, nil}
-  end
+        {:var!, meta, [{:assigns, ctx, nil}]}, acc ->
+          {{:assigns, meta, ctx}, acc}
 
-  defp transform_node({:var!, meta, [{:assigns, ctx, nil}]}) do
-    {:assigns, meta, ctx}
-  end
+        other, acc ->
+          {other, acc}
+      end)
 
-  defp transform_node(other), do: other
-
-  # ─── Reactive variable detection ─────────────────────────────────────────────
-
-  # Detect reactive variables from use_state patterns in the caller scope
-  # use_state returns {value, setter}, so {value, _} = use_state(_) means value is reactive
-  defp detect_reactive_vars(caller) do
-    caller
-    |> Map.get(:bindings, [])
-    |> Enum.flat_map(&detect_reactive_from_binding/1)
-    |> Enum.uniq()
-  end
-
-  # Check if a binding comes from use_state pattern
-  # Pattern: {reactive_var, setter_var} = use_state(...)
-  defp detect_reactive_from_binding({name, {{:., _, [Hooks, :use_state]}, _, [_initial]}}) do
-    # This is directly use_state(_) - no destructuring, so the whole result is reactive
-    [name]
-  end
-
-  defp detect_reactive_from_binding({name, {:{}, _, [_reactive, _setter]}}) do
-    # Destructured use_state: {value, setter} = use_state(...)
-    # Both are potentially reactive, but setter is stable
-    [name]
-  end
-
-  defp detect_reactive_from_binding(_other) do
-    []
+    {transformed, MapSet.to_list(reactive_names)}
   end
 
   # ─── use_memo wrapping ───────────────────────────────────────────────────────
