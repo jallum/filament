@@ -106,11 +106,44 @@ defmodule Filament.VNodeCompiler do
     end
   end
 
+  # Filament.Hooks.register_event_handler(fn_node) — the fn is an event handler
+  # closure. Wrap it in use_memo so stable closures (no reactive deps) produce
+  # the same fn reference across renders. Closures capturing reactive vars get
+  # a new fn only when those vars change.
+  #
+  # Targeting register_event_handler specifically (rather than all {:fn, _, _}
+  # nodes) avoids accidentally memoizing TagEngine's dynamic fn wrapper.
+  defp wrap_node_if_needed(
+         {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
+          meta, [fn_node]},
+         reactive_vars
+       ) do
+    deps = compute_closure_deps(fn_node, reactive_vars)
+
+    memoized =
+      quote do
+        Filament.Hooks.use_memo(fn -> unquote(fn_node) end, unquote(deps))
+      end
+
+    {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
+     meta, [memoized]}
+  end
+
   defp wrap_node_if_needed(node, _reactive_vars) do
     node
   end
 
   # ─── Dependency computation ───────────────────────────────────────────────────
+
+  # Compute reactive deps of a closure body by recursing into it.
+  defp compute_closure_deps(ast, reactive_vars) do
+    vars = collect_variables_deep(ast)
+
+    vars
+    |> MapSet.new()
+    |> MapSet.intersection(MapSet.new(reactive_vars))
+    |> MapSet.to_list()
+  end
 
   # Compute the reactive dependencies of an AST node
   defp compute_deps(ast, reactive_vars) do
