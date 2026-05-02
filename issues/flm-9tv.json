@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-02T20:39:10Z",
+  "description": "Replace runtime auto-increment hooks with compile-time slot assignment, following React Compiler's _c(N) model.\n\n## Motivation\n\nuse_memo is currently a runtime function that requires the process-dict render context. Correctness depends on an invariant — all calls must land in the linear render body — enforced by compiler hoisting passes. That invariant is fragile: comprehension entry fns called by PLV's diff engine broke it and required an ad-hoc fix (hoist_comprehension_handlers). Any future call-site escape causes a crash, not a compile error.\n\n## Goal\n\nMake the invariant structural. The compiler emits integer literals for every memo and event site. Runtime primitives become simple map lookups — no sequential state, no context guard, no 'hook called outside render pass' for compiler-generated code.\n\n## React Compiler parity\n\nReact Compiler allocates a fixed-size _c(N) cache per component where N is a compile-time constant. For list operations it memoizes the whole result as one slot — not one slot per item. Per-item isolation requires child components. Sub-slot keying is deliberately excluded for the same reason: destroys fixed-size guarantee.\n\n## Design\n\n- New primitives: memo_at({:t, N}, deps, factory) and event_at(N, handler)\n- Slot namespace: {:t, N} tagged tuples for template slots, plain integers for explicit hooks — no collision\n- Comprehension handlers: wrap entire for-loop in one memo_at slot\n- use_memo/2 deprecated (not removed); existing hooks API unchanged",
+  "id": "flm-9tv",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "Fold use_memo into the compiler: compile-time slot assignment",
+  "type": "task",
+  "updated_at": "2026-05-02T20:39:10Z"
+}
