@@ -1,12 +1,17 @@
 defmodule Inventory.Application do
-  @moduledoc """
-  Inventory application module for the Inventory example.
-  """
   use Application
 
   def start(_type, _args) do
+    demo_items = [
+      %Inventory.Item{id: "apple", name: "Apple", available: 2},
+      %Inventory.Item{id: "banana", name: "Banana", available: 1},
+      %Inventory.Item{id: "cherry", name: "Cherry (bag)", available: 0}
+    ]
+
     children = [
-      # No additional processes needed for this example
+      {Phoenix.PubSub, name: Inventory.PubSub},
+      {Inventory.Server, items: demo_items},
+      InventoryWeb.Endpoint
     ]
 
     opts = [strategy: :one_for_one, name: Inventory.Supervisor]

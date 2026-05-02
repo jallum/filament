@@ -6,7 +6,9 @@ defmodule Cart.Application do
 
   def start(_type, _args) do
     children = [
-      # No additional processes needed for this example
+      {Phoenix.PubSub, name: Cart.PubSub},
+      Cart.Server,
+      CartWeb.Endpoint
     ]
 
     opts = [strategy: :one_for_one, name: Cart.Supervisor]

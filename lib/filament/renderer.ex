@@ -24,7 +24,12 @@ defmodule Filament.Renderer do
           {Phoenix.LiveView.Rendered.t(), %{non_neg_integer() => term()}, list(),
            %{String.t() => Fiber.t()}, %{non_neg_integer() => function()}}
   def render(component_module, props, %RenderContext{} = context) do
-    # Apply prop defaults for any props not supplied
+    # Apply prop defaults for any props not supplied.
+    # Code.ensure_loaded is required because function_exported?/3 returns false
+    # for modules that haven't been called yet, since modules load lazily on
+    # their first function call — which happens later (component_module.render/1).
+    Code.ensure_loaded(component_module)
+
     props =
       if function_exported?(component_module, :__props__, 0) do
         Enum.reduce(component_module.__props__(), props, fn {name, meta}, acc ->
@@ -77,6 +82,11 @@ defmodule Filament.Renderer do
 
       # Harvest context fields
       final_ctx = Process.get(:filament_render_context)
+
+      # Seed the diff-eval state so that if Phoenix's diff engine re-evaluates
+      # the rendered struct's dynamic closure outside our render context, any
+      # register_event_handler calls return stable (non-crashing) wire refs.
+      Process.put(:filament_diff_eval_state, {to_string(context.fiber_id), 0})
 
       {rendered, final_ctx.new_hook_slots, final_ctx.pending_effects, final_ctx.new_fibers,
        final_ctx.new_event_handlers}

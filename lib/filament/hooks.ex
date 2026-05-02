@@ -73,10 +73,21 @@ defmodule Filament.Hooks do
   """
   @spec use_state(initial :: term()) :: {value :: term(), setter :: (term() -> :ok)}
   def use_state(initial) do
-    {index, previous, ctx} = use_slot(initial)
-    setter = build_setter(ctx.fiber_id, index, ctx.owner_pid)
-    commit_slot(index, previous)
-    {previous, setter}
+    {index, previous, ctx} = use_slot({initial, :__no_setter__})
+
+    {value, setter} =
+      case previous do
+        {val, s} when is_function(s, 1) ->
+          # Reuse stable setter from previous render
+          {val, s}
+
+        _ ->
+          # First render or no setter stored — build a new one
+          {initial, build_setter(ctx.fiber_id, index, ctx.owner_pid)}
+      end
+
+    commit_slot(index, {value, setter})
+    {value, setter}
   end
 
   defp build_setter(fiber_id, slot_index, owner_pid) when is_pid(owner_pid) do
@@ -207,35 +218,45 @@ defmodule Filament.Hooks do
     {slot_index, previous, ctx} = use_slot(:uninitialized)
     server = Map.get(ctx.observable_stubs, server, server)
 
-    value =
-      case previous do
-        :uninitialized ->
-          do_subscribe(server, request, project, ctx, slot_index)
+    # Skip subscription during disconnected (HTTP static) mounts — subscribing
+    # in the HTTP render creates zombie subscribers that inflate presence counts
+    # and race with the real WebSocket connection.
+    if not ctx.subscribe_enabled do
+      commit_slot(slot_index, :uninitialized)
+      :uninitialized
+    else
+      value =
+        case previous do
+          :uninitialized ->
+            do_subscribe(server, request, project, ctx, slot_index)
 
-        {:subscribed, ^server, _current} ->
-          # Same server — value comes from handle_info updates, just read it.
-          # The current value was stored by handle_info during the last update.
-          Map.get(ctx.new_hook_slots, slot_index, previous)
-          |> case do
-            {:subscribed, ^server, current} -> current
-            value -> value
-          end
+          {:subscribed, ^server, _current} ->
+            # Same server — value comes from handle_info updates, just read it.
+            # The current value was stored by handle_info during the last update.
+            Map.get(ctx.new_hook_slots, slot_index, previous)
+            |> case do
+              {:subscribed, ^server, current} -> current
+              value -> value
+            end
 
-        {:subscribed, old_server, _current} ->
-          # Server changed — unsubscribe from old, subscribe to new
-          if is_map_key(ctx.fiber_tree, ctx.fiber_id) do
-            parent_pid = ctx.owner_pid || self()
-            Filament.Observable.unsubscribe(old_server, parent_pid)
-          end
+          {:subscribed, old_server, _current} ->
+            # Server changed — unsubscribe from old, subscribe to new
+            if is_map_key(ctx.fiber_tree, ctx.fiber_id) do
+              Filament.Observable.unsubscribe(
+                old_server,
+                {ctx.owner_pid, ctx.fiber_id, slot_index}
+              )
+            end
 
-          do_subscribe(server, request, project, ctx, slot_index)
+            do_subscribe(server, request, project, ctx, slot_index)
 
-        :needs_resubscribe ->
-          do_subscribe(server, request, project, ctx, slot_index)
-      end
+          :needs_resubscribe ->
+            do_subscribe(server, request, project, ctx, slot_index)
+        end
 
-    commit_slot(slot_index, {:subscribed, server, value})
-    value
+      commit_slot(slot_index, {:subscribed, server, value})
+      value
+    end
   end
 
   defp do_subscribe(server, request, project, ctx, slot_index) do
@@ -248,7 +269,9 @@ defmodule Filament.Hooks do
 
     case Filament.Observable.subscribe(server, request, subscriber) do
       {:ok, initial_value} ->
-        initial_value
+        # Apply projection to initial value so hooks always see the projected shape,
+        # consistent with subsequent update messages from notify_observers.
+        project.(initial_value)
 
       {:error, reason} ->
         raise Filament.ObservableError,
@@ -321,21 +344,29 @@ defmodule Filament.Hooks do
   """
   @spec register_event_handler(handler :: function()) :: wire_ref :: String.t()
   def register_event_handler(handler) when is_function(handler) do
-    ctx =
-      Process.get(:filament_render_context) ||
-        raise ArgumentError,
-              "register_event_handler called outside a render pass"
+    case Process.get(:filament_render_context) do
+      nil ->
+        # Called outside a Filament render pass — Phoenix's diff engine is
+        # re-evaluating the previously-rendered struct's dynamic closure.
+        # Return a stable ref using a per-process diff-phase counter so the
+        # wire ref format stays valid (fiber_id:index). The real handlers were
+        # already committed to the fiber tree during the render pass.
+        {fiber_id, idx} = Process.get(:filament_diff_eval_state, {"unknown", 0})
+        Process.put(:filament_diff_eval_state, {fiber_id, idx + 1})
+        "#{fiber_id}:#{idx}"
 
-    idx = ctx.event_handler_index
-    fiber_id_str = to_string(ctx.fiber_id)
+      ctx ->
+        idx = ctx.event_handler_index
+        fiber_id_str = to_string(ctx.fiber_id)
 
-    new_ctx = %{
-      ctx
-      | event_handler_index: idx + 1,
-        new_event_handlers: Map.put(ctx.new_event_handlers, idx, handler)
-    }
+        new_ctx = %{
+          ctx
+          | event_handler_index: idx + 1,
+            new_event_handlers: Map.put(ctx.new_event_handlers, idx, handler)
+        }
 
-    Process.put(:filament_render_context, new_ctx)
-    "#{fiber_id_str}:#{idx}"
+        Process.put(:filament_render_context, new_ctx)
+        "#{fiber_id_str}:#{idx}"
+    end
   end
 end

@@ -325,7 +325,16 @@ defmodule Filament.Test do
         view.fiber_tree,
         fiber_id,
         slot_index,
-        fn _ -> new_value end
+        fn existing ->
+          # Preserve existing setter when updating use_state value
+          setter =
+            case existing do
+              {_, s} when is_function(s, 1) -> s
+              _ -> nil
+            end
+
+          {new_value, setter}
+        end
       )
 
     %{view | fiber_tree: tree}

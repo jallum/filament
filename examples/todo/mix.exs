@@ -1,11 +1,11 @@
-defmodule Inventory.MixProject do
+defmodule Todo.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :inventory,
+      app: :todo,
       version: "0.1.0",
-      elixir: "~> 1.19",
+      elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
@@ -13,17 +13,14 @@ defmodule Inventory.MixProject do
 
   def application do
     [
-      mod: {Inventory.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      extra_applications: [:logger],
+      mod: {Todo.Application, []}
     ]
   end
 
   defp deps do
     [
       {:filament, path: "../.."},
-      {:phoenix, "~> 1.7"},
-      {:phoenix_live_view, "~> 1.0"},
-      {:phoenix_html, "~> 4.0"},
       {:bandit, "~> 1.0"}
     ]
   end

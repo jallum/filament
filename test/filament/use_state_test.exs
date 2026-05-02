@@ -17,8 +17,14 @@ defmodule Filament.UseStateTest do
     end
 
     test "second render returns previously committed value" do
-      # First render commits the initial value
-      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{0 => :stored}, status: :stable)
+      # First render commits the initial value as {value, setter} tuple
+      fiber =
+        Fiber.new(
+          id: "root",
+          component: nil,
+          hook_slots: %{0 => {:stored, fn _ -> :ok end}},
+          status: :stable
+        )
 
       {value, setter} =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
@@ -56,8 +62,16 @@ defmodule Filament.UseStateTest do
       # Verify hook_index was incremented twice
       # (We check by seeing the second call read from slot 1, not slot 0)
       # If slot 1 was empty, b should be :b (the default)
+      # Note: stored value is now {value, setter} tuple
+      stable_setter = fn _ -> :ok end
+
       fiber2 =
-        Fiber.new(id: "root", component: nil, hook_slots: %{0 => :stored_a}, status: :stable)
+        Fiber.new(
+          id: "root",
+          component: nil,
+          hook_slots: %{0 => {:stored_a, stable_setter}},
+          status: :stable
+        )
 
       {values2, _ctx2} =
         with_render_ctx("root", %{"root" => fiber2}, nil, fn ->
@@ -119,6 +133,39 @@ defmodule Filament.UseStateTest do
 
       assert :ok = setter2.(:updated_second)
       assert_receive {:filament_set_state, "root", 1, :updated_second}, 100
+    end
+
+    test "setter is stable across renders" do
+      owner = self()
+
+      # First render: create a setter
+      fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+
+      {_value1, setter1} =
+        with_render_ctx("root", %{"root" => fiber1}, owner, fn ->
+          Hooks.use_state(:initial)
+        end)
+
+      # Simulate a render pass: setter was committed, state was updated via setter
+      # The slot now contains {new_value, setter1}
+      new_state = :updated
+
+      fiber2 =
+        Fiber.new(
+          id: "root",
+          component: nil,
+          hook_slots: %{0 => {new_state, setter1}},
+          status: :stable
+        )
+
+      # Second render: should get the SAME setter function reference
+      {_value2, setter2} =
+        with_render_ctx("root", %{"root" => fiber2}, owner, fn ->
+          Hooks.use_state(:initial)
+        end)
+
+      # The setter function reference must be identical
+      assert setter1 === setter2
     end
   end
 

@@ -75,7 +75,10 @@ defmodule Filament.LiveView do
       def mount(_params, _session, socket) do
         component = root_component()
         props = build_props(socket)
-        {tree, rendered, pending_effects} = Reconciler.mount(component, props, owner_pid: self())
+        connected = Phoenix.LiveView.connected?(socket)
+
+        {tree, rendered, pending_effects} =
+          Reconciler.mount(component, props, owner_pid: self(), connected: connected)
 
         socket =
           socket
@@ -188,8 +191,10 @@ defmodule Filament.LiveView do
             {:noreply, socket}
 
           fiber ->
-            # Update hook slot directly (outside render path)
-            new_slots = Map.put(fiber.hook_slots, slot_index, new_value)
+            # Preserve existing setter when updating value (stable setter pattern)
+            existing = Map.get(fiber.hook_slots, slot_index, {nil, nil})
+            setter = elem(existing, 1)
+            new_slots = Map.put(fiber.hook_slots, slot_index, {new_value, setter})
             tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
 
             # Re-render the fiber with its current props

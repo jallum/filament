@@ -35,7 +35,8 @@ defmodule Filament.Reconciler do
       fiber_id: "root",
       fiber_tree: %{},
       owner_pid: owner_pid,
-      observable_stubs: Keyword.get(opts, :observable_stubs, %{})
+      observable_stubs: Keyword.get(opts, :observable_stubs, %{}),
+      subscribe_enabled: Keyword.get(opts, :connected, true)
     }
 
     # Render the component
@@ -127,8 +128,8 @@ defmodule Filament.Reconciler do
         {_index, {_deps, cleanup}} when is_function(cleanup, 0) ->
           cleanup.()
 
-        {_index, {:subscribed, server, _value}} ->
-          Filament.Observable.unsubscribe(server, owner_pid)
+        {index, {:subscribed, server, _value}} ->
+          Filament.Observable.unsubscribe(server, {owner_pid, fiber.id, index})
 
         {_index, {:held, server, _token}} ->
           Filament.Hold.release(server, owner_pid)

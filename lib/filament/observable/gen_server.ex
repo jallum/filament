@@ -46,22 +46,39 @@ defmodule Filament.Observable.GenServer do
 
       @impl true
       def handle_call({:filament_subscribe, request, %Subscriber{} = sub_info}, _from, state) do
-        subscriber_pid = sub_info.pid
-        ref = Process.monitor(subscriber_pid)
+        sub_key = {sub_info.pid, sub_info.fiber_id, sub_info.slot_index}
 
-        subscriber = %Subscriber{
-          sub_info
-          | ref: ref,
-            last_projected: :unset
-        }
+        # If the same fiber slot is re-subscribing (e.g. LiveView disconnected→connected
+        # double-mount), cleanly replace the old subscriber so handle_subscribe/unsubscribe
+        # are called exactly once per logical subscription and presence counts stay correct.
+        subs = Process.get(:__filament_subscribers__, %{})
+
+        {state, subs} =
+          case Map.pop(subs, sub_key) do
+            {nil, subs} ->
+              {state, subs}
+
+            {old_sub, subs} ->
+              # Commit the removal to the process dict BEFORE calling handle_unsubscribe.
+              # handle_unsubscribe may call notify_observers, which reads the process dict.
+              # If the old sub is still in the dict at that point, notify_observers would
+              # send an update to the dying subscriber, triggering a re-render + re-subscribe
+              # cascade that inflates presence counts.
+              Process.put(:__filament_subscribers__, subs)
+              Process.demonitor(old_sub.ref, [:flush])
+              {:ok, new_state} = handle_unsubscribe(old_sub, state)
+              {new_state, subs}
+          end
+
+        ref = Process.monitor(sub_info.pid)
+        subscriber = %Subscriber{sub_info | ref: ref, last_projected: :unset}
 
         # Use apply/3 to disable Elixir's strict type-checker from seeing
         # the concrete return type at compile time, preventing dead-branch
         # warnings in modules that override handle_subscribe with a fixed return.
         case apply(__MODULE__, :handle_subscribe, [request, subscriber, state]) do
           {:ok, initial_value, new_state} ->
-            subs = Process.get(:__filament_subscribers__, %{})
-            Process.put(:__filament_subscribers__, Map.put(subs, subscriber_pid, subscriber))
+            Process.put(:__filament_subscribers__, Map.put(subs, sub_key, subscriber))
             {:reply, {:ok, initial_value}, new_state}
 
           {:error, reason, new_state} ->
@@ -71,10 +88,10 @@ defmodule Filament.Observable.GenServer do
       end
 
       @impl true
-      def handle_cast({:filament_unsubscribe, pid}, state) do
+      def handle_cast({:filament_unsubscribe, {_pid, _fiber_id, _slot_index} = sub_key}, state) do
         subs = Process.get(:__filament_subscribers__, %{})
 
-        case Map.pop(subs, pid) do
+        case Map.pop(subs, sub_key) do
           {nil, _subs} ->
             {:noreply, state}
 
@@ -90,12 +107,12 @@ defmodule Filament.Observable.GenServer do
       def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
         subs = Process.get(:__filament_subscribers__, %{})
 
-        case Enum.find(subs, fn {_pid, s} -> s.ref == ref end) do
+        case Enum.find(subs, fn {_key, s} -> s.ref == ref end) do
           nil ->
             {:noreply, state}
 
-          {pid, subscriber} ->
-            new_subs = Map.delete(subs, pid)
+          {sub_key, subscriber} ->
+            new_subs = Map.delete(subs, sub_key)
             Process.put(:__filament_subscribers__, new_subs)
             {:ok, new_state} = handle_unsubscribe(subscriber, state)
             {:noreply, new_state}
@@ -120,7 +137,7 @@ defmodule Filament.Observable.GenServer do
         subs = Process.get(:__filament_subscribers__, %{})
 
         new_subs =
-          Map.new(subs, fn {pid, subscriber} ->
+          Map.new(subs, fn {sub_key, subscriber} ->
             depth_result = Process.info(subscriber.pid, :message_queue_len)
 
             if saturated?(depth_result) do
@@ -144,7 +161,7 @@ defmodule Filament.Observable.GenServer do
               )
 
               # Do NOT update last_projected — next real notification must fire
-              {pid, subscriber}
+              {sub_key, subscriber}
             else
               new_projected = subscriber.project.(new_state)
 
@@ -155,9 +172,9 @@ defmodule Filament.Observable.GenServer do
                    new_projected}
                 )
 
-                {pid, %{subscriber | last_projected: new_projected}}
+                {sub_key, %{subscriber | last_projected: new_projected}}
               else
-                {pid, subscriber}
+                {sub_key, subscriber}
               end
             end
           end)

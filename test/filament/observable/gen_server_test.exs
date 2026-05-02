@@ -161,7 +161,7 @@ defmodule Filament.Observable.GenServerTest do
     }
 
     assert {:ok, _} = Observable.subscribe(pid, :any, sub)
-    :ok = Observable.unsubscribe(pid, self())
+    :ok = Observable.unsubscribe(pid, {self(), :root, 0})
 
     Process.sleep(50)
 

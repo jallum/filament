@@ -105,7 +105,7 @@ defmodule TodoWeb.Components.TodoList do
           <section class="main">
             <input class="toggle-all" type="checkbox" checked={@all_completed} />
             <ul class="todo-list">
-              <%= @items_html %>
+              <%= Phoenix.HTML.raw(@items_html) %>
             </ul>
           </section>
 
@@ -134,9 +134,7 @@ defmodule TodoWeb.Components.TodoList do
       """
     end
 
-    def handle_event("add_todo", %{"text" => text}, props) do
-      store = Map.get(props, :store)
-
+    def handle_event("add_todo", %{"text" => text}, %{store: store} = props) do
       if String.trim(text) != "" do
         Todo.Store.add(store, text)
       end
@@ -144,8 +142,7 @@ defmodule TodoWeb.Components.TodoList do
       {props, :ok}
     end
 
-    def handle_event("toggle:" <> id_str, _params, props) do
-      store = Map.get(props, :store)
+    def handle_event("toggle:" <> id_str, _params, %{store: store} = props) do
       id = String.to_integer(id_str)
       Todo.Store.toggle(store, id)
       {props, :ok}

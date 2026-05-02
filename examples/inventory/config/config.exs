@@ -1,10 +1,14 @@
 import Config
 
-# Basic Phoenix configuration for the Inventory example
-config :inventory, InventoryWeb.Router,
-  http: [ip: {127, 0, 0, 1}, port: 4002]
+config :inventory, InventoryWeb.Endpoint,
+  url: [host: "localhost"],
+  http: [port: 4002],
+  adapter: Bandit.PhoenixAdapter,
+  pubsub_server: Inventory.PubSub,
+  live_view: [signing_salt: "inventoryexamplesalt"],
+  secret_key_base: "inventory_example_secret_key_base_min_64_chars_xxxxxxxxxxxxxxxxxx",
+  render_errors: [formats: [html: InventoryWeb.ErrorHTML], layout: false]
 
-config :phoenix, :json_library, Jason
+config :phoenix, :json_library, JSON
 
-# Enable dev debug output
 config :logger, level: :warning

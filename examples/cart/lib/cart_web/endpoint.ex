@@ -1,10 +1,10 @@
-defmodule TodoWeb.Endpoint do
-  use Phoenix.Endpoint, otp_app: :todo
+defmodule CartWeb.Endpoint do
+  use Phoenix.Endpoint, otp_app: :cart
 
   @session_options [
     store: :cookie,
-    key: "_todo_key",
-    signing_salt: "todoexamplesalt",
+    key: "_cart_key",
+    signing_salt: "cartexamplesalt",
     same_site: "Lax"
   ]
 
@@ -22,5 +22,5 @@ defmodule TodoWeb.Endpoint do
     gzip: false
 
   plug Plug.Session, @session_options
-  plug TodoWeb.Router
+  plug CartWeb.Router
 end

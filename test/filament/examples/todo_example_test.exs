@@ -45,11 +45,16 @@ defmodule Filament.Examples.TodoExampleTest do
 
     todos = Store.list(pid)
     assert length(todos) == 2
-    assert [%{text: "Buy milk", completed: false, id: id1}, %{text: "Build TodoList", completed: false, id: id2}] =
+
+    assert [
+             %{text: "Buy milk", completed: false, id: id1},
+             %{text: "Build TodoList", completed: false, id: id2}
+           ] =
              Enum.sort_by(todos, & &1.id)
 
     # Toggle one
     :ok = Store.toggle(pid, id1)
+
     assert [%{completed: true}, %{completed: false}] =
              pid |> Store.list() |> Enum.sort_by(& &1.id)
 

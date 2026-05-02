@@ -12,17 +12,17 @@ defmodule Filament.Observable.BackpressureTest do
     def init(n), do: {:ok, n}
     def set(pid, n), do: GenServer.call(pid, {:set, n})
 
-    def get_subscriber(pid, subscriber_pid),
-      do: GenServer.call(pid, {:get_subscriber, subscriber_pid})
+    def get_subscriber(pid, sub_key),
+      do: GenServer.call(pid, {:get_subscriber, sub_key})
 
     def handle_call({:set, n}, _from, _state) do
       notify_observers(n)
       {:reply, :ok, n}
     end
 
-    def handle_call({:get_subscriber, subscriber_pid}, _from, state) do
+    def handle_call({:get_subscriber, sub_key}, _from, state) do
       subs = Process.get(:__filament_subscribers__, %{})
-      {:reply, Map.get(subs, subscriber_pid), state}
+      {:reply, Map.get(subs, sub_key), state}
     end
   end
 
@@ -40,8 +40,8 @@ defmodule Filament.Observable.BackpressureTest do
     Process.exit(pid, :kill)
   end
 
-  defp get_subscriber_state(observable, subscriber_pid) do
-    PressureCounter.get_subscriber(observable, subscriber_pid)
+  defp get_subscriber_state(observable, sub_key) do
+    PressureCounter.get_subscriber(observable, sub_key)
   end
 
   # --- Tests ---
@@ -111,7 +111,7 @@ defmodule Filament.Observable.BackpressureTest do
     PressureCounter.set(observable, 1)
 
     # Verify last_projected was updated
-    sub = get_subscriber_state(observable, sub_pid)
+    sub = get_subscriber_state(observable, {sub_pid, :root, 0})
     assert sub.last_projected == 1
 
     drain_sleeper_mailbox(sub_pid)
@@ -134,7 +134,7 @@ defmodule Filament.Observable.BackpressureTest do
     end)
 
     # last_projected should still be :unset (never updated)
-    sub_after = get_subscriber_state(observable, sub_pid2)
+    sub_after = get_subscriber_state(observable, {sub_pid2, :root, 0})
     assert sub_after.last_projected == :unset
 
     drain_sleeper_mailbox(sub_pid2)

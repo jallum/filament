@@ -52,11 +52,14 @@ defmodule Filament.Observable do
   end
 
   @doc """
-  Unsubscribe `subscriber_pid` from `observable`.
-  Called on fiber unmount. Do NOT call directly from application code.
+  Unsubscribe the subscription identified by `{pid, fiber_id, slot_index}` from `observable`.
+  Called when a fiber's server prop changes. Do NOT call directly from application code.
   """
-  @spec unsubscribe(observable :: GenServer.server(), subscriber_pid :: pid()) :: :ok
-  def unsubscribe(observable, subscriber_pid) do
-    GenServer.cast(observable, {:filament_unsubscribe, subscriber_pid})
+  @spec unsubscribe(
+          observable :: GenServer.server(),
+          sub_key :: {pid :: pid(), fiber_id :: term(), slot_index :: non_neg_integer()}
+        ) :: :ok
+  def unsubscribe(observable, sub_key) do
+    GenServer.cast(observable, {:filament_unsubscribe, sub_key})
   end
 end

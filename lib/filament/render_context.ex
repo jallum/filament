@@ -28,7 +28,9 @@ defmodule Filament.RenderContext do
     # %{non_neg_integer() => function()} - event handlers registered this render
     new_event_handlers: %{},
     # %{term() => pid()} - observable stubs for test isolation
-    observable_stubs: %{}
+    observable_stubs: %{},
+    # boolean() - false during disconnected (HTTP) mounts to skip subscriptions
+    subscribe_enabled: true
   ]
 
   @type t :: %__MODULE__{
@@ -41,6 +43,7 @@ defmodule Filament.RenderContext do
           pending_effects: [{non_neg_integer(), (-> (-> :ok) | nil), term() | :no_deps}],
           event_handler_index: non_neg_integer(),
           new_event_handlers: %{non_neg_integer() => function()},
-          observable_stubs: %{term() => pid()}
+          observable_stubs: %{term() => pid()},
+          subscribe_enabled: boolean()
         }
 end

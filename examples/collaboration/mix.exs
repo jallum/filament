@@ -1,9 +1,9 @@
-defmodule Cart.MixProject do
+defmodule Collaboration.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :cart,
+      app: :collaboration,
       version: "0.1.0",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
@@ -13,7 +13,7 @@ defmodule Cart.MixProject do
 
   def application do
     [
-      mod: {Cart.Application, []},
+      mod: {Collaboration.Application, []},
       extra_applications: [:logger, :runtime_tools]
     ]
   end
@@ -24,7 +24,7 @@ defmodule Cart.MixProject do
       {:phoenix, "~> 1.7"},
       {:phoenix_live_view, "~> 1.0"},
       {:phoenix_html, "~> 4.0"},
-      {:jason, "~> 1.2"},
+      {:floki, ">= 0.30.0"},
       {:bandit, "~> 1.0"}
     ]
   end

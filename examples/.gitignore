@@ -1,0 +1,9 @@
+# Build artifacts
+_build/
+deps/
+mix.lock
+*.beam
+
+# Phoenix assets (if any)
+assets/node_modules/
+priv/static/
