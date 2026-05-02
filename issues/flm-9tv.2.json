@@ -6,14 +6,15 @@
   "blocks": [
     "flm-9tv.3"
   ],
+  "closed_at": "2026-05-02T20:50:07Z",
   "created": "2026-05-02T20:39:42Z",
   "description": "Replace the wrap_in_use_memo pass in vnode_compiler.ex with two new passes. All 283 existing tests must pass after this change.\n\n## assign_slot_indices/2\n\nWalk the linear render body (using memo_walk — no fn literals) and assign a compile-time index to every:\n- live_to_iodata(expr) call with reactive deps → template memo slot {:t, 0}, {:t, 1}, …\n- register_event_handler(fn_expr) call → event slot 0, 1, …\n\nEach occurrence gets a unique index. Returns the AST annotated with slot assignments.\n\n## emit_slot_calls/1\n\nReplace annotated nodes with direct primitive calls:\n\n  Before:\n    v0 = use_memo(fn -\u003e live_to_iodata(count) end, [count])\n    v1 = binary_encode(register_event_handler(use_memo(fn -\u003e fn -\u003e handler end end, [])))\n\n  After:\n    v0 = memo_at({:t, 0}, [count], fn -\u003e live_to_iodata(count) end)\n    v1 = binary_encode(event_at(0, memo_at({:t, 1}, [], fn -\u003e fn -\u003e handler end end)))\n\n## Deprecation\n\nMark use_memo/2 as @deprecated. It continues to work but is no longer emitted by the compiler.\n\n## Acceptance\n\n- All 283 tests pass\n- Compiled template output contains memo_at/event_at calls with integer/tuple literals — no use_memo calls\n- Adding a use_state before the ~F template does not shift template slot indices",
   "id": "flm-9tv.2",
   "labels": [],
   "parent": "flm-9tv",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "flm-o58.2: Compiler — replace wrap_in_use_memo with assign_slot_indices + emit_slot_calls",
   "type": "task",
-  "updated_at": "2026-05-02T20:45:03Z"
+  "updated_at": "2026-05-02T20:50:07Z"
 }
