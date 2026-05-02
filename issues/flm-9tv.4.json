@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-02T20:39:42Z",
+  "description": "Add a FilterItem sub-component to the todo example to demonstrate the correct abstraction boundary for per-item isolation.\n\n## Motivation\n\nWhole-loop memoization (flm-o58.3) means if filters changes, all handlers are recomputed. For the filter bar with 3 stable items this is fine. For larger or more dynamic lists, per-item isolation requires a sub-component — each gets its own fiber and its own {:t, N} slot layout.\n\n## Change\n\nExtract filter item rendering from FilterBar into a defcomponent FilterItem that receives value, label, is_active, and on_click as props. FilterBar renders \u003cFilterItem /\u003e for each item.\n\nThis demonstrates:\n- Sub-component as the right abstraction for per-item stability\n- \u003cFilterBar /\u003e and \u003cFilterItem /\u003e JSX syntax in the same template\n- Child component rendering in a comprehension\n\n## Acceptance\n\n- Filter bar renders and functions identically to before\n- Each FilterItem is a separate Filament component with its own fiber\n- Clicking filter buttons still changes active state correctly",
+  "id": "flm-9tv.4",
+  "labels": [],
+  "parent": "flm-9tv",
+  "priority": 2,
+  "status": "open",
+  "title": "flm-o58.4: Demonstrate per-item isolation via FilterItem sub-component",
+  "type": "task",
+  "updated_at": "2026-05-02T20:39:42Z"
+}
