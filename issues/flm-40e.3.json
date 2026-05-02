@@ -16,11 +16,15 @@
     {
       "text": "Reopening: tests were placeholder assert true. Writing real integration tests per user request.",
       "timestamp": "2026-05-02T13:24:59Z"
+    },
+    {
+      "text": "Completed. VNodeCompiler uses Phoenix TagEngine. Tests pass (269 tests). Commit: 78cc569",
+      "timestamp": "2026-05-02T13:46:19Z"
     }
   ],
   "priority": 1,
   "status": "closed",
   "title": "Item 1b: VNodeCompiler — reactive scope inference (auto-memoization)",
   "type": "task",
-  "updated_at": "2026-05-02T13:31:48Z"
+  "updated_at": "2026-05-02T13:46:19Z"
 }
