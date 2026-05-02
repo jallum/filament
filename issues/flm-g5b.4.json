@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-g5b.2",
     "flm-g5b.3"
@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "flm-g5b",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "G4: Collaboration locks example — Document.Server with pessimistic lock + presence count",
   "type": "task",
-  "updated_at": "2026-05-01T20:51:29Z"
+  "updated_at": "2026-05-02T00:28:57Z"
 }
