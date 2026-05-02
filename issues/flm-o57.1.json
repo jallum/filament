@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-02T18:47:49Z",
+  "description": "Create Filament-owned copies of the Phoenix tag engine infrastructure so subsequent tickets can modify code-gen freely.\n\nREAD FIRST:\n- deps/phoenix_live_view/lib/phoenix_live_view/tag_engine.ex\n- deps/phoenix_live_view/lib/phoenix_live_view/html_engine.ex\n- lib/filament/html_engine.ex  (current thin wrapper — will be replaced)\n- lib/filament/vnode_compiler.ex  (line 37: the TagEngine call to update)\n- lib/filament/sigil_f.ex  (entry point, no changes needed here)\n\nSTEPS:\n\n1. Copy deps/phoenix_live_view/lib/phoenix_live_view/tag_engine.ex\n   to lib/filament/tag_engine.ex.\n   Change the module declaration to: defmodule Filament.TagEngine\n   Remove or comment the @moduledoc if it references Phoenix.\n   Do not change any logic yet — this ticket is pure copy + wire.\n\n2. Replace lib/filament/html_engine.ex entirely with a copy of\n   deps/phoenix_live_view/lib/phoenix_live_view/html_engine.ex.\n   Change the module declaration to: defmodule Filament.HTMLEngine\n   Remove @behaviour Phoenix.LiveView.TagEngine (it now satisfies\n   Filament.TagEngine callbacks implicitly).\n   Preserve the on_click/on_submit → phx-click/phx-submit transform\n   from the OLD lib/filament/html_engine.ex — migrate the\n   transform_event_pair/1 logic and the handle_attributes/2 override\n   into the new file. The old file calls Phoenix.LiveView.HTMLEngine.handle_attributes/2\n   after transforming; the new file IS HTMLEngine, so apply the transform\n   directly in handle_attributes/2 before the rest of the function body.\n\n3. In lib/filament/vnode_compiler.ex, change line 37:\n   FROM: Phoenix.LiveView.TagEngine.compile(source, ...\n   TO:   Filament.TagEngine.compile(source, ...\n   Keep all other options unchanged (file:, line:, caller:, indentation:, tag_handler:).\n   Remove the sanitized_caller workaround (lines 31-34 and 34 usage) — the\n   forked TagEngine will not have the maybe_warn_taint check that required it.\n   Pass caller directly.\n\n4. Verify the forked TagEngine compiles: run `mix compile`. Fix any module\n   references inside the forked files that point to Phoenix.LiveView.TagEngine\n   or Phoenix.LiveView.HTMLEngine — update them to Filament.TagEngine and\n   Filament.HTMLEngine respectively. Internal calls within each file are\n   already correct (same module).\n\nACCEPTANCE:\n- `mix test` passes with no new failures\n- `cd examples/todo \u0026\u0026 mix phx.server` starts; navigate Chrome to localhost:4000\n- Add two todos, verify both appear; toggle one, verify strikethrough; click filter tabs, verify filtering",
+  "id": "flm-o57.1",
+  "labels": [],
+  "parent": "flm-o57",
+  "priority": 2,
+  "status": "open",
+  "title": "Fork Filament.TagEngine and Filament.HTMLEngine; wire VNodeCompiler to use them",
+  "type": "task",
+  "updated_at": "2026-05-02T18:47:49Z"
+}
