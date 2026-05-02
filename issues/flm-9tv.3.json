@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-9tv.2"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "flm-9tv",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "flm-o58.3: Compiler — wrap comprehension for-loops in memo_at (whole-loop memoization)",
   "type": "task",
-  "updated_at": "2026-05-02T20:39:46Z"
+  "updated_at": "2026-05-02T20:50:09Z"
 }
