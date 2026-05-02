@@ -25,19 +25,11 @@ defmodule Filament.VNodeCompiler do
   """
   @spec compile(String.t(), Macro.Env.t() | nil) :: term()
   def compile(source, caller) do
-    # Strip versioned_vars from caller to suppress TagEngine's false-positive warning about
-    # accessing variables in LiveView templates. TagEngine's maybe_warn_taint/3 checks
-    # Macro.Env.has_var?(caller, {name, nil}) which looks in versioned_vars.
-    # Any variable defined in scope triggers this warning. Filament intentionally uses
-    # lexical scoping; LiveView's __changed__ mechanism is irrelevant to Filament's
-    # fiber reconciler.
-    sanitized_caller = %{caller | versioned_vars: %{}}
-
     quoted =
-      Phoenix.LiveView.TagEngine.compile(source,
+      Filament.TagEngine.compile(source,
         file: caller.file,
         line: caller.line + 1,
-        caller: sanitized_caller,
+        caller: caller,
         indentation: 0,
         tag_handler: Filament.HTMLEngine
       )
@@ -116,8 +108,9 @@ defmodule Filament.VNodeCompiler do
   # We do NOT memoize when fn_node is an expression like assigns.on_click — the
   # assigns value may change each render and must be re-read directly.
   defp wrap_node_if_needed(
-         {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
-          meta, [fn_node]},
+         {{:., call_meta,
+           [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]}, meta,
+          [fn_node]},
          reactive_vars
        ) do
     case fn_node do
@@ -130,12 +123,14 @@ defmodule Filament.VNodeCompiler do
             Filament.Hooks.use_memo(fn -> unquote(fn_node) end, unquote(dep_vars))
           end
 
-        {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
-         meta, [memoized]}
+        {{:., call_meta,
+          [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]}, meta,
+         [memoized]}
 
       _ ->
-        {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
-         meta, [fn_node]}
+        {{:., call_meta,
+          [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]}, meta,
+         [fn_node]}
     end
   end
 
@@ -171,10 +166,14 @@ defmodule Filament.VNodeCompiler do
   defp collect_variables(ast) do
     {_, vars} =
       Macro.prewalk(ast, MapSet.new(), fn
-        {:fn, _, _} = node, acc -> {node, acc}
+        {:fn, _, _} = node, acc ->
+          {node, acc}
+
         {name, _meta, nil} = node, acc when is_atom(name) ->
           if valid_variable_name?(name), do: {node, MapSet.put(acc, name)}, else: {node, acc}
-        node, acc -> {node, acc}
+
+        node, acc ->
+          {node, acc}
       end)
 
     MapSet.to_list(vars)
@@ -187,7 +186,9 @@ defmodule Filament.VNodeCompiler do
       Macro.prewalk(ast, MapSet.new(), fn
         {name, _meta, nil} = node, acc when is_atom(name) ->
           if valid_variable_name?(name), do: {node, MapSet.put(acc, name)}, else: {node, acc}
-        node, acc -> {node, acc}
+
+        node, acc ->
+          {node, acc}
       end)
 
     MapSet.to_list(vars)
