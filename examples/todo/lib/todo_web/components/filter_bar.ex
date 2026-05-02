@@ -9,18 +9,15 @@ defmodule TodoWeb.Components.FilterBar do
   """
   use Filament.Component
 
-  alias Filament.Hooks
+  import Filament.Hooks
 
   defcomponent FilterBar do
     prop(:filters, :list, required: true)
     prop(:default, :atom, default: nil)
     prop(:on_change, :function, default: nil)
 
-    def render(assigns) do
-      filters = Map.get(assigns, :filters)
-      on_change = Map.get(assigns, :on_change)
-
-      {current, set_current} = Hooks.use_state(Map.get(assigns, :default))
+    def render(%{filters: filters, on_change: on_change, default: default}) do
+      {current, set_current} = use_state(default)
 
       handlers =
         Enum.map(filters, fn {value, _} ->

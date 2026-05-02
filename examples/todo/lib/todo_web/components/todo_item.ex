@@ -16,18 +16,18 @@ defmodule TodoWeb.Components.TodoItem do
     defp item_class(%{completed: true}), do: "completed"
     defp item_class(_), do: ""
 
-    def render(%{todo: todo} = assigns) do
+    def render(%{todo: todo, on_toggle: on_toggle, on_remove: on_remove}) do
       ~F"""
       <li class={item_class(todo)}>
         <div class="view">
           <input
             class="toggle"
             type="checkbox"
-            checked={@todo.completed}
-            on_click={@on_toggle}
+            checked={todo.completed}
+            on_click={on_toggle}
           />
-          <label>{@todo.text}</label>
-          <button class="destroy" on_click={@on_remove}>×</button>
+          <label>{todo.text}</label>
+          <button class="destroy" on_click={on_remove}>×</button>
         </div>
       </li>
       """

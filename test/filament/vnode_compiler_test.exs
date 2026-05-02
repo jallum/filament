@@ -3,6 +3,35 @@ defmodule Filament.VNodeCompilerTest do
 
   alias Filament.{Reconciler, FiberTree}
 
+  describe "assigns-free render" do
+    test "render without assigns in scope compiles and renders correctly" do
+      defmodule AssignsFreeComp do
+        use Filament.Component
+        import Filament.Hooks
+
+        defcomponent AssignsFree do
+          def render(%{text: text, count: count}) do
+            ~F"""
+            <div class="item">
+              <span>{text}</span>
+              <em>{count}</em>
+            </div>
+            """
+          end
+        end
+      end
+
+      {_tree, rendered, _} =
+        Reconciler.mount(AssignsFreeComp.AssignsFree, %{text: "hello", count: 3},
+          owner_pid: self()
+        )
+
+      html = rendered |> Phoenix.HTML.Safe.to_iodata() |> IO.iodata_to_binary()
+      assert html =~ "hello"
+      assert html =~ "3"
+    end
+  end
+
   describe "warning suppression" do
     test "compiling template with lexically-bound variable produces no warnings" do
       # IO.warn (used by TagEngine's maybe_warn_taint) writes to stderr, not Logger.
@@ -53,7 +82,9 @@ defmodule Filament.VNodeCompilerTest do
       handler2 = FiberTree.get_event_handler(tree2, "root", 0)
 
       assert is_function(handler1), "expected event handler to be a function"
-      assert handler1 === handler2, "expected stable closure fn to be the same object across renders"
+
+      assert handler1 === handler2,
+             "expected stable closure fn to be the same object across renders"
     end
   end
 
@@ -105,9 +136,7 @@ defmodule Filament.VNodeCompilerTest do
       end
 
       {tree1, _, _} =
-        Reconciler.mount(ReactiveClosureStableComp.ReactiveClosureStable, %{},
-          owner_pid: self()
-        )
+        Reconciler.mount(ReactiveClosureStableComp.ReactiveClosureStable, %{}, owner_pid: self())
 
       handler1 = FiberTree.get_event_handler(tree1, "root", 0)
 
