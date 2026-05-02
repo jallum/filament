@@ -1,8 +1,19 @@
 defmodule Filament.ReconcilerTest do
   use ExUnit.Case, async: true
 
-  alias Filament.{Reconciler, ReconcilerError}
+  alias Filament.{Reconciler, ReconcilerError, Fiber}
   alias Filament.Fixtures.CounterComponent
+
+  defmodule StubObservable do
+    use GenServer
+
+    def start_link, do: GenServer.start_link(__MODULE__, [])
+    def init(_), do: {:ok, []}
+    def unsubscribe_calls(pid), do: GenServer.call(pid, :calls)
+
+    def handle_cast({:filament_unsubscribe, key}, calls), do: {:noreply, [key | calls]}
+    def handle_call(:calls, _from, calls), do: {:reply, calls, calls}
+  end
 
   describe "mount/2" do
     test "creates initial fiber tree with root fiber" do
@@ -107,6 +118,127 @@ defmodule Filament.ReconcilerTest do
         Reconciler.mount(CounterComponent.Counter, %{count: 0})
 
       assert :ok = Reconciler.unmount(tree)
+    end
+  end
+
+  describe "reconcile_children cleanup" do
+    defp tree_with_child(cleanup_fn) do
+      {tree, _, _} = Reconciler.mount(CounterComponent.Counter, %{count: 0})
+
+      child = Fiber.new(
+        id: "root.child",
+        component: CounterComponent.Counter,
+        props: %{count: 1},
+        status: :stable,
+        parent_id: "root",
+        hook_slots: %{0 => {[], cleanup_fn}}
+      )
+
+      tree
+      |> Map.put("root.child", child)
+      |> Map.update!("root", &%{&1 | children: ["root.child"]})
+    end
+
+    test "removed fiber's cleanup function is called on update" do
+      {:ok, agent} = Agent.start_link(fn -> 0 end)
+      cleanup = fn -> Agent.update(agent, &(&1 + 1)) end
+
+      tree = tree_with_child(cleanup)
+      {new_tree, _, _} = Reconciler.update(tree, "root", %{count: 1})
+
+      refute Map.has_key?(new_tree, "root.child")
+      assert Agent.get(agent, & &1) == 1
+    end
+
+    test "grandchild fibers are recursively cleaned up" do
+      {:ok, agent} = Agent.start_link(fn -> [] end)
+      child_cleanup = fn -> Agent.update(agent, &[:child | &1]) end
+      grandchild_cleanup = fn -> Agent.update(agent, &[:grandchild | &1]) end
+
+      grandchild = Fiber.new(
+        id: "root.child.grandchild",
+        component: CounterComponent.Counter,
+        props: %{count: 2},
+        status: :stable,
+        parent_id: "root.child",
+        hook_slots: %{0 => {[], grandchild_cleanup}}
+      )
+
+      {tree, _, _} = Reconciler.mount(CounterComponent.Counter, %{count: 0})
+
+      child = Fiber.new(
+        id: "root.child",
+        component: CounterComponent.Counter,
+        props: %{count: 1},
+        status: :stable,
+        parent_id: "root",
+        children: ["root.child.grandchild"],
+        hook_slots: %{0 => {[], child_cleanup}}
+      )
+
+      tree =
+        tree
+        |> Map.put("root.child", child)
+        |> Map.put("root.child.grandchild", grandchild)
+        |> Map.update!("root", &%{&1 | children: ["root.child"]})
+
+      {new_tree, _, _} = Reconciler.update(tree, "root", %{count: 1})
+
+      refute Map.has_key?(new_tree, "root.child")
+      refute Map.has_key?(new_tree, "root.child.grandchild")
+      calls = Agent.get(agent, & &1)
+      assert :child in calls
+      assert :grandchild in calls
+    end
+
+    test "observable is unsubscribed when fiber is removed" do
+      {:ok, server} = StubObservable.start_link()
+      owner = self()
+
+      {tree, _, _} = Reconciler.mount(CounterComponent.Counter, %{count: 0})
+
+      child = Fiber.new(
+        id: "root.child",
+        component: CounterComponent.Counter,
+        props: %{count: 1},
+        status: :stable,
+        parent_id: "root",
+        hook_slots: %{0 => {:subscribed, server, 42}}
+      )
+
+      tree =
+        tree
+        |> Map.put("root.child", child)
+        |> Map.update!("root", &%{&1 | children: ["root.child"]})
+
+      {new_tree, _, _} = Reconciler.update(tree, "root", %{count: 1}, owner_pid: owner)
+
+      refute Map.has_key?(new_tree, "root.child")
+      # Allow the cast to be processed
+      :timer.sleep(10)
+      assert StubObservable.unsubscribe_calls(server) == [{owner, "root.child", 0}]
+    end
+
+    test "parent fiber children list is updated to match new render" do
+      {tree, _, _} = Reconciler.mount(CounterComponent.Counter, %{count: 0})
+
+      child = Fiber.new(
+        id: "root.child",
+        component: CounterComponent.Counter,
+        props: %{count: 1},
+        status: :stable,
+        parent_id: "root",
+        hook_slots: %{}
+      )
+
+      tree =
+        tree
+        |> Map.put("root.child", child)
+        |> Map.update!("root", &%{&1 | children: ["root.child"]})
+
+      {new_tree, _, _} = Reconciler.update(tree, "root", %{count: 1})
+
+      assert new_tree["root"].children == []
     end
   end
 end

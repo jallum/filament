@@ -51,13 +51,7 @@ defmodule Filament.Reconciler do
         status: :stable
     }
 
-    tree =
-      %{"root" => root_fiber}
-      |> Map.merge(new_fibers)
-      |> Enum.map(fn {id, fiber} ->
-        {id, %{fiber | status: :stable}}
-      end)
-      |> Map.new()
+    tree = reconcile_children(%{"root" => root_fiber}, "root", root_fiber, new_fibers, owner_pid)
 
     {tree, rendered, pending_effects}
   end
@@ -105,7 +99,7 @@ defmodule Filament.Reconciler do
 
     # Reconcile children
     final_tree =
-      reconcile_children(new_tree, fiber_id, updated_fiber, new_fibers)
+      reconcile_children(new_tree, fiber_id, updated_fiber, new_fibers, owner_pid)
       |> Map.update!(fiber_id, &%{&1 | status: :stable})
 
     {final_tree, rendered, pending_effects}
@@ -146,35 +140,55 @@ defmodule Filament.Reconciler do
 
   # Private reconciliation functions
 
-  defp reconcile_children(tree, parent_id, parent_fiber, new_fibers) do
-    # For now, we rely on components registering themselves during render
-    # In a full implementation, we'd parse the rendered output to find child components
-
+  defp reconcile_children(tree, parent_id, parent_fiber, new_fibers, owner_pid) do
     new_children =
-      new_fibers
-      |> Map.new(fn {id, fiber} ->
+      Map.new(new_fibers, fn {id, fiber} ->
         {id, %{fiber | parent_id: parent_id, status: :stable}}
       end)
 
-    # Remove old children that aren't in new children
-    old_children = parent_fiber.children || []
+    old_child_ids = parent_fiber.children || []
     new_child_ids = Map.keys(new_children)
 
-    tree_without_old =
-      Enum.reduce(old_children, tree, fn child_id, acc ->
+    tree_after_unmount =
+      Enum.reduce(old_child_ids, tree, fn child_id, acc ->
         if child_id not in new_child_ids do
-          # Mark as unmounting
-          Map.update(acc, child_id, nil, fn fiber ->
-            %{fiber | status: :unmounting}
-          end)
+          unmount_fiber(acc, child_id, owner_pid)
         else
           acc
         end
       end)
 
-    # Add new children
-    tree_without_old
+    tree_after_unmount
     |> Map.merge(new_children)
     |> Map.update!(parent_id, &%{&1 | children: new_child_ids})
+  end
+
+  defp unmount_fiber(tree, fiber_id, owner_pid) do
+    case Map.get(tree, fiber_id) do
+      nil ->
+        tree
+
+      fiber ->
+        Enum.each(fiber.hook_slots, fn
+          {_index, {_deps, cleanup}} when is_function(cleanup, 0) ->
+            cleanup.()
+
+          {index, {:subscribed, server, _value}} ->
+            Filament.Observable.unsubscribe(server, {owner_pid, fiber.id, index})
+
+          {_index, {:held, server, _token}} ->
+            Filament.Hold.release(server, owner_pid)
+
+          _ ->
+            :ok
+        end)
+
+        tree_without_descendants =
+          Enum.reduce(fiber.children || [], tree, fn child_id, acc ->
+            unmount_fiber(acc, child_id, owner_pid)
+          end)
+
+        Map.delete(tree_without_descendants, fiber_id)
+    end
   end
 end
