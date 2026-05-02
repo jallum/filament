@@ -42,9 +42,11 @@ defmodule Filament.VNodeCompiler do
         tag_handler: Filament.HTMLEngine
       )
 
-    # Transform @foo → bare variable, collecting which names were referenced via @.
-    # Those names are the reactive inputs by definition — no caller inspection needed.
-    {transformed, reactive_vars} = transform_at_assigns(quoted)
+    # Transform @foo → bare variable for names that are lexically in scope.
+    # Only variables bound before the ~F call (e.g. from use_state) are reactive;
+    # assigns-map props (@id, @title, etc.) are left as assigns.key field access.
+    in_scope = MapSet.new(Map.keys(caller.versioned_vars), fn {name, _ctx} -> name end)
+    {transformed, reactive_vars} = transform_at_assigns(quoted, in_scope)
 
     # Wrap expressions in use_memo if they use reactive variables
     wrap_in_use_memo(transformed, reactive_vars)
@@ -52,20 +54,17 @@ defmodule Filament.VNodeCompiler do
 
   # ─── AST transformation ───────────────────────────────────────────────────────
 
-  # Transform @foo AST nodes to bare variable references, accumulating the names
-  # of all @-referenced variables as reactive_vars.
-  defp transform_at_assigns(ast) do
+  # Transform @foo AST nodes to bare variable references when foo is lexically in
+  # scope at the call site. Props stored only in the assigns map are left untouched.
+  defp transform_at_assigns(ast, in_scope) do
     {transformed, reactive_names} =
       Macro.postwalk(ast, MapSet.new(), fn
-        {{:., _, [EEx.Engine, :fetch_assign!]}, meta, [_assigns, key]}, acc ->
-          {{key, meta, nil}, MapSet.put(acc, key)}
-
-        {{:., _, [{:__aliases__, _, [:EEx, :Engine]}, :fetch_assign!]}, meta, [_assigns, key]},
-        acc ->
-          {{key, meta, nil}, MapSet.put(acc, key)}
-
-        {:var!, meta, [{:assigns, ctx, nil}]}, acc ->
-          {{:assigns, meta, ctx}, acc}
+        {{:., _, [{:assigns, _, _}, key]}, _, _} = node, acc when is_atom(key) ->
+          if MapSet.member?(in_scope, key) do
+            {{key, [], nil}, MapSet.put(acc, key)}
+          else
+            {node, acc}
+          end
 
         other, acc ->
           {other, acc}
@@ -98,8 +97,10 @@ defmodule Filament.VNodeCompiler do
     deps = compute_deps(inner, reactive_vars)
 
     if deps != [] do
+      dep_vars = names_to_var_ast(deps)
+
       quote do
-        Filament.Hooks.use_memo(fn -> unquote(node) end, unquote(deps))
+        Filament.Hooks.use_memo(fn -> unquote(node) end, unquote(dep_vars))
       end
     else
       node
@@ -119,10 +120,11 @@ defmodule Filament.VNodeCompiler do
          reactive_vars
        ) do
     deps = compute_closure_deps(fn_node, reactive_vars)
+    dep_vars = names_to_var_ast(deps)
 
     memoized =
       quote do
-        Filament.Hooks.use_memo(fn -> unquote(fn_node) end, unquote(deps))
+        Filament.Hooks.use_memo(fn -> unquote(fn_node) end, unquote(dep_vars))
       end
 
     {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
@@ -137,9 +139,7 @@ defmodule Filament.VNodeCompiler do
 
   # Compute reactive deps of a closure body by recursing into it.
   defp compute_closure_deps(ast, reactive_vars) do
-    vars = collect_variables_deep(ast)
-
-    vars
+    collect_variables_deep(ast)
     |> MapSet.new()
     |> MapSet.intersection(MapSet.new(reactive_vars))
     |> MapSet.to_list()
@@ -147,13 +147,16 @@ defmodule Filament.VNodeCompiler do
 
   # Compute the reactive dependencies of an AST node
   defp compute_deps(ast, reactive_vars) do
-    vars = collect_variables(ast)
-
-    deps =
-      vars |> MapSet.new() |> MapSet.intersection(MapSet.new(reactive_vars)) |> MapSet.to_list()
-
-    deps
+    collect_variables(ast)
+    |> MapSet.new()
+    |> MapSet.intersection(MapSet.new(reactive_vars))
+    |> MapSet.to_list()
   end
+
+  # Convert a list of atom variable names to a list of variable AST nodes so
+  # that unquote(dep_vars) in a quote block produces [var_a, var_b] at runtime
+  # (current values) rather than [:var_a, :var_b] (literal atoms, always equal).
+  defp names_to_var_ast(names), do: Enum.map(names, fn name -> {name, [], nil} end)
 
   # Collect variable references from an AST node, stopping at closure boundaries.
   # Used for computing deps of non-closure expressions (do not cross into fn bodies).

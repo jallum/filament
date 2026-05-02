@@ -29,156 +29,94 @@ defmodule Filament.VNodeCompilerTest do
     end
   end
 
-  describe "auto-memoization integration" do
-    test "reactive state changes trigger re-render" do
-      # Create a component that uses reactive state
-      defmodule MemoTestComponent do
+  describe "stable closure fn identity" do
+    # Closure capturing only a stable setter (not in reactive_vars because it is
+    # never referenced via @) → use_memo(fn -> closure end, []) → same fn object
+    # every render.
+    test "stable closure produces identical fn reference across renders" do
+      defmodule StableClosureComp do
         use Filament.Component
         import Filament.Hooks
 
-        defcomponent MemoTest do
+        defcomponent StableClosure do
           def render(assigns) do
-            {count, _set_count} = use_state(0)
-            ~F"<div>{count}</div>"
+            {_val, set_val} = use_state("x")
+            ~F'<button on_click={fn -> set_val.("clicked") end}>Go</button>'
           end
         end
       end
 
-      # Mount the component
-      {tree1, _, _} =
-        Reconciler.mount(MemoTestComponent.MemoTest, %{}, owner_pid: self())
+      {tree1, _, _} = Reconciler.mount(StableClosureComp.StableClosure, %{}, owner_pid: self())
+      handler1 = FiberTree.get_event_handler(tree1, "root", 0)
 
-      fiber1 = tree1["root"]
-      assert fiber1.status == :stable
+      {tree2, _, _} = Reconciler.update(tree1, "root", %{}, owner_pid: self())
+      handler2 = FiberTree.get_event_handler(tree2, "root", 0)
 
-      # Update with same props - fiber should be reused
-      {tree2, _, _} =
-        Reconciler.update(tree1, "root", %{}, owner_pid: self())
-
-      fiber2 = tree2["root"]
-      assert fiber2.status == :stable
-    end
-
-    test "stable setters work correctly in closures" do
-      defmodule StableSetterComponent do
-        use Filament.Component
-        import Filament.Hooks
-
-        defcomponent StableSetter do
-          def render(assigns) do
-            {_value, set_value} = use_state("initial")
-            click_handler = fn -> set_value.("clicked") end
-            ~F"<button on_click={click_handler}>Click me</button>"
-          end
-        end
-      end
-
-      {tree, _, _} =
-        Reconciler.mount(StableSetterComponent.StableSetter, %{}, owner_pid: self())
-
-      assert tree["root"].status == :stable
-    end
-
-    test "multiple reactive variables work correctly" do
-      defmodule MultiReactiveComponent do
-        use Filament.Component
-        import Filament.Hooks
-
-        defcomponent MultiReactive do
-          def render(assigns) do
-            {count, _set_count} = use_state(0)
-            {filter, _set_filter} = use_state(:all)
-
-            ~F"""
-            <div>
-              <span class="count">{count}</span>
-              <span class="filter">{filter}</span>
-            </div>
-            """
-          end
-        end
-      end
-
-      {tree1, _, _} =
-        Reconciler.mount(MultiReactiveComponent.MultiReactive, %{}, owner_pid: self())
-
-      assert tree1["root"].status == :stable
-
-      {tree2, _, _} =
-        Reconciler.update(tree1, "root", %{}, owner_pid: self())
-
-      assert tree2["root"].status == :stable
+      assert is_function(handler1), "expected event handler to be a function"
+      assert handler1 === handler2, "expected stable closure fn to be the same object across renders"
     end
   end
 
-  describe "use_memo caching behavior" do
-    test "use_memo is called with reactive deps and caches" do
-      defmodule MemoCacheComponent do
+  describe "reactive closure fn identity" do
+    # Closure capturing a reactive var (@count in the template) → deps = [count].
+    # When count changes, use_memo invalidates and produces a new fn.
+    test "reactive closure produces new fn reference when dep changes" do
+      defmodule ReactiveClosureComp do
         use Filament.Component
         import Filament.Hooks
 
-        defcomponent MemoCache do
+        defcomponent ReactiveClosure do
           def render(assigns) do
             {count, set_count} = use_state(0)
-
-            # Track memo calls
-            _computed =
-              use_memo(
-                fn ->
-                  send(self(), {:memo_called, count})
-                  count
-                end,
-                [count]
-              )
-
-            ~F"""
-            <div>
-              <span class="count">{count}</span>
-              <button on_click={fn -> set_count.(count + 1) end}>+</button>
-            </div>
-            """
+            ~F'<button on_click={fn -> set_count.(@count + 1) end}>+</button>'
           end
         end
       end
 
-      # Mount
       {tree1, _, _} =
-        Reconciler.mount(MemoCacheComponent.MemoCache, %{}, owner_pid: self())
+        Reconciler.mount(ReactiveClosureComp.ReactiveClosure, %{}, owner_pid: self())
 
-      # First memo call
-      assert_receive {:memo_called, 0}
-      flush_mailbox()
+      handler1 = FiberTree.get_event_handler(tree1, "root", 0)
 
-      # Simulate state change by updating the hook slot
-      updated_tree =
-        FiberTree.update_hook_slot(tree1, "root", 0, fn
-          {_old_count, setter} when is_function(setter, 1) ->
-            {1, setter}
-        end)
+      # Advance count: slot 0 = {value, setter}, change value 0 → 1
+      updated =
+        FiberTree.update_hook_slot(tree1, "root", 0, fn {_, setter} -> {1, setter} end)
 
-      # Re-render
-      {tree2, _, _} =
-        Reconciler.update(updated_tree, "root", %{}, owner_pid: self())
+      {tree2, _, _} = Reconciler.update(updated, "root", %{}, owner_pid: self())
+      handler2 = FiberTree.get_event_handler(tree2, "root", 0)
 
-      # Should have memo called again with new count
-      assert_receive {:memo_called, 1}
-      flush_mailbox()
+      assert is_function(handler2), "expected event handler to be a function"
 
-      # Re-render with same state - memo should use cache
-      # Re-render with same state - memo should use cache
-      {_tree3, _, _} =
-        Reconciler.update(tree2, "root", %{}, owner_pid: self())
-
-      # No new memo call
-      refute_receive {:memo_called, _}
+      refute handler1 === handler2,
+             "expected reactive closure to produce a new fn when count changed"
     end
-  end
 
-  defp flush_mailbox do
-    receive do
-      _ -> flush_mailbox()
-    after
-      0 -> :ok
+    test "reactive closure reuses fn reference when dep unchanged" do
+      defmodule ReactiveClosureStableComp do
+        use Filament.Component
+        import Filament.Hooks
+
+        defcomponent ReactiveClosureStable do
+          def render(assigns) do
+            {count, set_count} = use_state(0)
+            ~F'<button on_click={fn -> set_count.(@count + 1) end}>+</button>'
+          end
+        end
+      end
+
+      {tree1, _, _} =
+        Reconciler.mount(ReactiveClosureStableComp.ReactiveClosureStable, %{},
+          owner_pid: self()
+        )
+
+      handler1 = FiberTree.get_event_handler(tree1, "root", 0)
+
+      # Re-render with no state change — count is still 0
+      {tree2, _, _} = Reconciler.update(tree1, "root", %{}, owner_pid: self())
+      handler2 = FiberTree.get_event_handler(tree2, "root", 0)
+
+      assert handler1 === handler2,
+             "expected reactive closure fn to be reused when count did not change"
     end
   end
 end
