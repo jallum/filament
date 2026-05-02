@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "flm-o57.2"
@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "flm-o57",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Fork Filament.TagEngine and Filament.HTMLEngine; wire VNodeCompiler to use them",
   "type": "task",
-  "updated_at": "2026-05-02T18:49:55Z"
+  "updated_at": "2026-05-02T19:11:19Z"
 }
