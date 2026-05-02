@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-g5b.1"
   ],
@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "flm-g5b",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "G3: Inventory holds example — use_hold, process-death release, out-of-stock UX",
   "type": "task",
-  "updated_at": "2026-05-01T20:51:28Z"
+  "updated_at": "2026-05-02T00:26:36Z"
 }
