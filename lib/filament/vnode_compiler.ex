@@ -182,46 +182,15 @@ defmodule Filament.VNodeCompiler do
     MapSet.to_list(vars)
   end
 
-  # Check if a name is a valid variable (not a module, atom, keyword, etc.)
+  # Check if a name is a valid variable (not a reserved word or special form).
+  # Source of truth: Elixir reserved words per the tokenizer.
   defp valid_variable_name?(name) when is_atom(name) do
-    # Exclude Elixir keywords and built-ins
-    name not in [
-      :fn,
-      :do,
-      :end,
-      :after,
-      :else,
-      :catch,
-      :rescue,
-      :and,
-      :or,
-      :not,
-      :in,
-      :when,
-      :case,
-      :cond,
-      :if,
-      :unless,
-      :try,
-      :raise,
-      :throw,
-      :defmodule,
-      :def,
-      :defp,
-      :defmacro,
-      nil,
-      true,
-      false,
-      :__MODULE__,
-      :__DIR__,
-      :__ENV__,
-      :__STACKTRACE__,
-      :andalso,
-      :orelse,
-      :inlin,
-      :receive,
-      :send,
-      :self
-    ]
+    name not in ~w[
+      fn do end after else catch rescue and or not in when
+      case cond if unless with for try receive quote unquote
+      super import require use alias defmodule def defp defmacro defmacrop
+      __MODULE__ __DIR__ __ENV__ __STACKTRACE__ __CALLER__
+      true false nil
+    ]a
   end
 end
