@@ -73,11 +73,10 @@ defmodule Filament.SigilFPhase1Test do
     end
 
     test "element with event handler attribute compiles" do
-      # on_click triggers register_event_handler (via use_memo), which requires a
-      # fiber context. Templates with event handlers must run inside a render pass.
+      # on_click triggers event_at, which requires a fiber context.
+      # Templates with event handlers must run inside a render pass.
       defmodule EventHandlerComp do
         use Filament.Component
-        import Filament.Hooks
 
         defcomponent EventHandler do
           def render(assigns) do

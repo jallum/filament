@@ -1,7 +1,8 @@
 defmodule Filament.Hooks do
   @moduledoc """
   Low-level hook slot primitives. Not called by application code directly.
-  Application code uses use_state/1, use_memo/2, use_effect/2.
+  Application code uses use_state/1, use_effect/2, use_observable/3, use_hold/3.
+  Compiler-generated code uses memo_at/3 and event_at/2.
 
   Rules of hooks:
   1. Only call hooks at the top level of render/1.
@@ -109,45 +110,6 @@ defmodule Filament.Hooks do
 
   defp build_setter(_fiber_id, _slot_index, nil) do
     fn _new_value -> :ok end
-  end
-
-  @doc """
-  Returns a memoized value recomputed only when deps changes.
-
-  On the first render, always calls fun.() and caches the result.
-  On subsequent renders, compares deps to the previously stored deps using structural
-  equality. If deps is equal, returns the cached value. If deps changed, calls fun.()
-  and caches the new result.
-
-  Pass `[]` as deps to compute only once (on mount).
-  Pass `:no_deps` to recompute every render.
-
-  Rules: call only at the top level of render/1.
-  """
-  @spec use_memo((-> result), deps :: [term()] | :no_deps) :: result when result: term()
-  def use_memo(fun, deps) when is_function(fun, 0) do
-    {index, previous, _ctx} = use_slot(:__unset__)
-
-    {value, stored_deps} =
-      case previous do
-        :__unset__ ->
-          # First render
-          {fun.(), deps}
-
-        {cached_deps, cached_value} ->
-          if deps == :no_deps or cached_deps != deps do
-            {fun.(), deps}
-          else
-            {cached_value, cached_deps}
-          end
-
-        _other ->
-          # Unexpected slot content — recompute
-          {fun.(), deps}
-      end
-
-    commit_slot(index, {stored_deps, value})
-    value
   end
 
   @doc """

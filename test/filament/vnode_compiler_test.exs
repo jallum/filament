@@ -7,7 +7,6 @@ defmodule Filament.VNodeCompilerTest do
     test "render without assigns in scope compiles and renders correctly" do
       defmodule AssignsFreeComp do
         use Filament.Component
-        import Filament.Hooks
 
         defcomponent AssignsFree do
           def render(%{text: text, count: count}) do
@@ -105,7 +104,7 @@ defmodule Filament.VNodeCompilerTest do
 
   describe "stable closure fn identity" do
     # Closure capturing only a stable setter (not in reactive_vars because it is
-    # never referenced via @) → use_memo(fn -> closure end, []) → same fn object
+    # never referenced via @) → memo_at({:t, N}, [], fn -> closure end) → same fn object
     # every render.
     test "stable closure produces identical fn reference across renders" do
       defmodule StableClosureComp do
@@ -135,7 +134,7 @@ defmodule Filament.VNodeCompilerTest do
 
   describe "reactive closure fn identity" do
     # Closure capturing a reactive var (@count in the template) → deps = [count].
-    # When count changes, use_memo invalidates and produces a new fn.
+    # When count changes, memo_at invalidates and produces a new fn.
     test "reactive closure produces new fn reference when dep changes" do
       defmodule ReactiveClosureComp do
         use Filament.Component

@@ -4,7 +4,7 @@ defmodule Filament.VNodeCompiler do
   trivial dynamic fn.
 
   KEY INVARIANT: all real work (hooks, child renders, event handler registration,
-  use_memo calls) happens in the LINEAR BODY of the render function, where the
+  memo/event calls) happens in the LINEAR BODY of the render function, where the
   Filament fiber context is active. The dynamic fn is TRIVIAL — it only returns
   already-bound local variables. This prevents crashes when Phoenix's diff engine
   re-invokes the dynamic fn outside the Filament render context.
@@ -13,7 +13,7 @@ defmodule Filament.VNodeCompiler do
     1. Filament.TagEngine.compile  → %Rendered{} AST with work inside the dynamic fn
     2. hoist_dynamics              → lifts slot exprs out; fn becomes fn _ -> [v0, v1] end
     3. transform_at_assigns        → @foo → bare var (for reactive dep detection)
-    4. wrap_in_use_memo            → wraps reactive slot exprs in use_memo/2
+    4. assign_and_emit             → emits memo_at/event_at calls with compile-time indices
   """
 
   @spec compile(String.t(), Macro.Env.t() | nil) :: term()
@@ -32,7 +32,7 @@ defmodule Filament.VNodeCompiler do
     in_scope = MapSet.new(Map.keys(caller.versioned_vars), fn {name, _ctx} -> name end)
     {transformed, reactive_vars} = transform_at_assigns(hoisted, in_scope)
 
-    wrap_in_use_memo(transformed, reactive_vars)
+    assign_and_emit(transformed, reactive_vars)
   end
 
   # ─── JSX preprocessor ───────────────────────────────────────────────────────
@@ -117,7 +117,12 @@ defmodule Filament.VNodeCompiler do
         {counter, acc} ->
           var_name = :"freh_#{counter}"
           var_ast = {var_name, [], nil}
-          original = {{:., meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]}, call_meta, [fn_expr]}
+
+          original =
+            {{:., meta,
+              [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
+             call_meta, [fn_expr]}
+
           {var_ast, {counter + 1, [{var_ast, original} | acc]}}
 
         other, acc ->
@@ -165,8 +170,8 @@ defmodule Filament.VNodeCompiler do
     case exprs do
       [
         {:=, _, [{:dynamic, [], Phoenix.LiveView.Engine}, fn_ast]},
-        {:%, struct_meta, [{:__aliases__, alias_meta, [:Phoenix, :LiveView, :Rendered]},
-                           {:%{}, map_meta, fields}]}
+        {:%, struct_meta,
+         [{:__aliases__, alias_meta, [:Phoenix, :LiveView, :Rendered]}, {:%{}, map_meta, fields}]}
       ] ->
         {slot_assigns, return_list} = extract_fn_slots(fn_ast)
 
@@ -180,12 +185,15 @@ defmodule Filament.VNodeCompiler do
 
         new_rendered =
           {:%, struct_meta,
-           [{:__aliases__, alias_meta, [:Phoenix, :LiveView, :Rendered]},
-            {:%{}, map_meta, new_fields}]}
+           [
+             {:__aliases__, alias_meta, [:Phoenix, :LiveView, :Rendered]},
+             {:%{}, map_meta, new_fields}
+           ]}
 
         # Inject `changed = nil` so comprehension inner fns have a value to close over.
         # (`vars_changed = nil` is already present at the outer level from Phoenix's boilerplate.)
-        changed_nil = {:=, [generated: true], [{:changed, [generated: true], Phoenix.LiveView.Engine}, nil]}
+        changed_nil =
+          {:=, [generated: true], [{:changed, [generated: true], Phoenix.LiveView.Engine}, nil]}
 
         {:__block__, meta, [changed_nil | slot_assigns] ++ [new_rendered]}
 
@@ -292,58 +300,70 @@ defmodule Filament.VNodeCompiler do
     {transformed, MapSet.to_list(reactive_names)}
   end
 
-  # ─── use_memo wrapping ───────────────────────────────────────────────────────
+  # ─── Compile-time slot assignment ────────────────────────────────────────────
 
-  # Custom postwalk that does NOT recurse into fn literals, so use_memo and
-  # register_event_handler wrapping only applies to the linear render body —
-  # never to PLV-invoked fns (comprehension entry fns, dynamic fn).
-  defp wrap_in_use_memo(ast, reactive_vars) do
-    memo_walk(ast, reactive_vars)
+  # Single-pass walk that assigns compile-time indices to every memo and event site
+  # and emits memo_at/event_at calls directly. Does NOT recurse into fn literals,
+  # so only the linear render body is affected (not PLV comprehension entry fns).
+  defp assign_and_emit(ast, reactive_vars) do
+    {result, _counters} = do_walk(ast, reactive_vars, {0, 0})
+    result
   end
 
-  defp memo_walk({:fn, _, _} = node, _reactive_vars), do: node
+  defp do_walk({:fn, _, _} = node, _rv, counters), do: {node, counters}
 
-  defp memo_walk({tag, meta, args}, reactive_vars) when is_list(args) do
-    new_args = Enum.map(args, &memo_walk(&1, reactive_vars))
-    wrap_node_if_needed({tag, meta, new_args}, reactive_vars)
+  defp do_walk({:=, meta, [left, right]}, rv, counters) do
+    {new_right, counters} = do_walk(right, rv, counters)
+    {{:=, meta, [left, new_right]}, counters}
   end
 
-  defp memo_walk({a, b}, reactive_vars) do
-    wrap_node_if_needed({memo_walk(a, reactive_vars), memo_walk(b, reactive_vars)}, reactive_vars)
+  defp do_walk(list, rv, counters) when is_list(list) do
+    Enum.map_reduce(list, counters, &do_walk(&1, rv, &2))
   end
 
-  defp memo_walk(list, reactive_vars) when is_list(list) do
-    Enum.map(list, &memo_walk(&1, reactive_vars))
+  defp do_walk({tag, meta, args}, rv, counters) when is_list(args) do
+    {new_args, counters} = do_walk(args, rv, counters)
+    emit_if_needed({tag, meta, new_args}, rv, counters)
   end
 
-  defp memo_walk(other, _reactive_vars), do: other
-
-  defp wrap_node_if_needed({:=, meta, [left, right]}, _reactive_vars) do
-    {:=, meta, [left, right]}
+  defp do_walk({a, b}, rv, counters) do
+    {new_a, counters} = do_walk(a, rv, counters)
+    {new_b, counters} = do_walk(b, rv, counters)
+    {{new_a, new_b}, counters}
   end
 
-  # Wrap live_to_iodata(expr) in use_memo when the inner expr depends on reactive vars.
-  defp wrap_node_if_needed(
+  defp do_walk(other, _rv, counters), do: {other, counters}
+
+  # live_to_iodata(expr) with reactive deps → memo_at({:t, N}, deps, factory)
+  defp emit_if_needed(
          {{:., _, [{:__aliases__, _, [:Phoenix, :LiveView, :Engine]}, :live_to_iodata]}, _,
           [inner]} = node,
-         reactive_vars
+         reactive_vars,
+         {t_ctr, e_ctr}
        ) do
     deps = compute_deps(inner, reactive_vars)
 
     if deps != [] do
       dep_vars = names_to_var_ast(deps)
-      quote do: Filament.Hooks.use_memo(fn -> unquote(node) end, unquote(dep_vars))
+
+      new_node =
+        quote do:
+                Filament.Hooks.memo_at({:t, unquote(t_ctr)}, unquote(dep_vars), fn ->
+                  unquote(node)
+                end)
+
+      {new_node, {t_ctr + 1, e_ctr}}
     else
-      node
+      {node, {t_ctr, e_ctr}}
     end
   end
 
-  # Wrap the fn literal inside register_event_handler in use_memo so stable
-  # closures (no reactive deps) reuse the same fn reference across renders.
-  defp wrap_node_if_needed(
-         {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
-          meta, [fn_node]},
-         reactive_vars
+  # register_event_handler(fn) → event_at(M, memo_at({:t, N}, deps, fn -> fn end))
+  defp emit_if_needed(
+         {{:., _, [{:__aliases__, _, [:Filament, :Hooks]}, :register_event_handler]}, _,
+          [fn_node]},
+         reactive_vars,
+         {t_ctr, e_ctr}
        ) do
     case fn_node do
       {:fn, _, _} ->
@@ -351,18 +371,21 @@ defmodule Filament.VNodeCompiler do
         dep_vars = names_to_var_ast(deps)
 
         memoized =
-          quote do: Filament.Hooks.use_memo(fn -> unquote(fn_node) end, unquote(dep_vars))
+          quote do:
+                  Filament.Hooks.memo_at({:t, unquote(t_ctr)}, unquote(dep_vars), fn ->
+                    unquote(fn_node)
+                  end)
 
-        {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
-         meta, [memoized]}
+        wire_ref = quote do: Filament.Hooks.event_at(unquote(e_ctr), unquote(memoized))
+        {wire_ref, {t_ctr + 1, e_ctr + 1}}
 
       _ ->
-        {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
-         meta, [fn_node]}
+        wire_ref = quote do: Filament.Hooks.event_at(unquote(e_ctr), unquote(fn_node))
+        {wire_ref, {t_ctr, e_ctr + 1}}
     end
   end
 
-  defp wrap_node_if_needed(node, _reactive_vars), do: node
+  defp emit_if_needed(node, _rv, counters), do: {node, counters}
 
   # ─── Dependency computation ───────────────────────────────────────────────────
 
@@ -385,10 +408,14 @@ defmodule Filament.VNodeCompiler do
   defp collect_variables(ast) do
     {_, vars} =
       Macro.prewalk(ast, MapSet.new(), fn
-        {:fn, _, _} = node, acc -> {node, acc}
+        {:fn, _, _} = node, acc ->
+          {node, acc}
+
         {name, _meta, nil} = node, acc when is_atom(name) ->
           if valid_variable_name?(name), do: {node, MapSet.put(acc, name)}, else: {node, acc}
-        node, acc -> {node, acc}
+
+        node, acc ->
+          {node, acc}
       end)
 
     MapSet.to_list(vars)
@@ -399,7 +426,9 @@ defmodule Filament.VNodeCompiler do
       Macro.prewalk(ast, MapSet.new(), fn
         {name, _meta, nil} = node, acc when is_atom(name) ->
           if valid_variable_name?(name), do: {node, MapSet.put(acc, name)}, else: {node, acc}
-        node, acc -> {node, acc}
+
+        node, acc ->
+          {node, acc}
       end)
 
     MapSet.to_list(vars)
