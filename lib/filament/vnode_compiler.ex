@@ -108,27 +108,35 @@ defmodule Filament.VNodeCompiler do
   end
 
   # Filament.Hooks.register_event_handler(fn_node) — the fn is an event handler
-  # closure. Wrap it in use_memo so stable closures (no reactive deps) produce
-  # the same fn reference across renders. Closures capturing reactive vars get
-  # a new fn only when those vars change.
+  # closure. Wrap it in use_memo only when fn_node is a lambda literal ({:fn, _,
+  # _}). This allows stable closures (no reactive deps) to produce the same fn
+  # reference across renders, while closures capturing reactive vars get a new fn
+  # only when those vars change.
   #
-  # Targeting register_event_handler specifically (rather than all {:fn, _, _}
-  # nodes) avoids accidentally memoizing TagEngine's dynamic fn wrapper.
+  # We do NOT memoize when fn_node is an expression like assigns.on_click — the
+  # assigns value may change each render and must be re-read directly.
   defp wrap_node_if_needed(
          {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
           meta, [fn_node]},
          reactive_vars
        ) do
-    deps = compute_closure_deps(fn_node, reactive_vars)
-    dep_vars = names_to_var_ast(deps)
+    case fn_node do
+      {:fn, _, _} ->
+        deps = compute_closure_deps(fn_node, reactive_vars)
+        dep_vars = names_to_var_ast(deps)
 
-    memoized =
-      quote do
-        Filament.Hooks.use_memo(fn -> unquote(fn_node) end, unquote(dep_vars))
-      end
+        memoized =
+          quote do
+            Filament.Hooks.use_memo(fn -> unquote(fn_node) end, unquote(dep_vars))
+          end
 
-    {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
-     meta, [memoized]}
+        {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
+         meta, [memoized]}
+
+      _ ->
+        {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
+         meta, [fn_node]}
+    end
   end
 
   defp wrap_node_if_needed(node, _reactive_vars) do
