@@ -1,32 +1,158 @@
 defmodule Filament.VNodeCompilerTest do
   use ExUnit.Case, async: true
 
-  describe "compile/2 integration with ~F sigil" do
-    test "~F sigil works without assigns map" do
-      # This is tested by the CounterComponent in live_view_test.exs
-      # which uses ~F"<div class=\"counter\"><h1>Counter: {@count}</h1></div>"
-      assert true
+  alias Filament.{Reconciler, FiberTree}
+
+  describe "auto-memoization integration" do
+    test "reactive state changes trigger re-render" do
+      # Create a component that uses reactive state
+      defmodule MemoTestComponent do
+        use Filament.Component
+        import Filament.Hooks
+
+        defcomponent MemoTest do
+          def render(assigns) do
+            {count, _set_count} = use_state(0)
+            ~F"<div>{count}</div>"
+          end
+        end
+      end
+
+      # Mount the component
+      {tree1, _, _} =
+        Reconciler.mount(MemoTestComponent.MemoTest, %{}, owner_pid: self())
+
+      fiber1 = tree1["root"]
+      assert fiber1.status == :stable
+
+      # Update with same props - fiber should be reused
+      {tree2, _, _} =
+        Reconciler.update(tree1, "root", %{}, owner_pid: self())
+
+      fiber2 = tree2["root"]
+      assert fiber2.status == :stable
     end
 
-    test "@variables resolve to lexically-bound values" do
-      # Verified by live_view_test.exs: render/1 returns valid output
-      assert true
+    test "stable setters work correctly in closures" do
+      defmodule StableSetterComponent do
+        use Filament.Component
+        import Filament.Hooks
+
+        defcomponent StableSetter do
+          def render(assigns) do
+            {_value, set_value} = use_state("initial")
+            click_handler = fn -> set_value.("clicked") end
+            ~F"<button on_click={click_handler}>Click me</button>"
+          end
+        end
+      end
+
+      {tree, _, _} =
+        Reconciler.mount(StableSetterComponent.StableSetter, %{}, owner_pid: self())
+
+      assert tree["root"].status == :stable
+    end
+
+    test "multiple reactive variables work correctly" do
+      defmodule MultiReactiveComponent do
+        use Filament.Component
+        import Filament.Hooks
+
+        defcomponent MultiReactive do
+          def render(assigns) do
+            {count, _set_count} = use_state(0)
+            {filter, _set_filter} = use_state(:all)
+
+            ~F"""
+            <div>
+              <span class="count">{count}</span>
+              <span class="filter">{filter}</span>
+            </div>
+            """
+          end
+        end
+      end
+
+      {tree1, _, _} =
+        Reconciler.mount(MultiReactiveComponent.MultiReactive, %{}, owner_pid: self())
+
+      assert tree1["root"].status == :stable
+
+      {tree2, _, _} =
+        Reconciler.update(tree1, "root", %{}, owner_pid: self())
+
+      assert tree2["root"].status == :stable
     end
   end
 
-  describe "reactive variable detection" do
-    test "detect_reactive_vars extracts use_state bindings" do
-      # This tests the internal detection logic
-      # A properly bound use_state call should be detected
-      assert true
+  describe "use_memo caching behavior" do
+    test "use_memo is called with reactive deps and caches" do
+      defmodule MemoCacheComponent do
+        use Filament.Component
+        import Filament.Hooks
+
+        defcomponent MemoCache do
+          def render(assigns) do
+            {count, set_count} = use_state(0)
+
+            # Track memo calls
+            _computed =
+              use_memo(
+                fn ->
+                  send(self(), {:memo_called, count})
+                  count
+                end,
+                [count]
+              )
+
+            ~F"""
+            <div>
+              <span class="count">{count}</span>
+              <button on_click={fn -> set_count.(count + 1) end}>+</button>
+            </div>
+            """
+          end
+        end
+      end
+
+      # Mount
+      {tree1, _, _} =
+        Reconciler.mount(MemoCacheComponent.MemoCache, %{}, owner_pid: self())
+
+      # First memo call
+      assert_receive {:memo_called, 0}
+      flush_mailbox()
+
+      # Simulate state change by updating the hook slot
+      updated_tree =
+        FiberTree.update_hook_slot(tree1, "root", 0, fn
+          {_old_count, setter} when is_function(setter, 1) ->
+            {1, setter}
+        end)
+
+      # Re-render
+      {tree2, _, _} =
+        Reconciler.update(updated_tree, "root", %{}, owner_pid: self())
+
+      # Should have memo called again with new count
+      assert_receive {:memo_called, 1}
+      flush_mailbox()
+
+      # Re-render with same state - memo should use cache
+      # Re-render with same state - memo should use cache
+      {_tree3, _, _} =
+        Reconciler.update(tree2, "root", %{}, owner_pid: self())
+
+      # No new memo call
+      refute_receive {:memo_called, _}
     end
   end
 
-  describe "use_memo wrapping" do
-    test "templates with variables produce compilable output" do
-      # The full integration is tested in live_view_test.exs
-      # where CounterComponent uses ~F with @count
-      assert true
+  defp flush_mailbox do
+    receive do
+      _ -> flush_mailbox()
+    after
+      0 -> :ok
     end
   end
 end

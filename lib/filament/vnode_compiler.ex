@@ -156,7 +156,7 @@ defmodule Filament.VNodeCompiler do
     do_collect_variables(ast, [])
   end
 
-  defp do_collect_variables({left, meta, right}, acc) when is_tuple(right) do
+  defp do_collect_variables({left, _meta, right}, acc) when is_tuple(right) do
     acc = do_collect_variables(left, acc)
     do_collect_variables(right, acc)
   end
@@ -165,7 +165,7 @@ defmodule Filament.VNodeCompiler do
     Enum.reduce(exprs, acc, &do_collect_variables/2)
   end
 
-  defp do_collect_variables({:fn, _, clauses}, acc) do
+  defp do_collect_variables({:fn, _, _clauses}, acc) do
     # Don't recurse into closures - they're handled separately
     acc
   end
