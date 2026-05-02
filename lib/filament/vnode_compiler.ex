@@ -83,32 +83,27 @@ defmodule Filament.VNodeCompiler do
     end)
   end
 
-  # Check if this is an expression that needs wrapping
   defp wrap_node_if_needed({:=, meta, [left, right]}, _reactive_vars) do
-    # Skip assignment expressions
     {:=, meta, [left, right]}
   end
 
-  defp wrap_node_if_needed({:<<>>, _meta, _parts} = node, reactive_vars) do
-    # Binary concatenation - check if it contains reactive variable references
-    deps = compute_deps(node, reactive_vars)
+  # Phoenix.LiveView.Engine.live_to_iodata(expr) is the per-slot expression
+  # TagEngine emits for dynamic interpolations like {@count}. Wrap it in
+  # use_memo when the inner expression depends on reactive variables.
+  defp wrap_node_if_needed(
+         {{:., _, [{:__aliases__, _, [:Phoenix, :LiveView, :Engine]}, :live_to_iodata]}, _,
+          [inner]} = node,
+         reactive_vars
+       ) do
+    deps = compute_deps(inner, reactive_vars)
 
     if deps != [] do
-      # Wrap in use_memo
       quote do
-        Filament.Hooks.use_memo(unquote(deps), fn -> unquote(node) end)
+        Filament.Hooks.use_memo(fn -> unquote(node) end, unquote(deps))
       end
     else
       node
     end
-  end
-
-  defp wrap_node_if_needed({:fn, _, _} = node, reactive_vars) do
-    # Closure - check if it captures reactive variables
-    # Note: closures are typically event handlers, so we skip wrapping
-    # but still compute deps for future optimization
-    _deps = compute_deps(node, reactive_vars)
-    node
   end
 
   defp wrap_node_if_needed(node, _reactive_vars) do
