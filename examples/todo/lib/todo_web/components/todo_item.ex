@@ -13,19 +13,17 @@ defmodule TodoWeb.Components.TodoItem do
     prop(:on_toggle, :function, default: nil)
     prop(:on_remove, :function, default: nil)
 
-    def render(assigns) do
-      assigns =
-        assigns
-        |> Map.put(:completed, Map.get(assigns.todo, :completed, false))
-        |> then(fn a -> Map.put(a, :item_class, if(a.completed, do: "completed", else: "")) end)
+    defp item_class(%{completed: true}), do: "completed"
+    defp item_class(_), do: ""
 
+    def render(%{todo: todo} = assigns) do
       ~F"""
-      <li class={@item_class}>
+      <li class={item_class(todo)}>
         <div class="view">
           <input
             class="toggle"
             type="checkbox"
-            checked={@completed}
+            checked={@todo.completed}
             on_click={@on_toggle}
           />
           <label>{@todo.text}</label>
