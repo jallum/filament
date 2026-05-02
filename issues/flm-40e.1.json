@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "flm-40e.2"
@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "flm-40e",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Item 0: Stable use_state setters",
   "type": "task",
-  "updated_at": "2026-05-02T12:43:25Z"
+  "updated_at": "2026-05-02T12:51:03Z"
 }
