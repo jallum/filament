@@ -158,47 +158,32 @@ defmodule Filament.VNodeCompiler do
     deps
   end
 
-  # Collect all variable references from an AST node
+  # Collect variable references from an AST node, stopping at closure boundaries.
+  # Used for computing deps of non-closure expressions (do not cross into fn bodies).
   defp collect_variables(ast) do
-    do_collect_variables(ast, [])
+    {_, vars} =
+      Macro.prewalk(ast, MapSet.new(), fn
+        {:fn, _, _} = node, acc -> {node, acc}
+        {name, _meta, nil} = node, acc when is_atom(name) ->
+          if valid_variable_name?(name), do: {node, MapSet.put(acc, name)}, else: {node, acc}
+        node, acc -> {node, acc}
+      end)
+
+    MapSet.to_list(vars)
   end
 
-  defp do_collect_variables({left, _meta, right}, acc) when is_tuple(right) do
-    acc = do_collect_variables(left, acc)
-    do_collect_variables(right, acc)
-  end
+  # Collect variable references from an AST node, recursing into closure bodies.
+  # Used for computing what a closure captures (needed for closure dep computation).
+  defp collect_variables_deep(ast) do
+    {_, vars} =
+      Macro.prewalk(ast, MapSet.new(), fn
+        {name, _meta, nil} = node, acc when is_atom(name) ->
+          if valid_variable_name?(name), do: {node, MapSet.put(acc, name)}, else: {node, acc}
+        node, acc -> {node, acc}
+      end)
 
-  defp do_collect_variables({:__block__, _meta, exprs}, acc) do
-    Enum.reduce(exprs, acc, &do_collect_variables/2)
+    MapSet.to_list(vars)
   end
-
-  defp do_collect_variables({:fn, _, _clauses}, acc) do
-    # Don't recurse into closures - they're handled separately
-    acc
-  end
-
-  defp do_collect_variables({name, _meta, nil}, acc) when is_atom(name) do
-    # Variable reference
-    if valid_variable_name?(name) do
-      [name | acc]
-    else
-      acc
-    end
-  end
-
-  defp do_collect_variables({_, _, args}, acc) when is_list(args) do
-    Enum.reduce(args, acc, &do_collect_variables/2)
-  end
-
-  defp do_collect_variables({_, _, arg}, acc) do
-    do_collect_variables(arg, acc)
-  end
-
-  defp do_collect_variables(list, acc) when is_list(list) do
-    Enum.reduce(list, acc, &do_collect_variables/2)
-  end
-
-  defp do_collect_variables(_, acc), do: acc
 
   # Check if a name is a valid variable (not a module, atom, keyword, etc.)
   defp valid_variable_name?(name) when is_atom(name) do
