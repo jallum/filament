@@ -17,9 +17,7 @@ defmodule TodoWeb.Components.TodoItem do
       assigns =
         assigns
         |> Map.put(:completed, Map.get(assigns.todo, :completed, false))
-        |> Map.put(:id, Map.get(assigns.todo, :id, nil))
-        |> Map.put(:text, Map.get(assigns.todo, :text, ""))
-        |> Map.put(:item_class, if(assigns.completed, do: "completed", else: ""))
+        |> then(fn a -> Map.put(a, :item_class, if(a.completed, do: "completed", else: "")) end)
 
       ~F"""
       <li class={@item_class}>
@@ -30,10 +28,8 @@ defmodule TodoWeb.Components.TodoItem do
             checked={@completed}
             on_click={@on_toggle}
           />
-          <label>{@text}</label>
-          <button class="destroy" phx-click={"remove:" <> Integer.to_string(@id)}>
-            ×
-          </button>
+          <label>{@todo.text}</label>
+          <button class="destroy" on_click={@on_remove}>×</button>
         </div>
       </li>
       """
