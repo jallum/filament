@@ -323,36 +323,39 @@ defmodule Filament.Hooks do
           factory :: (-> term())
         ) :: term()
   def memo_at(slot, deps, factory) when is_function(factory, 0) do
-    ctx =
-      Process.get(:filament_render_context) ||
-        raise ArgumentError,
-              "hook called outside a render pass — hooks may only be called from render/1"
+    ctx = Process.get(:filament_render_context)
 
-    previous = read_slot_at(ctx, slot)
+    if is_nil(ctx) do
+      # Called outside a render pass (PLV diff engine re-evaluating comprehension entry fns).
+      # Just compute and return — no caching needed here.
+      factory.()
+    else
+      previous = read_slot_at(ctx, slot)
 
-    case previous do
-      {:memo, cached_deps, cached_value, handler_range}
-      when deps != :no_deps and cached_deps == deps ->
-        # Cache hit: replay event handlers registered by the factory last time
-        # so the fiber's event_handlers map stays populated without re-running factory.
-        replay_handler_range(ctx, handler_range)
-        after_ctx = Process.get(:filament_render_context)
-        slot_entry = {:memo, cached_deps, cached_value, handler_range}
-        updated = Map.put(after_ctx.new_hook_slots, slot, slot_entry)
-        Process.put(:filament_render_context, %{after_ctx | new_hook_slots: updated})
-        cached_value
+      case previous do
+        {:memo, cached_deps, cached_value, handler_range}
+        when deps != :no_deps and cached_deps == deps ->
+          # Cache hit: replay event handlers registered by the factory last time
+          # so the fiber's event_handlers map stays populated without re-running factory.
+          replay_handler_range(ctx, handler_range)
+          after_ctx = Process.get(:filament_render_context)
+          slot_entry = {:memo, cached_deps, cached_value, handler_range}
+          updated = Map.put(after_ctx.new_hook_slots, slot, slot_entry)
+          Process.put(:filament_render_context, %{after_ctx | new_hook_slots: updated})
+          cached_value
 
-      _ ->
-        # Cache miss or first render: run factory, record which handler indices it used.
-        e_start = ctx.event_handler_index
-        value = factory.()
-        after_ctx = Process.get(:filament_render_context)
-        e_end = after_ctx.event_handler_index
-        stored_deps = if deps == :no_deps, do: :no_deps, else: deps
-        slot_entry = {:memo, stored_deps, value, {e_start, e_end}}
-        updated = Map.put(after_ctx.new_hook_slots, slot, slot_entry)
-        Process.put(:filament_render_context, %{after_ctx | new_hook_slots: updated})
-        value
+        _ ->
+          # Cache miss or first render: run factory, record which handler indices it used.
+          e_start = ctx.event_handler_index
+          value = factory.()
+          after_ctx = Process.get(:filament_render_context)
+          e_end = after_ctx.event_handler_index
+          stored_deps = if deps == :no_deps, do: :no_deps, else: deps
+          slot_entry = {:memo, stored_deps, value, {e_start, e_end}}
+          updated = Map.put(after_ctx.new_hook_slots, slot, slot_entry)
+          Process.put(:filament_render_context, %{after_ctx | new_hook_slots: updated})
+          value
+      end
     end
   end
 
@@ -391,15 +394,19 @@ defmodule Filament.Hooks do
   """
   @spec event_at(slot :: non_neg_integer(), handler :: function()) :: wire_ref :: String.t()
   def event_at(slot, handler) when is_function(handler) do
-    ctx =
-      Process.get(:filament_render_context) ||
-        raise ArgumentError,
-              "hook called outside a render pass — hooks may only be called from render/1"
+    case Process.get(:filament_render_context) do
+      nil ->
+        # Called outside a render pass (PLV diff engine re-evaluating comprehension entry fns).
+        # Handlers were already committed during the render pass; return a stable ref.
+        {fiber_id, _} = Process.get(:filament_diff_eval_state, {"unknown", 0})
+        "#{fiber_id}:#{slot}"
 
-    fiber_id_str = to_string(ctx.fiber_id)
-    new_handlers = Map.put(ctx.new_event_handlers, slot, handler)
-    Process.put(:filament_render_context, %{ctx | new_event_handlers: new_handlers})
-    "#{fiber_id_str}:#{slot}"
+      ctx ->
+        fiber_id_str = to_string(ctx.fiber_id)
+        new_handlers = Map.put(ctx.new_event_handlers, slot, handler)
+        Process.put(:filament_render_context, %{ctx | new_event_handlers: new_handlers})
+        "#{fiber_id_str}:#{slot}"
+    end
   end
 
   @doc """

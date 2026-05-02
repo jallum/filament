@@ -20,6 +20,12 @@ defmodule Filament.FiberTree do
   end
 
   @doc """
+  Returns all fiber IDs present in the tree.
+  """
+  @spec fiber_ids(t()) :: [String.t()]
+  def fiber_ids(tree), do: Map.keys(tree)
+
+  @doc """
   Apply `updater` to hook slot `slot_index` of the fiber with `fiber_id`.
   Returns the updated tree. No-ops if fiber_id not found.
   """

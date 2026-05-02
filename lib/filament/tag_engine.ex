@@ -54,8 +54,11 @@ defmodule Filament.TagEngine do
   # LiveView's __changed__ change-tracking is irrelevant to Filament's fiber model.
   defp sanitize_caller(options) do
     case Keyword.fetch(options, :caller) do
-      {:ok, %Macro.Env{} = caller} -> Keyword.put(options, :caller, %{caller | versioned_vars: %{}})
-      _ -> options
+      {:ok, %Macro.Env{} = caller} ->
+        Keyword.put(options, :caller, %{caller | versioned_vars: %{}})
+
+      _ ->
+        options
     end
   end
 
@@ -145,9 +148,19 @@ defmodule Filament.TagEngine do
         _ -> assigns |> Map.new() |> Map.put_new(:__changed__, nil)
       end
 
-    case func.(assigns) do
-      %Phoenix.LiveView.Rendered{} = rendered ->
-        %{rendered | caller: caller}
+    rendered =
+      case {Process.get(:filament_render_context), Function.info(func, :module)} do
+        {ctx, {:module, mod}} when not is_nil(ctx) ->
+          # Inside a Filament render pass — render child component with its own fiber.
+          Filament.Renderer.render_component_child(ctx, mod, assigns)
+
+        _ ->
+          func.(assigns)
+      end
+
+    case rendered do
+      %Phoenix.LiveView.Rendered{} = r ->
+        %{r | caller: caller}
 
       %Phoenix.LiveView.Component{} = component ->
         component

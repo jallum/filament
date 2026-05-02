@@ -32,7 +32,9 @@ defmodule Filament.RenderContext do
     # boolean() - false during disconnected (HTTP) mounts to skip subscriptions
     subscribe_enabled: true,
     # %{non_neg_integer() => term()} - existing hook slot state for new child fibers
-    hook_slots: %{}
+    hook_slots: %{},
+    # non_neg_integer() - counter for unique child component discriminators within this render
+    child_component_index: 0
   ]
 
   @type t :: %__MODULE__{
@@ -47,6 +49,7 @@ defmodule Filament.RenderContext do
           new_event_handlers: %{non_neg_integer() => function()},
           observable_stubs: %{term() => pid()},
           subscribe_enabled: boolean(),
-          hook_slots: %{non_neg_integer() => term()}
+          hook_slots: %{non_neg_integer() => term()},
+          child_component_index: non_neg_integer()
         }
 end

@@ -102,6 +102,75 @@ defmodule Filament.Renderer do
   end
 
   @doc """
+  Renders a Filament child component within the current render pass, creating its
+  own fiber and registering it as a child of the current fiber.
+
+  Called by `Filament.TagEngine.component/3` when inside a Filament render pass
+  so that sub-components get isolated fibers (and thus isolated hook state).
+  """
+  @spec render_component_child(RenderContext.t(), module(), map()) ::
+          Phoenix.LiveView.Rendered.t()
+  def render_component_child(parent_ctx, mod, props) do
+    index = parent_ctx.child_component_index
+    parent_fiber = Map.get(parent_ctx.fiber_tree, parent_ctx.fiber_id)
+
+    child_id =
+      if parent_fiber do
+        Fiber.child_id(parent_fiber, mod, {:index, index})
+      else
+        "#{parent_ctx.fiber_id}.#{mod}[#{index}]"
+      end
+
+    existing_fiber = Map.get(parent_ctx.fiber_tree, child_id)
+    hook_slots = if existing_fiber, do: existing_fiber.hook_slots, else: %{}
+
+    child_ctx = %RenderContext{
+      fiber_id: child_id,
+      fiber_tree: parent_ctx.fiber_tree,
+      owner_pid: parent_ctx.owner_pid,
+      new_fibers: %{},
+      pending_effects: [],
+      observable_stubs: parent_ctx.observable_stubs,
+      subscribe_enabled: parent_ctx.subscribe_enabled,
+      hook_index: 0,
+      new_hook_slots: %{},
+      event_handler_index: 0,
+      new_event_handlers: %{},
+      hook_slots: hook_slots
+    }
+
+    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers,
+     child_event_handlers} = render(mod, props, child_ctx)
+
+    child_fiber = %Fiber{
+      id: child_id,
+      component: mod,
+      props: props,
+      hook_slots: Map.merge(hook_slots, child_new_hook_slots),
+      event_handlers: child_event_handlers,
+      children: Map.keys(grandchild_fibers),
+      parent_id: parent_ctx.fiber_id,
+      status: if(existing_fiber, do: :stable, else: :mounting)
+    }
+
+    updated_new_fibers =
+      parent_ctx.new_fibers
+      |> Map.put(child_id, child_fiber)
+      |> Map.merge(grandchild_fibers)
+
+    updated_ctx = %{
+      parent_ctx
+      | new_fibers: updated_new_fibers,
+        pending_effects: parent_ctx.pending_effects ++ child_pending_effects,
+        child_component_index: index + 1
+    }
+
+    Process.put(:filament_render_context, updated_ctx)
+
+    rendered_child
+  end
+
+  @doc """
   Recursively renders a vnode tree into Rendered structs.
   """
   @spec render_vnode(Filament.VNode.t(), RenderContext.t()) :: term()

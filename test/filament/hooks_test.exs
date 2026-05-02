@@ -128,10 +128,9 @@ defmodule Filament.HooksTest do
   end
 
   describe "memo_at/3" do
-    test "raises when called outside render pass" do
-      assert_raise ArgumentError,
-                   "hook called outside a render pass — hooks may only be called from render/1",
-                   fn -> Hooks.memo_at({:t, 0}, [], fn -> :value end) end
+    test "calls factory and returns value when outside render pass" do
+      result = Hooks.memo_at({:t, 0}, [], fn -> :value end)
+      assert result == :value
     end
 
     test "calls factory on first render and stores result" do
@@ -220,10 +219,10 @@ defmodule Filament.HooksTest do
   end
 
   describe "event_at/2" do
-    test "raises when called outside render pass" do
-      assert_raise ArgumentError,
-                   "hook called outside a render pass — hooks may only be called from render/1",
-                   fn -> Hooks.event_at(0, fn -> :action end) end
+    test "returns dummy wire ref when called outside render pass" do
+      ref = Hooks.event_at(0, fn -> :action end)
+      assert is_binary(ref)
+      assert String.contains?(ref, ":0")
     end
 
     test "stores handler and returns wire ref" do

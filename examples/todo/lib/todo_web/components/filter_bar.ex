@@ -6,10 +6,11 @@ defmodule TodoWeb.Components.FilterBar do
     * use_state owned by a child component
     * Variable filter entries via a keyword-list prop ({atom, label} pairs)
     * on_change callback to notify the parent of selection changes
+    * Sub-component (FilterItem) for per-item fiber isolation
   """
   use Filament.Component
 
-  import Filament.Hooks
+  alias TodoWeb.Components.FilterItem
 
   defcomponent do
     prop(:filters, :list, required: true)
@@ -22,16 +23,15 @@ defmodule TodoWeb.Components.FilterBar do
       ~F"""
       <ul class="filters">
         {for {value, label} <- filters do}
-          <li>
-            <a
-              class={if current == value, do: "selected", else: ""}
-              on_click={fn ->
-                set_current.(value)
-                if on_change, do: on_change.(value)
-              end}
-              href="#"
-            >{label}</a>
-          </li>
+          <FilterItem
+            value={value}
+            label={label}
+            is_active={current == value}
+            on_click={fn ->
+              set_current.(value)
+              if on_change, do: on_change.(value)
+            end}
+          />
         {end}
       </ul>
       """
