@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-40e.1"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "flm-40e",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Item 1a: VNodeCompiler — lexical @-variable scoping and sigil_F",
   "type": "task",
-  "updated_at": "2026-05-02T12:43:25Z"
+  "updated_at": "2026-05-02T13:02:02Z"
 }
