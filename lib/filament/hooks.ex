@@ -347,6 +347,75 @@ defmodule Filament.Hooks do
   end
 
   @doc """
+  Reads or recomputes a memoized value at an explicit compile-time-assigned slot key.
+
+  `slot` is a `{:t, N}` tagged tuple (template namespace) or a plain non-negative integer.
+  Uses structural equality on `deps`. Pass `[]` to compute once on mount. Pass `:no_deps`
+  to recompute every render.
+
+  Called only by compiler-generated code.
+  """
+  @spec memo_at(
+          slot :: non_neg_integer() | {:t, non_neg_integer()},
+          deps :: [term()] | :no_deps,
+          factory :: (-> term())
+        ) :: term()
+  def memo_at(slot, deps, factory) when is_function(factory, 0) do
+    ctx =
+      Process.get(:filament_render_context) ||
+        raise ArgumentError,
+              "hook called outside a render pass — hooks may only be called from render/1"
+
+    previous = read_slot_at(ctx, slot)
+    {value, stored_deps} = resolve_memo(previous, deps, factory)
+    updated = Map.put(ctx.new_hook_slots, slot, {stored_deps, value})
+    Process.put(:filament_render_context, %{ctx | new_hook_slots: updated})
+    value
+  end
+
+  defp read_slot_at(ctx, slot) do
+    case Map.get(ctx.hook_slots, slot) do
+      nil ->
+        fiber = Map.get(ctx.fiber_tree, ctx.fiber_id)
+        if fiber, do: Map.get(fiber.hook_slots, slot, :__unset__), else: :__unset__
+
+      value ->
+        value
+    end
+  end
+
+  defp resolve_memo({cached_deps, cached_value}, deps, factory) do
+    if deps != :no_deps and cached_deps == deps do
+      {cached_value, cached_deps}
+    else
+      {factory.(), deps}
+    end
+  end
+
+  defp resolve_memo(_other, deps, factory), do: {factory.(), deps}
+
+  @doc """
+  Registers an event handler at a specific compile-time-assigned slot index.
+  Returns the wire-ref string `"fiber_id:slot"` for embedding in DOM attributes.
+
+  `slot` is a non-negative integer literal assigned by the compiler.
+
+  Called only by compiler-generated code.
+  """
+  @spec event_at(slot :: non_neg_integer(), handler :: function()) :: wire_ref :: String.t()
+  def event_at(slot, handler) when is_function(handler) do
+    ctx =
+      Process.get(:filament_render_context) ||
+        raise ArgumentError,
+              "hook called outside a render pass — hooks may only be called from render/1"
+
+    fiber_id_str = to_string(ctx.fiber_id)
+    new_handlers = Map.put(ctx.new_event_handlers, slot, handler)
+    Process.put(:filament_render_context, %{ctx | new_event_handlers: new_handlers})
+    "#{fiber_id_str}:#{slot}"
+  end
+
+  @doc """
   Register an event handler function for the current fiber at the current render index.
   Returns the wire ref string `"fiber_id:handler_index"` to embed in phx-click/phx-submit.
 
