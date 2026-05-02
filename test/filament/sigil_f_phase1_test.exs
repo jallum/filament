@@ -73,16 +73,29 @@ defmodule Filament.SigilFPhase1Test do
     end
 
     test "element with event handler attribute compiles" do
-      assigns = %{}
+      # on_click triggers register_event_handler (via use_memo), which requires a
+      # fiber context. Templates with event handlers must run inside a render pass.
+      defmodule EventHandlerComp do
+        use Filament.Component
+        import Filament.Hooks
 
-      result = ~F"""
-      <button on_click={fn -> :clicked end}>
-        Click me
-      </button>
-      """
+        defcomponent EventHandler do
+          def render(assigns) do
+            ~F"""
+            <button on_click={fn -> :clicked end}>
+              Click me
+            </button>
+            """
+          end
+        end
+      end
 
-      assert %Phoenix.LiveView.Rendered{} = result
-      assert is_function(result.dynamic)
+      {tree, rendered, _} =
+        Filament.Reconciler.mount(EventHandlerComp.EventHandler, %{}, owner_pid: self())
+
+      assert %Phoenix.LiveView.Rendered{} = rendered
+      assert is_function(rendered.dynamic)
+      assert Filament.FiberTree.get_event_handler(tree, "root", 0)
     end
 
     test "wire output matches ~H for static HTML" do

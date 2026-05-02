@@ -4,7 +4,7 @@ defmodule TodoWeb.Components.TodoList do
   """
   use Filament.Component
 
-  alias Filament.Hooks
+  import Filament.Hooks
   alias TodoWeb.Components.FilterBar.FilterBar
   alias TodoWeb.Components.TodoItem.TodoItem
 
@@ -13,17 +13,11 @@ defmodule TodoWeb.Components.TodoList do
     prop(:title, :string, default: "Todo List")
 
     def render(%{store: store, title: title}) do
-      raw = Hooks.use_observable(store, nil, project: &Function.identity/1)
+      raw = use_observable(store, nil, project: &Function.identity/1)
       todos = if raw == :uninitialized, do: [], else: raw
 
-      {filter, set_filter} = Hooks.use_state(:all)
-
-      filtered =
-        case filter do
-          :active -> Enum.reject(todos, & &1.completed)
-          :completed -> Enum.filter(todos, & &1.completed)
-          _ -> todos
-        end
+      {filter, set_filter} = use_state(:all)
+      filtered = apply_filter(todos, filter)
 
       active_count = Enum.count(todos, &(!&1.completed))
       all_completed = todos != [] and Enum.all?(todos, & &1.completed)
@@ -34,8 +28,6 @@ defmodule TodoWeb.Components.TodoList do
           default: :all,
           on_change: set_filter
         })
-
-      assigns = {}
 
       ~F"""
       <section class="todoapp">
@@ -81,6 +73,9 @@ defmodule TodoWeb.Components.TodoList do
 
       {props, :ok}
     end
-  end
 
+    defp apply_filter(todos, :all), do: todos
+    defp apply_filter(todos, :active), do: Enum.reject(todos, & &1.completed)
+    defp apply_filter(todos, :completed), do: Enum.filter(todos, & &1.completed)
+  end
 end

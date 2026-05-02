@@ -1,28 +1,21 @@
 defmodule Filament.VNodeCompiler do
   @moduledoc """
-  Compiles ~F template strings into iodata expressions with auto-memoization.
+  Compiles ~F template strings into %Phoenix.LiveView.Rendered{} structs with a
+  trivial dynamic fn.
 
-  Uses Phoenix.LiveView.TagEngine to parse HEEx templates with @var interpolation,
-  then transforms the AST to use bare variable references instead of assigns lookups.
+  KEY INVARIANT: all real work (hooks, child renders, event handler registration,
+  use_memo calls) happens in the LINEAR BODY of the render function, where the
+  Filament fiber context is active. The dynamic fn is TRIVIAL — it only returns
+  already-bound local variables. This prevents crashes when Phoenix's diff engine
+  re-invokes the dynamic fn outside the Filament render context.
 
-  Key transformations:
-  1. @foo → bare variable reference (the variable foo must be in scope)
-  2. Expressions using reactive variables are wrapped in use_memo/2
-  3. Templates compile to iodata
+  Pipeline:
+    1. Filament.TagEngine.compile  → %Rendered{} AST with work inside the dynamic fn
+    2. hoist_dynamics              → lifts slot exprs out; fn becomes fn _ -> [v0, v1] end
+    3. transform_at_assigns        → @foo → bare var (for reactive dep detection)
+    4. wrap_in_use_memo            → wraps reactive slot exprs in use_memo/2
   """
 
-  @doc """
-  Compiles a template string into a compiled template expression with auto-memoization.
-
-  Reactive variables (from use_state) are detected and expressions using them
-  are wrapped in use_memo/2 calls to prevent unnecessary re-evaluation.
-
-  ## Examples
-
-      iex> assigns = %{name: "World"}
-      iex> ~F"<div>Hello {@name}</div>"
-      {:safe, ["<div>Hello ", "World", "</div>"]}
-  """
   @spec compile(String.t(), Macro.Env.t() | nil) :: term()
   def compile(source, caller) do
     quoted =
@@ -34,20 +27,185 @@ defmodule Filament.VNodeCompiler do
         tag_handler: Filament.HTMLEngine
       )
 
-    # Transform @foo → bare variable for names that are lexically in scope.
-    # Only variables bound before the ~F call (e.g. from use_state) are reactive;
-    # assigns-map props (@id, @title, etc.) are left as assigns.key field access.
-    in_scope = MapSet.new(Map.keys(caller.versioned_vars), fn {name, _ctx} -> name end)
-    {transformed, reactive_vars} = transform_at_assigns(quoted, in_scope)
+    hoisted = hoist_dynamics(quoted, caller)
 
-    # Wrap expressions in use_memo if they use reactive variables
+    in_scope = MapSet.new(Map.keys(caller.versioned_vars), fn {name, _ctx} -> name end)
+    {transformed, reactive_vars} = transform_at_assigns(hoisted, in_scope)
+
     wrap_in_use_memo(transformed, reactive_vars)
   end
+
+  # ─── Dynamic hoisting ────────────────────────────────────────────────────────
+
+  # Walk the TagEngine AST bottom-up, finding each innermost block of the form
+  # [dynamic_fn_assignment, %Rendered{} struct] and transforming it:
+  #   - extract slot expressions from the fn body
+  #   - emit them as linear assignments in the enclosing scope
+  #   - replace the fn body with fn _ -> [v0, v1, ...] end  (trivial closure)
+  defp hoist_dynamics(quoted, caller) do
+    caller_ast = Macro.escape({caller.module, caller.function, caller.file, caller.line})
+
+    # Pass 1: hoist slot expressions out of each %Rendered{} dynamic fn
+    hoisted =
+      Macro.postwalk(quoted, fn
+        {:__block__, meta, exprs} -> maybe_hoist_block(meta, exprs, caller_ast)
+        node -> node
+      end)
+
+    # Pass 2: remove any remaining Phoenix change-tracking boilerplate from the
+    # outer scope. Comprehension inner fns own their `changed`/`vars_changed`
+    # bindings — skip fn literals entirely so they're left intact.
+    strip_outer_change_tracking(hoisted)
+  end
+
+  # Walk the AST stripping outer Phoenix change-tracking variable assignments
+  # without descending into fn literals (comprehension entry fns own their bindings).
+  #
+  # `changed = nil` and `vars_changed = nil` assignments are KEPT (with generated:true
+  # to suppress unused-variable warnings) because comprehension inner fns close over them.
+  # Complex assignments (the `case assigns do` form) are stripped — they lived in the
+  # dynamic fn body, which is now replaced by the trivial fn.
+  defp strip_outer_change_tracking({:fn, _, _} = node), do: node
+
+  @generated [generated: true]
+  @plv Phoenix.LiveView.Engine
+
+  defp strip_outer_change_tracking({:=, _, [{:changed, _, @plv}, nil]}),
+    do: {:=, @generated, [{:changed, @generated, @plv}, nil]}
+
+  defp strip_outer_change_tracking({:=, _, [{:changed, _, @plv}, _]}), do: nil
+
+  defp strip_outer_change_tracking({:=, _, [{:vars_changed, _, @plv}, nil]}),
+    do: {:=, @generated, [{:vars_changed, @generated, @plv}, nil]}
+
+  defp strip_outer_change_tracking({:=, _, [{:vars_changed, _, @plv}, _]}), do: nil
+
+  defp strip_outer_change_tracking({tag, meta, args}) when is_list(args) do
+    {tag, meta, Enum.map(args, &strip_outer_change_tracking/1)}
+  end
+
+  defp strip_outer_change_tracking({a, b}),
+    do: {strip_outer_change_tracking(a), strip_outer_change_tracking(b)}
+
+  defp strip_outer_change_tracking(list) when is_list(list),
+    do: Enum.map(list, &strip_outer_change_tracking/1)
+
+  defp strip_outer_change_tracking(other), do: other
+
+  defp maybe_hoist_block(meta, exprs, caller_ast) do
+    case exprs do
+      [
+        {:=, _, [{:dynamic, [], Phoenix.LiveView.Engine}, fn_ast]},
+        {:%, struct_meta, [{:__aliases__, alias_meta, [:Phoenix, :LiveView, :Rendered]},
+                           {:%{}, map_meta, fields}]}
+      ] ->
+        {slot_assigns, return_list} = extract_fn_slots(fn_ast)
+
+        trivial_fn = {:fn, [], [{:->, [], [[{:_, [], nil}], return_list]}]}
+
+        new_fields =
+          fields
+          |> Keyword.put(:dynamic, trivial_fn)
+          |> Keyword.put(:root, nil)
+          |> Keyword.put(:caller, caller_ast)
+
+        new_rendered =
+          {:%, struct_meta,
+           [{:__aliases__, alias_meta, [:Phoenix, :LiveView, :Rendered]},
+            {:%{}, map_meta, new_fields}]}
+
+        # Inject `changed = nil` so comprehension inner fns have a value to close over.
+        # (`vars_changed = nil` is already present at the outer level from Phoenix's boilerplate.)
+        changed_nil = {:=, [generated: true], [{:changed, [generated: true], Phoenix.LiveView.Engine}, nil]}
+
+        {:__block__, meta, [changed_nil | slot_assigns] ++ [new_rendered]}
+
+      _ ->
+        {:__block__, meta, exprs}
+    end
+  end
+
+  # Extract slot variable assignments and the return list from the Phoenix-generated
+  # dynamic fn body. Phoenix emits two shapes:
+  #
+  # No dynamics — fn takes `_`:
+  #   body = {:__block__, [], [_ = assigns, []]}
+  #
+  # With dynamics — fn takes `track_changes?`:
+  #   body = {:__block__, _, [changed_bp, vars_bp, {:__block__, _, slot_assigns}, return_list]}
+  #
+  # In both cases, the last element is the return list (a literal list) and the
+  # second-to-last element (if a __block__) holds the slot variable assignments.
+  defp extract_fn_slots({:fn, _, [{:->, _, [_args, body]}]}) do
+    case body do
+      {:__block__, _, exprs} when is_list(exprs) and length(exprs) >= 2 ->
+        return_list = List.last(exprs)
+
+        if is_list(return_list) do
+          slot_assigns =
+            case Enum.at(exprs, -2) do
+              {:__block__, _, assigns} ->
+                Enum.map(assigns, fn {:=, m, [var, expr]} ->
+                  {:=, m, [var, simplify_slot_expr(expr)]}
+                end)
+
+              _ ->
+                []
+            end
+
+          {slot_assigns, return_list}
+        else
+          {[], []}
+        end
+
+      _ ->
+        {[], []}
+    end
+  end
+
+  defp extract_fn_slots(_), do: {[], []}
+
+  # Phoenix wraps slot expressions in change-tracking cases. Since we always call
+  # the dynamic fn with track_changes? = false, `changed` is always nil and the
+  # "changed" branch always executes. Simplify all such wrappers to just EXPR.
+  #
+  # Pattern A: PLV.Engine.changed_assign?(changed, :key) / nested_changed_assign?(...)
+  #   case PLV.Engine.*(changed, ...) do true -> EXPR; false -> nil end
+  defp simplify_slot_expr(
+         {:case, _,
+          [
+            {{:., _, [Phoenix.LiveView.Engine, _fn_name]}, _, _},
+            [do: [{:->, _, [[true], expr]}, {:->, _, [[false], nil]}]]
+          ]}
+       ) do
+    expr
+  end
+
+  # Pattern B: direct `changed` guard — case changed do %{} -> nil; _ -> EXPR end
+  defp simplify_slot_expr(
+         {:case, _,
+          [
+            {:changed, _, Phoenix.LiveView.Engine},
+            [do: [{:->, _, [[{:%{}, _, []}], nil]}, {:->, _, [[_], expr]}]]
+          ]}
+       ) do
+    expr
+  end
+
+  # Pattern C: compound condition — case (f1 or f2 or ...) do true -> EXPR; false -> nil end
+  # Emitted when a slot depends on multiple assigns (Phoenix ORs the changed checks).
+  defp simplify_slot_expr(
+         {:case, _, [_, [do: [{:->, _, [[true], expr]}, {:->, _, [[false], nil]}]]]}
+       ) do
+    expr
+  end
+
+  defp simplify_slot_expr(expr), do: expr
 
   # ─── AST transformation ───────────────────────────────────────────────────────
 
   # Transform @foo AST nodes to bare variable references when foo is lexically in
-  # scope at the call site. Props stored only in the assigns map are left untouched.
+  # scope at the call site.
   defp transform_at_assigns(ast, in_scope) do
     {transformed, reactive_names} =
       Macro.postwalk(ast, MapSet.new(), fn
@@ -67,7 +225,6 @@ defmodule Filament.VNodeCompiler do
 
   # ─── use_memo wrapping ───────────────────────────────────────────────────────
 
-  # Wrap expressions in use_memo if they use reactive variables
   defp wrap_in_use_memo(ast, reactive_vars) do
     Macro.postwalk(ast, fn node ->
       wrap_node_if_needed(node, reactive_vars)
@@ -78,9 +235,7 @@ defmodule Filament.VNodeCompiler do
     {:=, meta, [left, right]}
   end
 
-  # Phoenix.LiveView.Engine.live_to_iodata(expr) is the per-slot expression
-  # TagEngine emits for dynamic interpolations like {@count}. Wrap it in
-  # use_memo when the inner expression depends on reactive variables.
+  # Wrap live_to_iodata(expr) in use_memo when the inner expr depends on reactive vars.
   defp wrap_node_if_needed(
          {{:., _, [{:__aliases__, _, [:Phoenix, :LiveView, :Engine]}, :live_to_iodata]}, _,
           [inner]} = node,
@@ -90,27 +245,17 @@ defmodule Filament.VNodeCompiler do
 
     if deps != [] do
       dep_vars = names_to_var_ast(deps)
-
-      quote do
-        Filament.Hooks.use_memo(fn -> unquote(node) end, unquote(dep_vars))
-      end
+      quote do: Filament.Hooks.use_memo(fn -> unquote(node) end, unquote(dep_vars))
     else
       node
     end
   end
 
-  # Filament.Hooks.register_event_handler(fn_node) — the fn is an event handler
-  # closure. Wrap it in use_memo only when fn_node is a lambda literal ({:fn, _,
-  # _}). This allows stable closures (no reactive deps) to produce the same fn
-  # reference across renders, while closures capturing reactive vars get a new fn
-  # only when those vars change.
-  #
-  # We do NOT memoize when fn_node is an expression like assigns.on_click — the
-  # assigns value may change each render and must be re-read directly.
+  # Wrap the fn literal inside register_event_handler in use_memo so stable
+  # closures (no reactive deps) reuse the same fn reference across renders.
   defp wrap_node_if_needed(
-         {{:., call_meta,
-           [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]}, meta,
-          [fn_node]},
+         {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
+          meta, [fn_node]},
          reactive_vars
        ) do
     case fn_node do
@@ -119,28 +264,21 @@ defmodule Filament.VNodeCompiler do
         dep_vars = names_to_var_ast(deps)
 
         memoized =
-          quote do
-            Filament.Hooks.use_memo(fn -> unquote(fn_node) end, unquote(dep_vars))
-          end
+          quote do: Filament.Hooks.use_memo(fn -> unquote(fn_node) end, unquote(dep_vars))
 
-        {{:., call_meta,
-          [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]}, meta,
-         [memoized]}
+        {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
+         meta, [memoized]}
 
       _ ->
-        {{:., call_meta,
-          [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]}, meta,
-         [fn_node]}
+        {{:., call_meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
+         meta, [fn_node]}
     end
   end
 
-  defp wrap_node_if_needed(node, _reactive_vars) do
-    node
-  end
+  defp wrap_node_if_needed(node, _reactive_vars), do: node
 
   # ─── Dependency computation ───────────────────────────────────────────────────
 
-  # Compute reactive deps of a closure body by recursing into it.
   defp compute_closure_deps(ast, reactive_vars) do
     collect_variables_deep(ast)
     |> MapSet.new()
@@ -148,7 +286,6 @@ defmodule Filament.VNodeCompiler do
     |> MapSet.to_list()
   end
 
-  # Compute the reactive dependencies of an AST node
   defp compute_deps(ast, reactive_vars) do
     collect_variables(ast)
     |> MapSet.new()
@@ -156,46 +293,31 @@ defmodule Filament.VNodeCompiler do
     |> MapSet.to_list()
   end
 
-  # Convert a list of atom variable names to a list of variable AST nodes so
-  # that unquote(dep_vars) in a quote block produces [var_a, var_b] at runtime
-  # (current values) rather than [:var_a, :var_b] (literal atoms, always equal).
   defp names_to_var_ast(names), do: Enum.map(names, fn name -> {name, [], nil} end)
 
-  # Collect variable references from an AST node, stopping at closure boundaries.
-  # Used for computing deps of non-closure expressions (do not cross into fn bodies).
   defp collect_variables(ast) do
     {_, vars} =
       Macro.prewalk(ast, MapSet.new(), fn
-        {:fn, _, _} = node, acc ->
-          {node, acc}
-
+        {:fn, _, _} = node, acc -> {node, acc}
         {name, _meta, nil} = node, acc when is_atom(name) ->
           if valid_variable_name?(name), do: {node, MapSet.put(acc, name)}, else: {node, acc}
-
-        node, acc ->
-          {node, acc}
+        node, acc -> {node, acc}
       end)
 
     MapSet.to_list(vars)
   end
 
-  # Collect variable references from an AST node, recursing into closure bodies.
-  # Used for computing what a closure captures (needed for closure dep computation).
   defp collect_variables_deep(ast) do
     {_, vars} =
       Macro.prewalk(ast, MapSet.new(), fn
         {name, _meta, nil} = node, acc when is_atom(name) ->
           if valid_variable_name?(name), do: {node, MapSet.put(acc, name)}, else: {node, acc}
-
-        node, acc ->
-          {node, acc}
+        node, acc -> {node, acc}
       end)
 
     MapSet.to_list(vars)
   end
 
-  # Check if a name is a valid variable (not a reserved word or special form).
-  # Source of truth: Elixir reserved words per the tokenizer.
   defp valid_variable_name?(name) when is_atom(name) do
     name not in ~w[
       fn do end after else catch rescue and or not in when
