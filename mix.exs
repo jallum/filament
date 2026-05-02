@@ -16,7 +16,7 @@ defmodule Filament.MixProject do
 
   # Include test/support for all Mix environments to avoid ExUnit pattern warnings
   # Include examples for compile verification in test env
-  defp elixirc_paths(:test), do: ["lib", "test/support", "examples/todo/lib", "examples/cart/lib"]
+  defp elixirc_paths(:test), do: ["lib", "test/support", "examples/todo/lib", "examples/cart/lib", "examples/inventory/lib"]
   defp elixirc_paths(_), do: ["lib"]
 
   # Configure test paths to avoid ExUnit warnings for fixture/support files

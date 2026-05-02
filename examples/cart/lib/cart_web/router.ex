@@ -15,6 +15,6 @@ defmodule CartWeb.Router do
 
   scope "/" do
     pipe_through [:browser]
-    live "/", CartWeb.CartLive
+    # No live view for this example - components only
   end
 end
