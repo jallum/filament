@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-02T20:39:42Z",
+  "description": "Add two new low-level primitives to Filament.Hooks. These are called only by compiler-generated code, not directly by users.\n\n## memo_at/3\n\n  @spec memo_at(slot :: non_neg_integer() | {atom(), non_neg_integer()}, deps :: [term()], factory :: (-\u003e term())) :: term()\n\nDirect slot read/write with an explicit compile-time-assigned key. No auto-increment. Equivalent to use_memo/2 but takes an explicit index instead of using hook_index. The {:t, N} tuple key namespace keeps template slots separate from explicit hook slots (use_state, use_observable, etc.).\n\n## event_at/2\n\n  @spec event_at(slot :: non_neg_integer(), handler :: function()) :: wire_ref :: String.t()\n\nRegisters an event handler at a specific slot index. Returns the wire-ref string in the same format as register_event_handler/1. N is a compile-time literal.\n\n## Slot key changes\n\nhook_slots is already a map — extend it to accept {:t, N} tuple keys alongside plain integers. No migration needed for existing fibers.\n\n## Acceptance\n\n- memo_at({:t, 0}, [], fn -\u003e :value end) returns :value on first call, reuses it on subsequent calls with same deps\n- event_at(0, fn -\u003e :action end) registers handler at slot 0 and returns wire ref\n- use_state and use_observable slots (plain integers) are unaffected\n- No new processes or global state",
+  "id": "flm-9tv.1",
+  "labels": [],
+  "parent": "flm-9tv",
+  "priority": 2,
+  "status": "open",
+  "title": "flm-o58.1: Add memo_at/3 and event_at/2 to hooks.ex; {:t,N} slot key support",
+  "type": "task",
+  "updated_at": "2026-05-02T20:39:42Z"
+}
