@@ -5,30 +5,25 @@ defmodule Filament.VNodeCompilerTest do
 
   describe "warning suppression" do
     test "compiling template with lexically-bound variable produces no warnings" do
-      # This test verifies that Step 0 fix works: VNodeCompiler strips versioned_vars
-      # from the caller before passing to TagEngine, suppressing the false-positive
-      # warning about accessing variables inside LiveView templates.
-      defmodule WarningTestComponent do
-        use Filament.Component
+      # IO.warn (used by TagEngine's maybe_warn_taint) writes to stderr, not Logger.
+      # CaptureLog would miss it. Force fresh compilation inside capture_io(:stderr)
+      # so the warning — if emitted — is caught during macro expansion.
+      n = System.unique_integer([:positive])
 
-        defcomponent WarningTest do
+      src = """
+      defmodule WarningDynamic#{n} do
+        use Filament.Component
+        defcomponent WT do
           def render(assigns) do
-            click_handler = fn -> :ok end
-            ~F"<button on_click={click_handler}>Click me</button>"
+            lock_holder_name = "alice"
+            ~F"<div>{lock_holder_name}</div>"
           end
         end
       end
+      """
 
-      # Capture any IO.warn output
-      warnings =
-        ExUnit.CaptureLog.capture_log(fn ->
-          {tree, _, _} =
-            Reconciler.mount(WarningTestComponent.WarningTest, %{}, owner_pid: self())
+      warnings = ExUnit.CaptureIO.capture_io(:stderr, fn -> Code.compile_string(src) end)
 
-          assert tree["root"].status == :stable
-        end)
-
-      # The captured output should not contain the LiveView variable warning
       refute warnings =~ "you are accessing the variable"
       refute warnings =~ "inside a LiveView template"
     end
