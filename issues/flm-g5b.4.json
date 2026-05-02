@@ -12,9 +12,15 @@
   "id": "flm-g5b.4",
   "labels": [],
   "parent": "flm-g5b",
+  "comments": [
+    {
+      "text": "CONFLICT: Observable.GenServer :DOWN handler cannot be extended to release locks automatically. Current implementation injects handle_info/2 clause that prevents manual :DOWN handling. Options: 1) Make Observable.GenServer macro extensible, 2) Track lock holders as subscribers, 3) Implement both patterns manually. Requesting guidance on preferred approach.",
+      "timestamp": "2026-05-02T00:45:17Z"
+    }
+  ],
   "priority": 1,
   "status": "in_progress",
   "title": "G4: Collaboration locks example — Document.Server with pessimistic lock + presence count",
   "type": "task",
-  "updated_at": "2026-05-02T00:28:57Z"
+  "updated_at": "2026-05-02T00:45:17Z"
 }
