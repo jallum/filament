@@ -73,7 +73,58 @@ defmodule Filament.VNodeCompiler do
     # Pass 2: remove any remaining Phoenix change-tracking boilerplate from the
     # outer scope. Comprehension inner fns own their `changed`/`vars_changed`
     # bindings — skip fn literals entirely so they're left intact.
-    strip_outer_change_tracking(hoisted)
+    stripped = strip_outer_change_tracking(hoisted)
+
+    # Pass 3: hoist register_event_handler calls out of comprehension entry fns.
+    # PLV calls those fns from its diff engine (outside our render pass), so any
+    # hook call inside them crashes. Move the registrations to before the fn in
+    # the for-loop body — they close over the pre-computed refs.
+    hoist_comprehension_handlers(stripped)
+  end
+
+  # Walk the AST looking for comprehension entry tuples — {nil, var_map, entry_fn} —
+  # and hoist any register_event_handler(fn_expr) calls out of the entry fn body to
+  # new variable bindings immediately before the fn. The fn closes over those vars.
+  defp hoist_comprehension_handlers(ast) do
+    Macro.postwalk(ast, fn
+      {:{}, tuple_meta,
+       [nil, map_expr, {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body]}]}] = entry_parts} ->
+        {new_fn_body, hoisted} = extract_reg_handlers(fn_body)
+
+        if hoisted == [] do
+          {:{}, tuple_meta, entry_parts}
+        else
+          new_fn = {:fn, fn_meta, [{:->, arrow_meta, [fn_args, new_fn_body]}]}
+          new_tuple = {:{}, tuple_meta, [nil, map_expr, new_fn]}
+          assigns = Enum.map(hoisted, fn {var, expr} -> {:=, [], [var, expr]} end)
+          {:__block__, [], assigns ++ [new_tuple]}
+        end
+
+      other ->
+        other
+    end)
+  end
+
+  # Replace register_event_handler(fn_expr) calls in fn_body with fresh variable refs.
+  # Returns {new_fn_body, [{var_ast, original_register_expr}]}.
+  defp extract_reg_handlers(fn_body) do
+    base = System.unique_integer([:positive, :monotonic])
+
+    {new_body, {_counter, hoisted}} =
+      Macro.postwalk(fn_body, {base, []}, fn
+        {{:., meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
+         call_meta, [fn_expr]},
+        {counter, acc} ->
+          var_name = :"freh_#{counter}"
+          var_ast = {var_name, [], nil}
+          original = {{:., meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]}, call_meta, [fn_expr]}
+          {var_ast, {counter + 1, [{var_ast, original} | acc]}}
+
+        other, acc ->
+          {other, acc}
+      end)
+
+    {new_body, Enum.reverse(hoisted)}
   end
 
   # Walk the AST stripping outer Phoenix change-tracking variable assignments
@@ -243,11 +294,29 @@ defmodule Filament.VNodeCompiler do
 
   # ─── use_memo wrapping ───────────────────────────────────────────────────────
 
+  # Custom postwalk that does NOT recurse into fn literals, so use_memo and
+  # register_event_handler wrapping only applies to the linear render body —
+  # never to PLV-invoked fns (comprehension entry fns, dynamic fn).
   defp wrap_in_use_memo(ast, reactive_vars) do
-    Macro.postwalk(ast, fn node ->
-      wrap_node_if_needed(node, reactive_vars)
-    end)
+    memo_walk(ast, reactive_vars)
   end
+
+  defp memo_walk({:fn, _, _} = node, _reactive_vars), do: node
+
+  defp memo_walk({tag, meta, args}, reactive_vars) when is_list(args) do
+    new_args = Enum.map(args, &memo_walk(&1, reactive_vars))
+    wrap_node_if_needed({tag, meta, new_args}, reactive_vars)
+  end
+
+  defp memo_walk({a, b}, reactive_vars) do
+    wrap_node_if_needed({memo_walk(a, reactive_vars), memo_walk(b, reactive_vars)}, reactive_vars)
+  end
+
+  defp memo_walk(list, reactive_vars) when is_list(list) do
+    Enum.map(list, &memo_walk(&1, reactive_vars))
+  end
+
+  defp memo_walk(other, _reactive_vars), do: other
 
   defp wrap_node_if_needed({:=, meta, [left, right]}, _reactive_vars) do
     {:=, meta, [left, right]}
