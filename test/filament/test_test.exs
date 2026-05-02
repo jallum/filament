@@ -5,19 +5,18 @@ defmodule Filament.TestTest do
 
   defmodule CounterComp do
     use Filament.Component
-    import Filament.Hooks
 
     defcomponent Counter do
       prop(:initial, :integer, default: 0)
 
-      def render(assigns) do
-        {count, set_count} = use_state(Map.get(assigns, :initial, 0))
-        assigns = Map.merge(assigns, %{count: count, on_click: fn -> set_count.(count + 1) end})
+      def render(%{initial: initial}) do
+        {count, set_count} = use_state(initial)
+        on_click = fn -> set_count.(count + 1) end
 
         ~F"""
         <div>
-          <span id="count">Count: {@count}</span>
-          <button on_click={@on_click}>+</button>
+          <span id="count">Count: {count}</span>
+          <button on_click={on_click}>+</button>
         </div>
         """
       end
@@ -30,12 +29,11 @@ defmodule Filament.TestTest do
     defcomponent Class do
       prop(:active, :boolean, default: false)
 
-      def render(assigns) do
-        class = if Map.get(assigns, :active), do: "active bold", else: "inactive"
-        assigns = Map.put(assigns, :class, class)
+      def render(%{active: active}) do
+        class = if active, do: "active bold", else: "inactive"
 
         ~F"""
-        <div class={@class}>Hello</div>
+        <div class={class}>Hello</div>
         """
       end
     end
@@ -43,17 +41,15 @@ defmodule Filament.TestTest do
 
   defmodule ObservableComp do
     use Filament.Component
-    import Filament.Hooks
 
     defcomponent Observable do
       prop(:server, :term, required: true)
 
-      def render(assigns) do
-        value = use_observable(Map.get(assigns, :server))
-        assigns = Map.put(assigns, :value, value)
+      def render(%{server: server}) do
+        value = use_observable(server)
 
         ~F"""
-        <div id="value">{@value}</div>
+        <div id="value">{value}</div>
         """
       end
     end
@@ -65,9 +61,9 @@ defmodule Filament.TestTest do
     defcomponent Form do
       prop(:on_submit, :function, required: true)
 
-      def render(assigns) do
+      def render(%{on_submit: on_submit}) do
         ~F"""
-        <form on_submit={@on_submit}>
+        <form on_submit={on_submit}>
           <input name="name" />
           <button>Submit</button>
         </form>

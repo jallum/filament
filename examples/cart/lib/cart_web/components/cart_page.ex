@@ -21,13 +21,8 @@ defmodule CartWeb.Components.CartPage do
       ]
     end
 
-    def render(assigns) do
-      server = Map.get(assigns, :server)
-
-      # Projection: count-only — mirrors what CartBadge would observe.
+    def render(%{server: server}) do
       count = Hooks.use_observable(server, nil, project: &Cart.State.item_count/1)
-
-      # Full-state subscription — mirrors what CartView would observe.
       cart = Hooks.use_observable(server)
 
       items_html =
@@ -78,34 +73,25 @@ defmodule CartWeb.Components.CartPage do
           ]
         end)
 
-      assigns =
-        Map.merge(assigns, %{
-          count: count,
-          cart: cart,
-          items_html: items_html,
-          total_str: total_str,
-          products_html: products_html
-        })
-
       ~F"""
       <div>
         <h1>
           Shopping Demo
-          <span class="cart-badge" data-count={@count} data-testid="cart-count">
-            {@count}
+          <span class="cart-badge" data-count={count} data-testid="cart-count">
+            {count}
           </span>
         </h1>
 
         <div class="products" data-testid="products">
-          <%= Phoenix.HTML.raw(@products_html) %>
+          <%= Phoenix.HTML.raw(products_html) %>
         </div>
 
         <div class="cart-view" data-testid="cart-view">
           <h2>Your Cart</h2>
           <ul class="cart-items" data-testid="cart-items">
-            <%= Phoenix.HTML.raw(@items_html) %>
+            <%= Phoenix.HTML.raw(items_html) %>
           </ul>
-          <p class="total" data-testid="cart-total">Total: {@total_str}</p>
+          <p class="total" data-testid="cart-total">Total: {total_str}</p>
         </div>
       </div>
       """

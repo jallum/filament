@@ -18,17 +18,15 @@ defmodule Filament.Test.Rung3Test do
 
   defmodule CountingComp do
     use Filament.Component
-    import Filament.Hooks
 
     defcomponent Counter do
       prop(:server, :term, required: true)
 
-      def render(assigns) do
-        count = use_observable(Map.get(assigns, :server))
-        assigns = Map.put(assigns, :count, count)
+      def render(%{server: server}) do
+        count = use_observable(server)
 
         ~F"""
-        <span id="count">Count: {@count}</span>
+        <span id="count">Count: {count}</span>
         """
       end
     end

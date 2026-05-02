@@ -4,8 +4,7 @@ defmodule InventoryWeb.Components.InventoryPage do
   defcomponent do
     prop(:server, :any, default: Inventory.Server)
 
-    def render(assigns) do
-      server = Map.get(assigns, :server)
+    def render(%{server: server}) do
 
       item_ids = ["apple", "banana", "cherry"]
 
@@ -33,13 +32,11 @@ defmodule InventoryWeb.Components.InventoryPage do
         end)
         |> Enum.join("\n")
 
-      assigns = Map.put(assigns, :items_html, items_html)
-
       ~F"""
       <div>
         <h1>Inventory Demo</h1>
         <p>Live inventory status (reads from <code>Inventory.Server</code>):</p>
-        <%= Phoenix.HTML.raw(@items_html) %>
+        <%= Phoenix.HTML.raw(items_html) %>
         <p style="margin-top:1rem;color:#666;font-size:0.9em">
           Unit tests validate <code>use_hold</code> acquire/release and process-death release.
         </p>

@@ -9,9 +9,9 @@ defmodule Filament.RendererTest do
     defcomponent SimpleItem do
       prop(:label, :string, required: true)
 
-      def render(assigns) do
+      def render(%{label: label}) do
         ~F"""
-        <span>{@label}</span>
+        <span>{label}</span>
         """
       end
     end
@@ -19,17 +19,15 @@ defmodule Filament.RendererTest do
 
   defmodule StatefulComp do
     use Filament.Component
-    import Filament.Hooks
 
     defcomponent StatefulComp do
       prop(:initial, :integer, default: 0)
 
-      def render(assigns) do
-        {count, _set} = use_state(Map.get(assigns, :initial, 0))
-        assigns = Map.put(assigns, :count, count)
+      def render(%{initial: initial}) do
+        {count, _set} = use_state(initial)
 
         ~F"""
-        <span>{@count}</span>
+        <span>{count}</span>
         """
       end
     end
@@ -42,9 +40,9 @@ defmodule Filament.RendererTest do
     defcomponent TestHello do
       prop(:name, :string, required: true)
 
-      def render(assigns) do
+      def render(%{name: name}) do
         ~F"""
-        <p>Hello, {@name}!</p>
+        <p>Hello, {name}!</p>
         """
       end
     end

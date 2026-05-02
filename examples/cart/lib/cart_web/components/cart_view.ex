@@ -6,13 +6,9 @@ defmodule CartWeb.Components.CartView do
   defcomponent do
     prop(:server, :any, default: Cart.Server)
 
-    def render(assigns) do
-      server = Map.get(assigns, :server)
-
-      # No projection — subscribe to full state.
+    def render(%{server: server}) do
       cart = Hooks.use_observable(server)
 
-      # Build cart item HTML as iodata (avoid Phoenix variable warnings)
       items_html =
         if cart == :uninitialized do
           []
@@ -22,8 +18,7 @@ defmodule CartWeb.Components.CartView do
             item_name = item.name
             item_qty = item.quantity
             item_total = div(item.price_cents * item.quantity, 100)
-            
-            # Build HTML manually as iodata
+
             [
               "<li class=\"cart-item\" id=\"cart-item-",
               item_id,
@@ -42,25 +37,19 @@ defmodule CartWeb.Components.CartView do
           end)
         end
 
-      assigns =
-        Map.merge(assigns, %{
-          cart: cart,
-          items_html: items_html
-        })
-
       ~F"""
       <div class="cart-view">
         <h2>Your Cart</h2>
-        <%= if @cart == :uninitialized do %>
+        {if cart == :uninitialized do}
           <p>Loading...</p>
-        <% else %>
+        {else}
           <ul>
-            <%= @items_html %>
+            <%= items_html %>
           </ul>
           <p class="total">
-            Total: <%= div(@cart.total_cents, 100) %> USD
+            Total: {div(cart.total_cents, 100)} USD
           </p>
-        <% end %>
+        {end}
       </div>
       """
     end

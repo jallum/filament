@@ -5,8 +5,6 @@ defmodule Filament.SigilFPhase1Test do
 
   describe "~F sigil Phase 1: basic functionality" do
     test "static template produces Rendered struct" do
-      assigns = %{}
-
       result = ~F"""
       <div>hello</div>
       """
@@ -41,13 +39,9 @@ defmodule Filament.SigilFPhase1Test do
     end
 
     test "different templates have different fingerprints" do
-      assigns = %{}
-
       result1 = ~F"""
       <div>Template 1</div>
       """
-
-      assigns = %{}
 
       result2 = ~F"""
       <div>Template 2</div>
@@ -79,7 +73,7 @@ defmodule Filament.SigilFPhase1Test do
         use Filament.Component
 
         defcomponent EventHandler do
-          def render(assigns) do
+          def render(_assigns) do
             ~F"""
             <button on_click={fn -> :clicked end}>
               Click me

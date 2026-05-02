@@ -63,7 +63,7 @@ defmodule Filament.VNodeCompilerTest do
         use Filament.Component
 
         defcomponent MultiHandler do
-          def render(assigns) do
+          def render(_assigns) do
             {count, set_count} = use_state(0)
 
             ~F"""
@@ -110,7 +110,7 @@ defmodule Filament.VNodeCompilerTest do
         use Filament.Component
 
         defcomponent StableClosure do
-          def render(assigns) do
+          def render(_assigns) do
             {_val, set_val} = use_state("x")
             ~F'<button on_click={fn -> set_val.("clicked") end}>Go</button>'
           end
@@ -138,7 +138,7 @@ defmodule Filament.VNodeCompilerTest do
         use Filament.Component
 
         defcomponent ReactiveClosure do
-          def render(assigns) do
+          def render(_assigns) do
             {count, set_count} = use_state(0)
             ~F'<button on_click={fn -> set_count.(@count + 1) end}>+</button>'
           end
@@ -168,7 +168,7 @@ defmodule Filament.VNodeCompilerTest do
         use Filament.Component
 
         defcomponent ReactiveClosureStable do
-          def render(assigns) do
+          def render(_assigns) do
             {count, set_count} = use_state(0)
             ~F'<button on_click={fn -> set_count.(@count + 1) end}>+</button>'
           end
