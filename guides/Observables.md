@@ -204,7 +204,7 @@ drain the observable update message and re-render:
 ```elixir
 describe "CartView (rung-3, real Cart.Server)" do
   setup do
-    {:ok, server} = Cart.Server.start_link([])
+    server = start_supervised!(Cart.Server)
     {:ok, view} = mount(CartWeb.Components.CartView, %{server: server})
     %{server: server, view: view}
   end

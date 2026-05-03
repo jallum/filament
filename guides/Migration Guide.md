@@ -204,7 +204,8 @@ Several transformations follow a mechanical pattern that could be automated:
 - `assign(socket, key: value)` in `handle_event` → `use_state` in the component
 - `socket.assigns.key` in render → bind the variable in `render/1` pattern match
 - `socket.assigns.key` in templates → `{variable}` or `{@key}` in `~F` templates
-- `handle_event("name", params, socket)` → event closure passed via prop
+- `handle_event("name", params, socket)` → `on_*` closure in the template; state
+  updates via captured `use_state` setters, side effects via captured server refs
 
 These are not shipped as codemod tools in this release. The patterns are regular
 enough that a Sourceror-based transform could automate most of them. Community

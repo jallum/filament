@@ -98,12 +98,27 @@ end
 
 ## Event closures
 
-Filament event handlers are plain Elixir closures attached to template
-attributes. The `TodoList` component adds todos through a Phoenix form event
-and toggles / removes items through Filament closures:
+All Filament event handlers are plain Elixir closures attached to `on_*`
+template attributes. The `on_*` name maps directly to the corresponding
+Phoenix event: `on_click` → `phx-click`, `on_submit` → `phx-submit`,
+`on_change` → `phx-change`, and so on. Filament wires the closure to a
+`filament:fiber_id:index` ref automatically — you never write wire format by
+hand.
+
+The `TodoList` component handles form submission and item interactions
+entirely through closures:
 
 ```elixir
+{text, set_text} = use_state("")
+
 ~F"""
+<form on_submit={fn %{"text" => val} ->
+  if String.trim(val) != "", do: Todo.Store.add(store, val)
+  set_text.("")
+end}>
+  <input name="text" class="new-todo" value={text} placeholder="What needs to be done?" />
+</form>
+
 <ul class="todo-list">
   {for todo <- filtered do}
     <TodoItem
@@ -116,15 +131,14 @@ and toggles / removes items through Filament closures:
 """
 ```
 
-- Closures passed to `on_click` or any `on_*` prop are registered in the
-  fiber's event handler table at render time.
-- When the user clicks, `Filament.LiveView` routes the `phx-click="filament:..."` 
-  event back to the correct closure. The wire format is internal — you never
-  write it by hand.
 - Zero-arity closures receive no arguments; one-arity closures receive the
-  event params map.
-- Because closures capture the render-time environment, `todo.id` in the loop
-  above is correctly bound for each iteration.
+  event params map (for `on_submit`, the full form data; for `on_change`, the
+  changed field map including `_target`).
+- Closures capture the render-time environment. `todo.id` in the loop above is
+  correctly bound per iteration, and `set_text` from `use_state` is in scope
+  inside `on_submit`.
+- Because closures own both the side effect and any state updates, there is no
+  `handle_event` callback to write — the closure is the handler.
 
 ## Composing components and keyed lists
 
@@ -175,7 +189,7 @@ defmodule Filament.Examples.TodoTest do
   describe "TodoList component" do
     setup do
       name = :"todo_store_#{System.unique_integer([:positive])}"
-      {:ok, store} = Todo.Store.start_link(name: name)
+      store = start_supervised!({ Todo.Store, [name: name] })
       {:ok, _view} = mount(TodoWeb.Components.TodoList, %{store: store})
       %{store: store}
     end
@@ -187,8 +201,8 @@ defmodule Filament.Examples.TodoTest do
     end
 
     test "renders todo items from store", %{store: store} do
-      :ok = Todo.Store.add(store, "First task")
-      :ok = Todo.Store.add(store, "Second task")
+      {:ok, _} = Todo.Store.add(store, "First task")
+      {:ok, _} = Todo.Store.add(store, "Second task")
 
       {:ok, view} = mount(TodoWeb.Components.TodoList, %{store: store})
 
@@ -198,7 +212,7 @@ defmodule Filament.Examples.TodoTest do
     end
 
     test "completed items have 'completed' class", %{store: store} do
-      :ok = Todo.Store.add(store, "Done task")
+      {:ok, _} = Todo.Store.add(store, "Done task")
       [item | _] = Todo.Store.list(store)
       :ok = Todo.Store.toggle(store, item.id)
 

@@ -209,7 +209,7 @@ the last unit:
 ```elixir
 test "two components competing for last unit" do
   items = [%Inventory.Item{id: "last", name: "LastUnit", available: 1}]
-  {:ok, server} = Inventory.Server.start_link(items: items)
+  server = start_supervised!({ Inventory.Server, [items: items] })
 
   # view1 mounts first and acquires the only unit
   {:ok, view1} = mount(InventoryWeb.Components.CheckoutLineItem,
