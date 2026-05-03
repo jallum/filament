@@ -25,53 +25,16 @@ defmodule CartWeb.Components.CartPage do
       count = Hooks.use_observable(server, nil, project: &Cart.State.item_count/1)
       cart = Hooks.use_observable(server)
 
-      items_html =
-        case cart do
-          :uninitialized ->
-            ["<li>Loading...</li>"]
+      items = case cart do
+        :uninitialized -> []
+        %Cart.State{items: items} -> items
+      end
 
-          %Cart.State{items: items} ->
-            Enum.map(items, fn item ->
-              [
-                "<li class=\"cart-item\" id=\"cart-item-",
-                item.id,
-                "\">",
-                Phoenix.HTML.Engine.encode_to_iodata!(item.name),
-                " \xc3\x97 ",
-                Integer.to_string(item.quantity),
-                " \xe2\x80\x94 $",
-                Integer.to_string(div(item.price_cents * item.quantity, 100)),
-                ".",
-                String.pad_leading(Integer.to_string(rem(item.price_cents * item.quantity, 100)), 2, "0"),
-                "<button class=\"remove\" phx-click=\"remove_item:",
-                item.id,
-                "\">Remove</button>",
-                "</li>"
-              ]
-            end)
-        end
-
-      total_str =
-        case cart do
-          :uninitialized -> "0.00"
-          %Cart.State{total_cents: t} ->
-            "$#{div(t, 100)}.#{String.pad_leading(Integer.to_string(rem(t, 100)), 2, "0")}"
-        end
-
-      products_html =
-        Enum.map(products(), fn p ->
-          [
-            "<button phx-click=\"add_item:",
-            p.id,
-            "\">Add ",
-            Phoenix.HTML.Engine.encode_to_iodata!(p.name),
-            " ($",
-            Integer.to_string(div(p.price_cents, 100)),
-            ".",
-            String.pad_leading(Integer.to_string(rem(p.price_cents, 100)), 2, "0"),
-            ")</button>"
-          ]
-        end)
+      total_str = case cart do
+        :uninitialized -> "$0.00"
+        %Cart.State{total_cents: t} ->
+          "$#{div(t, 100)}.#{String.pad_leading(Integer.to_string(rem(t, 100)), 2, "0")}"
+      end
 
       ~F"""
       <div>
@@ -83,40 +46,34 @@ defmodule CartWeb.Components.CartPage do
         </h1>
 
         <div class="products" data-testid="products">
-          <%= Phoenix.HTML.raw(products_html) %>
+          {for p <- products() do}
+            <button on_click={fn ->
+              item = %Cart.Item{id: p.id, name: p.name, price_cents: p.price_cents}
+              Cart.Server.add_item(server, item)
+            end}>
+              Add {p.name} ($#{div(p.price_cents, 100)}.{String.pad_leading(Integer.to_string(rem(p.price_cents, 100)), 2, "0")})
+            </button>
+          {end}
         </div>
 
         <div class="cart-view" data-testid="cart-view">
           <h2>Your Cart</h2>
           <ul class="cart-items" data-testid="cart-items">
-            <%= Phoenix.HTML.raw(items_html) %>
+            {if cart == :uninitialized do}
+              <li>Loading...</li>
+            {else}
+              {for item <- items do}
+                <li class="cart-item" id={"cart-item-#{item.id}"}>
+                  {item.name} × {item.quantity}
+                  <button class="remove" on_click={fn -> Cart.Server.remove_item(server, item.id) end}>Remove</button>
+                </li>
+              {end}
+            {end}
           </ul>
           <p class="total" data-testid="cart-total">Total: {total_str}</p>
         </div>
       </div>
       """
-    end
-
-    def handle_event("add_item:" <> id, _params, props) do
-      server = Map.get(props, :server)
-      product = Enum.find(products(), &(&1.id == id))
-
-      if product do
-        item = %Cart.Item{
-          id: product.id,
-          name: product.name,
-          price_cents: product.price_cents
-        }
-        Cart.Server.add_item(server, item)
-      end
-
-      {props, :ok}
-    end
-
-    def handle_event("remove_item:" <> id, _params, props) do
-      server = Map.get(props, :server)
-      Cart.Server.remove_item(server, id)
-      {props, :ok}
     end
   end
 end

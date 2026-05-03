@@ -9,34 +9,6 @@ defmodule CartWeb.Components.CartView do
     def render(%{server: server}) do
       cart = Hooks.use_observable(server)
 
-      items_html =
-        if cart == :uninitialized do
-          []
-        else
-          Enum.map(cart.items, fn item ->
-            item_id = item.id
-            item_name = item.name
-            item_qty = item.quantity
-            item_total = div(item.price_cents * item.quantity, 100)
-
-            [
-              "<li class=\"cart-item\" id=\"cart-item-",
-              item_id,
-              "\">",
-              Phoenix.HTML.Engine.encode_to_iodata!(item_name),
-              " × ",
-              Integer.to_string(item_qty),
-              " — ",
-              Integer.to_string(item_total),
-              " USD",
-              "<button class=\"remove\" phx-click=\"remove:",
-              item_id,
-              "\">Remove</button>",
-              "</li>"
-            ]
-          end)
-        end
-
       ~F"""
       <div class="cart-view">
         <h2>Your Cart</h2>
@@ -44,7 +16,12 @@ defmodule CartWeb.Components.CartView do
           <p>Loading...</p>
         {else}
           <ul>
-            <%= items_html %>
+            {for item <- cart.items do}
+              <li class="cart-item" id={"cart-item-#{item.id}"}>
+                {item.name} × {item.quantity} — {div(item.price_cents * item.quantity, 100)} USD
+                <button class="remove" on_click={fn -> Cart.Server.remove_item(server, item.id) end}>Remove</button>
+              </li>
+            {end}
           </ul>
           <p class="total">
             Total: {div(cart.total_cents, 100)} USD
@@ -52,12 +29,6 @@ defmodule CartWeb.Components.CartView do
         {end}
       </div>
       """
-    end
-
-    def handle_event("remove:" <> id_str, _, props) do
-      server = Map.get(props, :server)
-      Cart.Server.remove_item(server, id_str)
-      {props, :ok}
     end
   end
 end
