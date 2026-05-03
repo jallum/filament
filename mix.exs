@@ -29,7 +29,14 @@ defmodule Filament.MixProject do
 
   defp elixirc_paths(_), do: ["lib"]
 
-  defp test_paths(:test), do: ["test", "examples/todo/test"]
+  defp test_paths(:test),
+    do: [
+      "test",
+      "examples/cart/test",
+      "examples/collaboration/test",
+      "examples/inventory/test",
+      "examples/todo/test"
+    ]
   defp test_paths(_), do: ["test"]
 
   # Configure test paths to avoid ExUnit warnings for fixture/support files

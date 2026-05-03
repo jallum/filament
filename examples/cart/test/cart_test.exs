@@ -1,4 +1,4 @@
-defmodule Filament.Examples.CartTest do
+defmodule Cart.Test do
   use ExUnit.Case, async: true
   import Filament.Test
 
@@ -27,7 +27,6 @@ defmodule Filament.Examples.CartTest do
       state3 = Cart.State.add_item(state2, item)
       assert Cart.State.item_count(state3) == 2
       assert state3.total_cents == 1000
-      # still one distinct item
       assert length(state3.items) == 1
     end
 
@@ -57,28 +56,22 @@ defmodule Filament.Examples.CartTest do
     end
   end
 
-  # ── Rung 2: CartBadge isolated (stub observable) ──────────────────────────────
+  # ── Rung 2: CartBadge isolated (stub observable) ─────────────────────────────
 
   describe "CartBadge (rung-2)" do
     test "renders item count from stub observable" do
-      # Stub returns initial empty state. CartBadge applies count projection internally.
       {:ok, stub} = Filament.Test.Stub.start(fn _req -> %Cart.State{} end)
-
       {:ok, view} = mount(CartWeb.Components.CartBadge, %{server: stub})
 
-      html = view.rendered_html
-      # Badge renders empty (count=0 shows nothing due to conditional in template)
-      assert html =~ "cart-badge"
-      refute html =~ "data-count=\"1\""
+      assert view.rendered_html =~ "cart-badge"
+      refute view.rendered_html =~ "data-count=\"1\""
     end
 
     test "badge updates when count changes" do
       {:ok, stub} = Filament.Test.Stub.start(fn _req -> %Cart.State{} end)
-
       {:ok, view} = mount(CartWeb.Components.CartBadge, %{server: stub})
       assert view.rendered_html =~ "data-count=\"0\""
 
-      # Push a new state with one item
       new_state =
         Cart.State.add_item(
           %Cart.State{},
@@ -86,18 +79,13 @@ defmodule Filament.Examples.CartTest do
         )
 
       Filament.Test.Stub.push(stub, new_state)
-
-      # Process the update message and re-render
       view = Filament.Test.update(view)
       assert view.rendered_html =~ "data-count=\"1\""
     end
 
-    test "projection: badge does NOT receive update when count is unchanged" do
-      # Core projection validation: count projection should suppress notifications
-      # when projected value doesn't change
+    test "projection suppresses update when count is unchanged" do
       {:ok, stub} = Filament.Test.Stub.start(fn _req -> %Cart.State{} end)
 
-      # Subscribe with count projection
       sub = %Filament.Observable.Subscriber{
         pid: self(),
         fiber_id: :badge_test_fiber,
@@ -107,7 +95,6 @@ defmodule Filament.Examples.CartTest do
 
       {:ok, _initial} = Filament.Observable.subscribe(stub, nil, sub)
 
-      # First push: count 0 → 1
       state1 =
         Cart.State.add_item(
           %Cart.State{},
@@ -117,15 +104,14 @@ defmodule Filament.Examples.CartTest do
       Filament.Test.Stub.push(stub, state1)
       assert_receive {:filament_observable_update, :badge_test_fiber, 0, 1}, 500
 
-      # Second push: same items, no count change - should NOT notify
       Filament.Test.Stub.push(stub, state1)
       refute_receive {:filament_observable_update, :badge_test_fiber, 0, _}, 100
     end
   end
 
-  # ── Rung 3: CartView with real Cart.Server ───────────────────────────────────
+  # ── Rung 3: CartView with real Cart.Server ────────────────────────────────────
 
-  describe "CartView (rung-3, real Cart.Server)" do
+  describe "CartView (rung-3)" do
     setup do
       server = start_supervised!({Cart.Server, []})
       {:ok, view} = mount(CartWeb.Components.CartView, %{server: server})
@@ -139,51 +125,27 @@ defmodule Filament.Examples.CartTest do
     end
 
     test "add_item updates rendered view", %{server: server, view: view} do
-      Cart.Server.add_item(server, %Cart.Item{
-        id: "w1",
-        name: "Widget",
-        price_cents: 999,
-        quantity: 1
-     })
-
+      Cart.Server.add_item(server, %Cart.Item{id: "w1", name: "Widget", price_cents: 999, quantity: 1})
       view = Filament.Test.update(view)
       assert render_text(view) =~ "Widget"
     end
 
     test "remove_item updates rendered view", %{server: server, view: view} do
-      Cart.Server.add_item(server, %Cart.Item{
-        id: "g1",
-        name: "Gadget",
-        price_cents: 500,
-        quantity: 1
-     })
-
+      Cart.Server.add_item(server, %Cart.Item{id: "g1", name: "Gadget", price_cents: 500, quantity: 1})
       view = Filament.Test.update(view)
       assert render_text(view) =~ "Gadget"
 
-      # Remove the item
       Cart.Server.remove_item(server, "g1")
       view = Filament.Test.update(view)
       refute render_text(view) =~ "Gadget"
     end
 
-    test "eventually/2 retries until cart is updated asynchronously", %{
-      server: server,
-      view: view
-    } do
-      # Spawn an asynchronous mutation
+    test "eventually/2 retries until cart is updated asynchronously", %{server: server, view: view} do
       spawn(fn ->
         Process.sleep(50)
-
-        Cart.Server.add_item(server, %Cart.Item{
-          id: "async1",
-          name: "AsyncItem",
-          price_cents: 100,
-          quantity: 1
-       })
+        Cart.Server.add_item(server, %Cart.Item{id: "async1", name: "AsyncItem", price_cents: 100, quantity: 1})
       end)
 
-      # Store view ref for eventually callback
       view_ref = make_ref()
       Process.put(view_ref, view)
 
@@ -198,8 +160,4 @@ defmodule Filament.Examples.CartTest do
       )
     end
   end
-
-  # ── Rung 4: LiveView integration ─────────────────────────────────────────────
-  # NOTE: CartLive requires CartWeb.Endpoint which is not configured in test env.
-  # Skipping rung-4 tests for cart example.
 end
