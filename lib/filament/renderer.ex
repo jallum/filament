@@ -3,6 +3,7 @@ defmodule Filament.Renderer do
 
   alias Filament.Fiber
   alias Filament.RenderContext
+  alias Phoenix.HTML.Safe
   alias Phoenix.LiveView.Rendered
 
   @doc """
@@ -79,7 +80,7 @@ defmodule Filament.Renderer do
 
       # Force evaluation of dynamic expressions so side effects like
       # register_event_handler run while the render context is active.
-      _ = Phoenix.HTML.Safe.to_iodata(rendered)
+      _ = Safe.to_iodata(rendered)
 
       # Harvest context fields
       final_ctx = Process.get(:filament_render_context)

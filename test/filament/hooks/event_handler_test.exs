@@ -5,6 +5,7 @@ defmodule Filament.Hooks.EventHandlerTest do
   alias Filament.FiberTree
   alias Filament.Hooks
   alias Filament.RenderContext
+  alias Phoenix.LiveView.Lifecycle
 
   defmodule TestLiveView do
     use Filament.LiveView
@@ -169,7 +170,7 @@ defmodule Filament.Hooks.EventHandlerTest do
         _filament_rendered: %Phoenix.LiveView.Rendered{},
         __changed__: %{}
       },
-      private: %{live_temp: %{}, lifecycle: Phoenix.LiveView.Lifecycle.__struct__()}
+      private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}
     }
   end
 end

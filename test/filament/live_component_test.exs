@@ -2,6 +2,7 @@ defmodule Filament.LiveComponentTest do
   use ExUnit.Case, async: true
 
   alias Phoenix.HTML.Safe
+  alias Phoenix.LiveView.Lifecycle
   alias Phoenix.LiveView.Socket
 
   defp test_socket(assigns \\ %{}) do
@@ -9,7 +10,7 @@ defmodule Filament.LiveComponentTest do
       assigns: Map.merge(%{__changed__: %{}}, assigns),
       private: %{
         live_temp: %{},
-        lifecycle: Phoenix.LiveView.Lifecycle.__struct__()
+        lifecycle: Lifecycle.__struct__()
       }
     }
   end

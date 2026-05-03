@@ -3,6 +3,7 @@ defmodule Filament.VNodeCompilerTest do
 
   alias Filament.FiberTree
   alias Filament.Reconciler
+  alias Phoenix.HTML.Safe
 
   describe "assigns-free render" do
     test "render without assigns in scope compiles and renders correctly" do
@@ -25,7 +26,7 @@ defmodule Filament.VNodeCompilerTest do
       {_tree, rendered, _} =
         Reconciler.mount(AssignsFreeComp.AssignsFree, %{text: "hello", count: 3}, owner_pid: self())
 
-      html = rendered |> Phoenix.HTML.Safe.to_iodata() |> IO.iodata_to_binary()
+      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "hello"
       assert html =~ "3"
     end

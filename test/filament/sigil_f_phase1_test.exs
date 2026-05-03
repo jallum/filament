@@ -27,7 +27,7 @@ defmodule Filament.SigilFPhase1Test do
       """
 
       assert %Rendered{} = result
-      assert length(result.static) > 0
+      assert result.static != []
       assert is_function(result.dynamic)
     end
 

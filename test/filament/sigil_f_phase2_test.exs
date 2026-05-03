@@ -113,7 +113,6 @@ defmodule Filament.SigilFPhase2Test do
   end
 
   describe "~F sigil Phase 2: Known limitations" do
-    # TODO: Future enhancement for compile-time key validation
     @tag :skip
     test "component in :for without explicit key tracking" do
       flunk("Compile-time component key validation is a TODO for future enhancement")

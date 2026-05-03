@@ -18,6 +18,8 @@ defmodule Filament.Test do
       assert render_text(view) =~ "Count: 1"
   """
 
+  alias Filament.Test.Stub
+  alias Phoenix.HTML.Engine, as: HTMLEngine
   alias Phoenix.LiveView.Rendered
 
   defstruct [
@@ -53,7 +55,7 @@ defmodule Filament.Test do
           {:ok, t()} | {:error, term()}
   def mount(component, props, opts \\ []) do
     stub_specs = Keyword.get(opts, :stub, [])
-    {stubs_map, _pids} = Filament.Test.Stub.build(stub_specs)
+    {stubs_map, _pids} = Stub.build(stub_specs)
 
     owner_pid = self()
 
@@ -229,7 +231,7 @@ defmodule Filament.Test do
   defp part_to_iodata({:safe, data}), do: data
   defp part_to_iodata(%Rendered{} = r), do: rendered_to_string(r)
   defp part_to_iodata(list) when is_list(list), do: list
-  defp part_to_iodata(other), do: Phoenix.HTML.Engine.encode_to_iodata!(other)
+  defp part_to_iodata(other), do: HTMLEngine.encode_to_iodata!(other)
 
   # ── Event dispatch helpers ────────────────────────────────────────────────
 
