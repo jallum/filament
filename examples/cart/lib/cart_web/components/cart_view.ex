@@ -12,7 +12,7 @@ defmodule CartWeb.Components.CartView do
       ~F"""
       <div class="cart-view">
         <h2>Your Cart</h2>
-        {if cart == :uninitialized do}
+        {if cart == :disconnected do}
           <p>Loading...</p>
         {else}
           <ul>

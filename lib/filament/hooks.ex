@@ -164,9 +164,10 @@ defmodule Filament.Hooks do
   Subscribe this fiber to `server`, returning the current projected value.
 
   - `server`  — PID or registered name of the observable GenServer
-  - `request` — passed to `handle_subscribe/3` (default `nil`)
   - `opts`    — keyword list:
-      `:project` — `(state :: term() -> term())` projection function (default identity)
+      `:request`      — passed to `handle_subscribe/3` (default `nil`)
+      `:project`      — `(state :: term() -> term())` projection function (default identity)
+      `:disconnected` — value to return before the WebSocket connects (default `:disconnected`)
 
   Must be called at the top level of a component's `render/1`, in consistent order
   across renders (like all hooks). Do not call inside conditionals or loops.
@@ -174,14 +175,16 @@ defmodule Filament.Hooks do
   ## Examples
 
       counter = use_observable(CounterServer, project: fn s -> s.count end)
+      todos   = use_observable(store, disconnected: [])
   """
   @spec use_observable(
           server :: GenServer.server(),
-          opts :: [request: term(), project: (term() -> term())]
+          opts :: [request: term(), project: (term() -> term()), disconnected: term()]
         ) :: term()
   def use_observable(server, opts \\ []) do
-    request = Keyword.get(opts, :request, nil)
-    project = Keyword.get(opts, :project, &Function.identity/1)
+    request      = Keyword.get(opts, :request, nil)
+    project      = Keyword.get(opts, :project, &Function.identity/1)
+    disconnected = Keyword.get(opts, :disconnected, :disconnected)
     {slot_index, previous, ctx} = use_slot(:uninitialized)
     server = Map.get(ctx.observable_stubs, server, server)
 
@@ -190,7 +193,7 @@ defmodule Filament.Hooks do
     # and race with the real WebSocket connection.
     if not ctx.subscribe_enabled do
       commit_slot(slot_index, :uninitialized)
-      :uninitialized
+      disconnected
     else
       value =
         case previous do

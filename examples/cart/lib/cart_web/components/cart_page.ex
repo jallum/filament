@@ -26,12 +26,12 @@ defmodule CartWeb.Components.CartPage do
       cart = Hooks.use_observable(server)
 
       items = case cart do
-        :uninitialized -> []
+        :disconnected -> []
         %Cart.State{items: items} -> items
       end
 
       total_str = case cart do
-        :uninitialized -> "$0.00"
+        :disconnected -> "$0.00"
         %Cart.State{total_cents: t} ->
           "$#{div(t, 100)}.#{String.pad_leading(Integer.to_string(rem(t, 100)), 2, "0")}"
       end
@@ -59,7 +59,7 @@ defmodule CartWeb.Components.CartPage do
         <div class="cart-view" data-testid="cart-view">
           <h2>Your Cart</h2>
           <ul class="cart-items" data-testid="cart-items">
-            {if cart == :uninitialized do}
+            {if cart == :disconnected do}
               <li>Loading...</li>
             {else}
               {for item <- items do}

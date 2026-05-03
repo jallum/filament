@@ -78,8 +78,7 @@ Key points:
 
 ```elixir
 def render(%{store: store, title: title}) do
-  raw = use_observable(store)
-  todos = if raw == :uninitialized, do: [], else: raw
+  todos = use_observable(store, disconnected: [])
 
   {filter, set_filter} = use_state(:all)
   filtered = apply_filter(todos, filter)

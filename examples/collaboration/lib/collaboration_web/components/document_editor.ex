@@ -17,7 +17,7 @@ defmodule CollaborationWeb.Components.DocumentEditor do
       # Subscribe to lock status and presence count.
       doc_view = use_observable(server)
 
-      if doc_view == :uninitialized do
+      if doc_view == :disconnected do
         ~F"""
         <div class="document-editor" data-doc-id={@doc_id}>
           <p>Connecting…</p>

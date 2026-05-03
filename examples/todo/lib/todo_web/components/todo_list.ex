@@ -12,8 +12,7 @@ defmodule TodoWeb.Components.TodoList do
     prop(:title, :string, default: "Todo List")
 
     def render(%{store: store, title: title}) do
-      raw = use_observable(store)
-      todos = if raw == :uninitialized, do: [], else: raw
+      todos = use_observable(store, disconnected: [])
 
       {filter, set_filter} = use_state(:all)
       {clear_key, bump_clear} = use_state(0)

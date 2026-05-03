@@ -115,8 +115,8 @@ defmodule MyApp.CartComponent do
 
     def render(%{server: server}) do
       cart = use_observable(server)
-      items = if cart == :uninitialized, do: [], else: cart.items
-      total = if cart == :uninitialized, do: 0, else: cart.total
+      items = if cart == :disconnected, do: [], else: cart.items
+      total = if cart == :disconnected, do: 0, else: cart.total
 
       ~F"""
       <div>

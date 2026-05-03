@@ -98,7 +98,7 @@ def render(%{server: server}) do
   cart = Hooks.use_observable(server)
 
   items_html =
-    if cart == :uninitialized do
+    if cart == :disconnected do
       []
     else
       Enum.map(cart.items, fn item ->
@@ -120,14 +120,21 @@ use_observable(server, opts \\ [])
   - `:request` — passed to `handle_subscribe/3` on the server; use it to filter or
     scope the subscription (default `nil`).
   - `:project` — a one-arity function applied to each new state before delivery.
+  - `:disconnected` — value returned before the WebSocket connects (default `:disconnected`).
 
-On the **first render** (HTTP pre-connect), `use_observable` returns `:uninitialized`
-because subscribing to the real server during an HTTP render would create zombie
-subscribers. Always guard against it:
+On the **first render** (HTTP pre-connect), `use_observable` returns `:disconnected`
+(or your `disconnected:` override) because subscribing during an HTTP render would
+create zombie subscribers. Use the opt to supply a sensible default directly:
 
 ```elixir
-count = use_observable(server, project: &Cart.State.item_count/1)
-display = if count == :uninitialized, do: 0, else: count
+count = use_observable(server, project: &Cart.State.item_count/1, disconnected: 0)
+```
+
+Or check the sentinel when you need branching logic:
+
+```elixir
+cart = use_observable(server)
+if cart == :disconnected, do: render_loading(), else: render_cart(cart)
 ```
 
 On subsequent renders (WebSocket-connected), the hook returns the projected value.
