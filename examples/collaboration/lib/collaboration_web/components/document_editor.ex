@@ -1,72 +1,66 @@
 defmodule CollaborationWeb.Components.DocumentEditor do
   use Filament.Component
 
-
   defcomponent do
     prop(:doc_id, :string, required: true)
     prop(:server, :any, default: :via_registry)
 
     def render(%{doc_id: doc_id} = assigns) do
-      # Get the server via registry
       server =
         case Map.get(assigns, :server) do
           :via_registry -> Collaboration.DocumentServer.via_registry(doc_id)
           server -> server
         end
 
-      # Subscribe to lock status and presence count.
       doc_view = use_observable(server)
 
       if doc_view == :disconnected do
         ~F"""
-        <div class="document-editor" data-doc-id={@doc_id}>
-          <p>Connecting…</p>
+        <div class="doc-editor">
+          <p class="connecting">Connecting…</p>
         </div>
         """
       else
-        # All calculations inside the else block where doc_view is a map
-        badge_class = if doc_view.locked, do: "locked", else: "unlocked"
-
         presence_text =
-          if doc_view.presence == 1 do
-            "1 user"
-          else
-            "#{doc_view.presence} users"
-          end
-
-        lock_status =
-          if doc_view.locked do
-            lock_holder = doc_view.lock_holder
-            lock_holder_name = if lock_holder, do: inspect(lock_holder), else: "Unknown"
-
-            ~F"""
-            <div class="lock-status">
-              <span class={badge_class}>🔒 Locked by {lock_holder_name}</span>
-              <button class="view-only-btn" disabled="true">Edit (unavailable)</button>
-            </div>
-            """
-          else
-            ~F"""
-            <div class="lock-status">
-              <span class={badge_class}>🔓 Unlocked</span>
-              <button class="edit-btn" on_click={fn ->
-                Collaboration.DocumentServer.acquire_lock(server, self())
-              end}>
-                Edit
-              </button>
-            </div>
-            """
-          end
+          if doc_view.presence == 1, do: "1 user viewing", else: "#{doc_view.presence} users viewing"
 
         ~F"""
-        <div class="document-editor" data-doc-id={@doc_id}>
-          <div class="presence">
-            {presence_text} here
+        <div class="doc-editor">
+          <div class="doc-header">
+            <h1>Document: {doc_id}</h1>
+            <span class="presence">{presence_text}</span>
           </div>
-          {lock_status}
+
+          <div class="doc-body">
+            <p class="doc-placeholder">— document content would appear here —</p>
+          </div>
+
+          <div class="doc-footer">
+            {if doc_view.locked do}
+              <span class="lock-badge locked">Locked</span>
+              <span class="lock-holder">held by {format_holder(doc_view.lock_holder)}</span>
+              <button class="btn btn-disabled" disabled>Edit</button>
+            {else}
+              <span class="lock-badge unlocked">Available</span>
+              <button class="btn btn-primary" on_click={fn ->
+                Collaboration.DocumentServer.acquire_lock(server, self())
+              end}>Edit</button>
+            {end}
+          </div>
         </div>
         """
       end
     end
+
+    defp format_holder(nil), do: "unknown"
+    defp format_holder(pid) when is_pid(pid) do
+      case :rpc.call(node(), Process, :info, [pid, :registered_name]) do
+        {:registered_name, name} when name != [] -> inspect(name)
+        _ ->
+          [_, b, c] = pid |> :erlang.pid_to_list() |> List.to_string() |> String.split(".")
+          "session #{b}.#{String.trim_trailing(c, ">")}"
+      end
+    end
+    defp format_holder(other), do: inspect(other)
   end
 end

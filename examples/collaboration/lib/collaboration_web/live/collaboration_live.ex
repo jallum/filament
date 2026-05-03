@@ -8,5 +8,5 @@ defmodule CollaborationWeb.CollaborationLive do
     super(params, session, socket)
   end
 
-  def root_component, do: CollaborationWeb.Components.DocumentEditor.DocumentEditor
+  def root_component, do: CollaborationWeb.Components.DocumentEditor
 end
