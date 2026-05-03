@@ -257,7 +257,7 @@ defmodule Filament.Hooks do
   - `opts`    — reserved for future use (default `[]`)
 
   Returns the opaque token from `handle_acquire/3`.
-  Raises if the server rejects the request.
+  Raises `Filament.HoldError` if the server rejects the request.
   """
   @spec use_hold(server :: GenServer.server(), request :: term(), opts :: keyword()) ::
           token :: term()
