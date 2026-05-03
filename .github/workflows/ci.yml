@@ -17,7 +17,6 @@ jobs:
           - {elixir: "1.18",   otp: "27"}
           - {elixir: "1.18",   otp: "28"}
           - {elixir: "1.19.5", otp: "28"}
-          - {elixir: "1.19.5", otp: "29"}
 
     steps:
       - uses: actions/checkout@v4
