@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-yj9"
   ],
@@ -9,8 +9,8 @@
   "id": "flm-abf",
   "labels": [],
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Track I: Docs \u0026 Interop — HexDocs, narrative guides, LiveView interop adapter",
   "type": "task",
-  "updated_at": "2026-05-01T20:59:04Z"
+  "updated_at": "2026-05-03T09:10:22Z"
 }
