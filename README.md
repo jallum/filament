@@ -10,16 +10,48 @@ defmodule CartWeb.Components.CartBadge do
   use Filament.Component
 
   defcomponent do
-    prop(:server, :any, default: Cart.Server)
+    prop(:cart_id, :string, required: true)
 
-    def render(%{server: server}) do
-      count = use_observable(server,
+    def render(%{cart_id: cart_id}) do
+      count = use_observable({:via, Registry, {Cart.Registry, cart_id}},
         project: &Cart.State.item_count/1,
         disconnected: 0
       )
 
       ~F"""
-      <span class="cart-badge">{count}</span>
+      <span class="badge">{count} items</span>
+      """
+    end
+  end
+end
+
+defmodule CartWeb.Components.CartView do
+  use Filament.Component
+
+  defcomponent do
+    prop(:cart_id, :string, required: true)
+
+    def render(%{cart_id: cart_id}) do
+      cart = use_observable({:via, Registry, {Cart.Registry, cart_id}},
+        disconnected: nil
+      )
+
+      ~F"""
+      <div class="cart">
+        <header>
+          <CartBadge cart_id={cart_id} />
+        </header>
+        {if cart do}
+          {for item <- cart.items do}
+            <div class="item">
+              <span>{item.name}</span>
+              <button on_click={fn -> Cart.Server.remove(cart_id, item.id) end}>
+                Remove
+              </button>
+            </div>
+          {end}
+        {end}
+      </div>
       """
     end
   end
@@ -61,7 +93,9 @@ logic.
 ```elixir
 # CartBadge only re-renders when the item count changes,
 # not on every cart mutation.
-count = use_observable(server, project: &Cart.State.item_count/1)
+count = use_observable({:via, Registry, {Cart.Registry, cart_id}},
+  project: &Cart.State.item_count/1
+)
 ```
 
 **Automatic memoization.** The `~F` compiler automatically wraps closure
