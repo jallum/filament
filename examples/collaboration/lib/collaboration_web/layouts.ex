@@ -116,6 +116,14 @@ defmodule CollaborationWeb.Layouts do
 
           .btn-primary:hover { background: #444; }
 
+          .btn-release {
+            background: #fff0f0;
+            color: #c0392b;
+            border: 1px solid #f5c6c2;
+          }
+
+          .btn-release:hover { background: #fde8e8; }
+
           .btn-disabled {
             background: #f0f0f0;
             color: #bbb;

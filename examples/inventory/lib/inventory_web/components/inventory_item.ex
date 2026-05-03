@@ -9,8 +9,13 @@ defmodule InventoryWeb.Components.InventoryItem do
 
     def render(%{item_id: item_id, server: server}) do
       noop = fn _ -> :ok end
+
       {held_qty, item, hold, release} =
-        use_hold(server, item_id, disconnected: {0, nil, noop, noop})
+        use_hold(
+          server,
+          item_id,
+          disconnected: {0, nil, noop, noop}
+        )
 
       ~F"""
       <div class="inventory-item">
