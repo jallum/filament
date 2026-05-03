@@ -75,18 +75,18 @@ defmodule Filament.MixProject do
     [
       main: "Filament",
       extras: [
+        "README.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",
-        "guides/Getting Started.md",
-        "guides/Observables.md",
-        "guides/Resource Holds.md",
-        "guides/Migration Guide.md"
+        "guides/getting-started.md",
+        "guides/observables.md",
+        "guides/hooks.md",
+        "guides/migration-guide.md"
       ],
       groups_for_modules: [
         Components: [Filament.Component, Filament.Defcomponent, Filament.SigilF],
         Hooks: [Filament.Hooks],
         Observables: [Filament.Observable, Filament.Observable.GenServer],
-        Holds: [Filament.Hold, Filament.Hold.GenServer],
         LiveView: [Filament.LiveView]
       ]
     ]

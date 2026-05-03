@@ -3,7 +3,7 @@ defmodule Filament do
   Filament — a process-aware UI framework for Phoenix LiveView.
 
   Filament brings React-style component composition and hooks to LiveView,
-  adding first-class support for observable domain state and resource holds.
+  with first-class support for observable domain state.
 
   ## Core concepts
 
@@ -26,8 +26,6 @@ defmodule Filament do
     - `use_state/2` — local component state (re-renders on change)
     - `use_observable/2` — subscribe to an `Observable.GenServer` with an optional
       projection (only re-renders when the projected value changes)
-    - `use_hold/3` — acquire a resource hold from a `Hold.GenServer`; released
-      automatically if the LiveView process terminates
     - `use_memo/2` — memoised computation (recomputes only when deps change)
     - `use_effect/2` — side-effect with cleanup (run after render)
 
@@ -51,7 +49,6 @@ defmodule Filament do
 
   - "Getting Started" — first component, props, state, events, testing
   - "Observables" — Observable.GenServer, projections, change-or-bust
-  - "Resource Holds" — Hold.GenServer, :DOWN lifecycle, out-of-stock UX
   - "Migration Guide" — converting LiveView assigns to Filament observables
   """
 end

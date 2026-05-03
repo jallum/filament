@@ -8,7 +8,6 @@ defmodule Filament.Hooks do
 
     - `use_state/1` — local mutable state; returns `{value, setter}`
     - `use_observable/2` — subscribe to an `Observable.GenServer`
-    - `use_hold/3` — subscribe to a `Hold.GenServer`; returns `{held_qty, item, hold, release}`
     - `use_effect/2` — side-effect with optional cleanup
     - `memo_at/3` and `event_at/2` — invoked by compiler-generated code from `~F` templates
 
@@ -310,66 +309,6 @@ defmodule Filament.Hooks do
           message: "use_observable subscription rejected: #{inspect(reason)}",
           observable: server,
           reason: reason
-    end
-  end
-
-  @doc """
-  Subscribe to a `Hold.GenServer` and manage quantity-based resource holds.
-
-  Returns `{held_qty, item, hold, release}` on a live WebSocket connection:
-
-  - `held_qty` — number of units this component currently holds
-  - `item` — the current observable value for `item_id` from the server
-  - `hold.(qty)` — acquire `qty` more units; raises `HoldError` if denied
-  - `release.(qty)` — release up to `qty` units
-
-  Returns `:disconnected` (or the value of `disconnected:`) during the HTTP
-  pre-render before the WebSocket connects.
-
-  Holds are released automatically when the LiveView disconnects.
-
-  Options:
-  - `project:` — fn/1 applied to server state to extract `item`; defaults to
-    `fn state -> state[item_id] end`, suitable for map-keyed stores.
-  - `disconnected:` — value returned before WebSocket connects (default `:disconnected`)
-  """
-  @spec use_hold(server :: GenServer.server(), item_id :: term(), opts :: keyword()) ::
-          {held_qty :: non_neg_integer(), item :: term(),
-           hold :: (pos_integer() -> :ok), release :: (pos_integer() -> :ok)}
-          | term()
-  def use_hold(server, item_id, opts \\ []) do
-    disconnected_val = Keyword.get(opts, :disconnected, :disconnected)
-    project = Keyword.get(opts, :project, &Map.get(&1, item_id))
-    sentinel = :__hold_disconnected__
-
-    item = use_observable(server, request: item_id, project: project, disconnected: sentinel)
-    {held_qty, set_held_qty} = use_state(0)
-
-    if item == sentinel do
-      disconnected_val
-    else
-      owner_pid = current_context().owner_pid
-
-      hold_fn = fn qty ->
-        case GenServer.call(server, {:filament_hold, item_id, qty, owner_pid}) do
-          :ok ->
-            set_held_qty.(held_qty + qty)
-
-          {:error, reason} ->
-            raise Filament.HoldError,
-              message: "use_hold acquisition rejected by #{inspect(server)}: #{inspect(reason)}",
-              server: server,
-              reason: reason
-        end
-      end
-
-      # release always fires the cast; server caps at actual held qty
-      release_fn = fn qty ->
-        GenServer.cast(server, {:filament_release_qty, item_id, qty, owner_pid})
-        set_held_qty.(max(0, held_qty - qty))
-      end
-
-      {held_qty, item, hold_fn, release_fn}
     end
   end
 

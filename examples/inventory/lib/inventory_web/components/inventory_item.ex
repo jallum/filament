@@ -1,11 +1,11 @@
 defmodule InventoryWeb.Components.InventoryItem do
   use Filament.Component
 
-  import Filament.Hooks
+  import InventoryWeb.Hooks
 
   defcomponent do
     prop(:item_id, :string, required: true)
-    prop(:server, :any, default: Inventory.Server)
+    prop(:server, :any, required: true)
 
     def render(%{item_id: item_id, server: server}) do
       noop = fn _ -> :ok end

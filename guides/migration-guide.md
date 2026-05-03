@@ -5,8 +5,8 @@ adopt Filament incrementally. Filament is not all-or-nothing — you can migrate
 LiveView at a time using `Filament.LiveComponent` as an entry point, and promote to
 a full Filament LiveView only when you are ready.
 
-Prerequisite reading: [Getting Started](getting-started.html),
-[Observables](observables.html), and [Resource Holds](resource-holds.html).
+Prerequisite reading: [Getting Started](getting-started.html) and
+[Observables](observables.html).
 
 ## Phase 1: Add Filament to your project
 
@@ -58,7 +58,7 @@ Classify each assign:
 |--------|------|--------|
 | `items`, `total` | Shared domain state | `Observable.GenServer` |
 | Form input, filter | Ephemeral UI state | `use_state` in component |
-| Checkout lock, seat hold | Resource claim | `Hold.GenServer` |
+| Checkout lock, seat hold | Resource claim | Custom hook (see [Hooks guide](hooks.html)) |
 | Derived totals, counts | Computed from domain | Computed in server or `use_memo` |
 
 ## Phase 3: Extract domain state into an Observable.GenServer
@@ -192,10 +192,13 @@ for the full `Filament.LiveView` explanation.
 
 ## Phase 7: Add resource holds (if needed)
 
-If your application has checkout flows, pessimistic locks, or reservation UX, add
-a `Hold.GenServer` for each resource. The [Resource Holds guide](resource-holds.html)
-covers the full `Hold.GenServer` lifecycle including automatic `:DOWN` release when
-the user closes their browser tab.
+If your application has checkout flows, pessimistic locks, or reservation UX, holds
+are not part of Filament core — but they are straightforward to build as a custom
+hook on top of `use_observable`. See
+`examples/inventory/lib/inventory_web/hooks.ex` for a complete `use_hold/3`
+implementation that acquires and releases quantity-based holds, with automatic
+release when the LiveView disconnects via `handle_unsubscribe/2` on the server.
+The [Hooks guide](hooks.html) covers composing and writing custom hooks.
 
 ## Codemods (where automatable)
 

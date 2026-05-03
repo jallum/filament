@@ -151,7 +151,7 @@ defmodule Filament.TagEngine do
         raise RuntimeError, """
         expected #{inspect(func)} to return a %Phoenix.LiveView.Rendered{} struct
 
-        Ensure your render function uses ~H to define its template.
+        Ensure your render function uses ~F to define its template.
 
         Got:
 

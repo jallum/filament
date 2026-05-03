@@ -13,11 +13,6 @@ defmodule Filament.Observable.GenServer do
     - `notify_observers/1` — call this from your handlers whenever state changes
       to push updates to all subscribed components
 
-  > #### Observable + Hold
-  >
-  > `Filament.Hold.GenServer` builds on top of this macro — use it when you
-  > need quantity-based resource holds with automatic release on disconnect.
-
   ## Example
 
       defmodule MyApp.Counter do

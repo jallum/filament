@@ -95,7 +95,7 @@ The `CartView` component subscribes without a projection, receiving the full sta
 
 ```elixir
 def render(%{server: server}) do
-  cart = Hooks.use_observable(server)
+  cart = use_observable(server)
 
   items_html =
     if cart == :disconnected do
@@ -188,11 +188,11 @@ Filament uses strict inequality (`!==`) for the comparison. Primitives and atoms
 compare by value; maps and structs compare by identity. If your projection returns
 a map you should return the same struct whenever the relevant fields haven't changed.
 
-The projection test from `test/filament/examples/cart_test.exs` demonstrates this
+The projection test from `examples/cart/test/cart_test.exs` demonstrates this
 directly:
 
 ```elixir
-test "projection: badge does NOT receive update when count is unchanged" do
+test "projection suppresses update when count is unchanged" do
   {:ok, stub} = Filament.Test.Stub.start(fn _req -> %Cart.State{} end)
 
   sub = %Filament.Observable.Subscriber{
@@ -304,17 +304,10 @@ Key test helpers:
 See `Filament.Observable` for the full `@callback` specifications including the
 `handle_unsubscribe/2` cleanup callback.
 
-> #### Do not mix Observable.GenServer with Hold.GenServer {: .warning}
->
-> Both macros inject a `handle_info/2` clause for `{:DOWN, ref, :process, ...}`.
-> Using them together in the same module will cause a compile-time duplicate-clause
-> error. If you need both observable and hold capabilities in one server, use only
-> `use Filament.Observable.GenServer` and manage hold state manually. See the
-> [Resource Holds guide](resource-holds.html) for details.
-
 ## Next steps
 
-- **Resource Holds guide** — learn `Hold.GenServer`, the `:DOWN` auto-release
-  lifecycle, and how to model reservations and out-of-stock UX.
+- **Hooks guide** — learn how to compose hooks and build custom hooks like
+  `use_hold` (see `examples/inventory/lib/inventory_web/hooks.ex` for a
+  worked example of resource holds built on top of `use_observable`).
 - **API reference** — see `Filament.Observable`, `Filament.Observable.GenServer`,
   and `Filament.Hooks` (`use_observable/2`) for full signatures.

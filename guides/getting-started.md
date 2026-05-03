@@ -178,10 +178,10 @@ Child components are rendered with their module name as a tag in `~F` templates:
 Filament's rung-2 API mounts a component tree in-process with no WebSocket
 required. Tests run with `async: true` and complete in milliseconds.
 
-Here are the rung-2 tests from `test/filament/examples/todo_test.exs`:
+Here are the rung-2 tests from `examples/todo/test/todo_test.exs`:
 
 ```elixir
-defmodule Filament.Examples.TodoTest do
+defmodule Todo.Test do
   use ExUnit.Case, async: true
   import Filament.Test
 
@@ -193,8 +193,8 @@ defmodule Filament.Examples.TodoTest do
 
     test "renders todo items after submission" do
       {:ok, view} = mount(TodoWeb.Components.TodoList, %{})
-      {:ok, view} = submit(view, "form.header form", %{"text" => "First task"})
-      {:ok, view} = submit(view, "form.header form", %{"text" => "Second task"})
+      {:ok, view} = submit(view, "form", %{"text" => "First task"})
+      {:ok, view} = submit(view, "form", %{"text" => "Second task"})
 
       text = render_text(view)
       assert text =~ "First task"
@@ -203,7 +203,7 @@ defmodule Filament.Examples.TodoTest do
 
     test "toggling a todo marks it completed" do
       {:ok, view} = mount(TodoWeb.Components.TodoList, %{})
-      {:ok, view} = submit(view, "form.header form", %{"text" => "Done task"})
+      {:ok, view} = submit(view, "form", %{"text" => "Done task"})
       {:ok, view} = click(view, ".todo-list li input[type=checkbox]")
 
       assert view.rendered_html =~ "class=\"completed"
@@ -229,9 +229,9 @@ they are safe to run with `async: true` and typically finish in under 5 ms.
 
 ## Next steps
 
-- **Observables guide** — learn `Observable.GenServer`, projections, and
-  the change-or-bust pattern for efficient re-renders.
-- **Resource Holds guide** — learn `Hold.GenServer`, the `:DOWN` lifecycle,
-  and how to model out-of-stock or reservation UX.
+- **[Observables guide](observables.html)** — learn `Observable.GenServer`,
+  projections, and the change-or-bust pattern for efficient re-renders.
+- **[Hooks guide](hooks.html)** — composing built-in hooks and writing
+  custom hooks for domain logic.
 - **API reference** — see `Filament.Hooks` for the full hook signatures and
   `Filament.Component` for the behaviour callbacks.
