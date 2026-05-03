@@ -20,7 +20,9 @@ defmodule TodoWeb.Components.FilterItem do
           class={if is_active, do: "selected", else: ""}
           on_click={on_click}
           href="#"
-        >{label}</a>
+        >
+          {label}
+        </a>
       </li>
       """
     end
