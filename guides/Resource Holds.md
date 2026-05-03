@@ -130,8 +130,9 @@ end
 - Returns the opaque token from `handle_acquire/3` when the hold is granted.
 - Raises `Filament.HoldError` when the server denies the request — rescue it to
   render the fallback UI (out-of-stock, locked, etc.).
-- On the first render (HTTP pre-connect), `use_hold` returns `:uninitialized`; the
-  hold is actually acquired on the WebSocket-connected render.
+- Returns `:disconnected` on the HTTP pre-render before WebSocket connects; the
+  hold is actually acquired on the first WebSocket-connected render. This prevents
+  zombie holds from being acquired during the pre-render that would never be released.
 
 ## The :DOWN lifecycle in practice
 

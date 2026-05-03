@@ -13,14 +13,10 @@ defmodule Filament.Observable.GenServer do
     - `notify_observers/1` — call this from your handlers whenever state changes
       to push updates to all subscribed components
 
-  > #### Do not mix with Hold.GenServer {: .warning}
+  > #### Observable + Hold
   >
-  > Do **not** use both `use Filament.Observable.GenServer` and
-  > `use Filament.Hold.GenServer` in the same module. Both inject
-  > `handle_info/2` for `{:DOWN, ref, :process, ...}` and the compiler will
-  > raise a duplicate clause error. If you need both capabilities in one server,
-  > use only `Filament.Observable.GenServer` and implement lock/hold management
-  > manually in the server state.
+  > `Filament.Hold.GenServer` builds on top of this macro — use it when you
+  > need quantity-based resource holds with automatic release on disconnect.
 
   ## Example
 

@@ -207,15 +207,7 @@ defmodule Filament.LiveView do
             new_slots = Map.put(fiber.hook_slots, slot_index, {new_value, setter})
             tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
 
-            # Re-render the fiber with its current props
-            {new_tree, rendered, pending_effects} =
-              Reconciler.update(tree, fiber_id, fiber.props, owner_pid: self())
-
-            {:noreply,
-             socket
-             |> Phoenix.Component.assign(:_filament_tree, new_tree)
-             |> Phoenix.Component.assign(:_filament_rendered, rendered)
-             |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
+            {:noreply, rerender_from_root(socket, tree)}
         end
       end
 
@@ -242,15 +234,7 @@ defmodule Filament.LiveView do
             new_slots = Map.put(fiber.hook_slots, slot_index, {:subscribed, server, new_value})
             tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
 
-            # Re-render the fiber with its current props
-            {new_tree, rendered, pending_effects} =
-              Reconciler.update(tree, fiber_id, fiber.props, owner_pid: self())
-
-            {:noreply,
-             socket
-             |> Phoenix.Component.assign(:_filament_tree, new_tree)
-             |> Phoenix.Component.assign(:_filament_rendered, rendered)
-             |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
+            {:noreply, rerender_from_root(socket, tree)}
         end
       end
 
@@ -269,15 +253,22 @@ defmodule Filament.LiveView do
             new_slots = Map.put(fiber.hook_slots, slot_index, :needs_resubscribe)
             tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
 
-            {new_tree, rendered, pending_effects} =
-              Reconciler.update(tree, fiber_id, fiber.props, owner_pid: self())
-
-            {:noreply,
-             socket
-             |> Phoenix.Component.assign(:_filament_tree, new_tree)
-             |> Phoenix.Component.assign(:_filament_rendered, rendered)
-             |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
+            {:noreply, rerender_from_root(socket, tree)}
         end
+      end
+
+      # Re-render from the root fiber so _filament_rendered always contains the full
+      # page output regardless of which child fiber triggered the update.
+      defp rerender_from_root(socket, tree) do
+        root_fiber = tree["root"]
+
+        {new_tree, rendered, pending_effects} =
+          Reconciler.update(tree, "root", root_fiber.props, owner_pid: self())
+
+        socket
+        |> Phoenix.Component.assign(:_filament_tree, new_tree)
+        |> Phoenix.Component.assign(:_filament_rendered, rendered)
+        |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)
       end
 
       # Ensure render/1 is defined

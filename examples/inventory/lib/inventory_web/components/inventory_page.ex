@@ -1,7 +1,7 @@
 defmodule InventoryWeb.Components.InventoryPage do
   use Filament.Component
 
-  alias InventoryWeb.Components.CheckoutLineItem
+  alias InventoryWeb.Components.InventoryItem
 
   defcomponent do
     prop(:server, :any, default: Inventory.Server)
@@ -15,7 +15,7 @@ defmodule InventoryWeb.Components.InventoryPage do
         <p>Holds are acquired per-component and released automatically on disconnect.</p>
         <div class="items">
           {for item <- items do}
-            <CheckoutLineItem server={server} item_id={item.id} />
+            <InventoryItem server={server} item_id={item.id} />
           {end}
         </div>
       </div>

@@ -1,54 +1,38 @@
 defmodule Filament.Hold do
   @moduledoc """
-  Behaviour for GenServers that grant resource holds to client processes.
+  Behaviour for GenServers that grant quantity-based resource holds to Filament components.
 
   A hold is acquired by a LiveView process on behalf of a fiber. If the LiveView
-  process terminates for any reason (disconnect, crash), the hold is automatically
-  released via BEAM :DOWN monitoring — no cleanup message is required from the client.
-
-  Explicit release also occurs when the fiber unmounts cleanly.
+  process terminates for any reason (disconnect, crash), all holds are automatically
+  released via the observable subscription lifecycle — no cleanup message is required.
 
   Use `Filament.Hold.GenServer` to implement the server side with minimal boilerplate.
   """
 
   @doc """
-  Called when a client requests a hold. Return `{:ok, token, new_state}` to grant.
-  `token` is an opaque value returned to the caller via `use_hold/3`.
-  Return `{:error, reason, new_state}` to deny.
+  Called when a client requests to hold `qty` units of `item_id`.
+  Return `{:ok, new_state}` to grant or `{:error, reason, state}` to deny.
   """
   @callback handle_acquire(
-              request :: term(),
-              holder :: pid(),
+              item_id :: term(),
+              qty :: pos_integer(),
+              holder_pid :: pid(),
               state :: term()
             ) ::
-              {:ok, token :: term(), new_state :: term()}
-              | {:error, reason :: term(), new_state :: term()}
+              {:ok, new_state :: term()}
+              | {:error, reason :: term(), state :: term()}
 
   @doc """
-  Called when a holder explicitly releases a hold or its process terminates (:DOWN).
-  `token` is the opaque value returned by `handle_acquire/3`.
+  Called when a holder releases `qty` units of `item_id`, either explicitly
+  or because their process terminated.
   """
-  @callback handle_release(token :: term(), holder :: pid(), state :: term()) ::
+  @callback handle_release(
+              item_id :: term(),
+              qty :: pos_integer(),
+              holder_pid :: pid(),
+              state :: term()
+            ) ::
               {:ok, new_state :: term()}
 
-  @optional_callbacks handle_acquire: 3, handle_release: 3
-
-  # ── Public API ──────────────────────────────────────────────────────────────
-
-  @doc """
-  Acquire a hold from `server`. Called by `use_hold/3`. Do not call directly.
-  """
-  @spec acquire(server :: GenServer.server(), request :: term(), holder :: pid()) ::
-          {:ok, token :: term()} | {:error, reason :: term()}
-  def acquire(server, request, holder) do
-    GenServer.call(server, {:filament_acquire, request, holder})
-  end
-
-  @doc """
-  Release a hold from `server`. Called on fiber unmount. Do not call directly.
-  """
-  @spec release(server :: GenServer.server(), holder :: pid()) :: :ok
-  def release(server, holder) do
-    GenServer.cast(server, {:filament_release, holder})
-  end
+  @optional_callbacks handle_acquire: 4, handle_release: 4
 end

@@ -6,19 +6,20 @@ defmodule Inventory.Server do
 
   def start_link(opts \\ []) do
     initial_items = Keyword.get(opts, :items, [])
-    name = Keyword.get(opts, :name, __MODULE__)
-    GenServer.start_link(__MODULE__, initial_items, name: name)
+    gen_opts = case Keyword.fetch(opts, :name) do
+      {:ok, name} -> [name: name]
+      :error -> []
+    end
+    GenServer.start_link(__MODULE__, initial_items, gen_opts)
   end
 
-  def list_items(server \\ __MODULE__) do
+  def list_items(server) do
     GenServer.call(server, :list_items)
   end
 
-  def get_item(server \\ __MODULE__, item_id) do
+  def get_item(server, item_id) do
     GenServer.call(server, {:get_item, item_id})
   end
-
-  # GenServer callbacks
 
   @impl GenServer
   def init(items) do
@@ -26,37 +27,25 @@ defmodule Inventory.Server do
     {:ok, state}
   end
 
-  # Hold callbacks — called by the Hold.GenServer macro on acquire/release.
-  # request is the item_id passed to use_hold/3.
-  # holder_pid is the subscribing fiber's pid.
-
   @impl Filament.Hold
-  def handle_acquire(item_id, _holder_pid, state) do
+  def handle_acquire(item_id, qty, _holder_pid, state) do
     case Map.get(state, item_id) do
       nil ->
         {:error, :not_found, state}
 
-      %{available: 0} ->
+      %{available: available} when available < qty ->
         {:error, :insufficient, state}
 
       item ->
-        token = {item_id, make_ref()}
-        new_item = %{item | available: item.available - 1}
-        {:ok, token, Map.put(state, item_id, new_item)}
+        {:ok, Map.put(state, item_id, %{item | available: item.available - qty})}
     end
   end
 
-  # handle_release/3 is called when the holder process dies (:DOWN) or explicitly
-  # releases the hold. The token was returned by handle_acquire/3.
   @impl Filament.Hold
-  def handle_release({item_id, _ref}, _holder_pid, state) do
+  def handle_release(item_id, qty, _holder_pid, state) do
     case Map.get(state, item_id) do
-      nil ->
-        {:ok, state}
-
-      item ->
-        new_item = %{item | available: item.available + 1}
-        {:ok, Map.put(state, item_id, new_item)}
+      nil -> {:ok, state}
+      item -> {:ok, Map.put(state, item_id, %{item | available: item.available + qty})}
     end
   end
 

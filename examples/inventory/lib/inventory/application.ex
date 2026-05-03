@@ -10,7 +10,7 @@ defmodule Inventory.Application do
 
     children = [
       {Phoenix.PubSub, name: Inventory.PubSub},
-      {Inventory.Server, items: demo_items},
+      {Inventory.Server, items: demo_items, name: Inventory.Server},
       InventoryWeb.Endpoint
     ]
 
