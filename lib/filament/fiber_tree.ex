@@ -1,9 +1,5 @@
 defmodule Filament.FiberTree do
-  @moduledoc """
-  Helper functions for operating on the fiber tree map.
-
-  The fiber tree is a `%{String.t() => Filament.Fiber.t()}` map keyed by fiber ID.
-  """
+  @moduledoc false
 
   @type t :: %{String.t() => Filament.Fiber.t()}
 

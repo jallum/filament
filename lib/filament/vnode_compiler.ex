@@ -1,20 +1,5 @@
 defmodule Filament.VNodeCompiler do
-  @moduledoc """
-  Compiles ~F template strings into %Phoenix.LiveView.Rendered{} structs with a
-  trivial dynamic fn.
-
-  KEY INVARIANT: all real work (hooks, child renders, event handler registration,
-  memo/event calls) happens in the LINEAR BODY of the render function, where the
-  Filament fiber context is active. The dynamic fn is TRIVIAL — it only returns
-  already-bound local variables. This prevents crashes when Phoenix's diff engine
-  re-invokes the dynamic fn outside the Filament render context.
-
-  Pipeline:
-    1. Filament.TagEngine.compile  → %Rendered{} AST with work inside the dynamic fn
-    2. hoist_dynamics              → lifts slot exprs out; fn becomes fn _ -> [v0, v1] end
-    3. transform_at_assigns        → @foo → bare var (for reactive dep detection)
-    4. assign_and_emit             → emits memo_at/event_at calls with compile-time indices
-  """
+  @moduledoc false
 
   @spec compile(String.t(), Macro.Env.t() | nil) :: term()
   def compile(source, caller) do

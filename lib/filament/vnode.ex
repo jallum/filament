@@ -1,18 +1,5 @@
 defmodule Filament.VNode do
-  @moduledoc """
-  VNode IR types for Filament component rendering.
-
-  VNodes are tagged tuples that serve as the intermediate representation
-  returned by component render functions. They are pattern-matched heavily
-  during the render walk for performance.
-
-  Five variants:
-  - :text - text node
-  - :element - HTML element
-  - :component - child component reference
-  - :fragment - transparent grouping
-  - :keyed_list - explicitly keyed list
-  """
+  @moduledoc false
 
   defmodule Error do
     @moduledoc "Exception raised when VNode validation fails"

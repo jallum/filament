@@ -31,7 +31,7 @@ defmodule Filament.Test do
   @type t :: %__MODULE__{
           component: module(),
           props: map(),
-          fiber_tree: Filament.FiberTree.t(),
+          fiber_tree: map(),
           rendered: Phoenix.LiveView.Rendered.t(),
           rendered_html: String.t(),
           owner_pid: pid(),

@@ -1,11 +1,5 @@
 defmodule Filament.Renderer do
-  @moduledoc """
-  Pure render function that takes a component module and props and returns
-  a %Phoenix.LiveView.Rendered{} struct.
-
-  The renderer manages the render context (stored in the process dictionary)
-  during component rendering to support hooks and fiber tracking.
-  """
+  @moduledoc false
 
   alias Filament.{Fiber, RenderContext}
 

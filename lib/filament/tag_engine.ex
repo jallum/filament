@@ -1,23 +1,5 @@
 defmodule Filament.TagEngine do
-  @moduledoc """
-  Building blocks for tag based `Phoenix.Template.Engine`s.
-
-  This cannot be directly used by Phoenix applications.
-  Instead, it is the building block for engines such as
-  `Phoenix.LiveView.HTMLEngine`.
-
-  It is typically invoked like this:
-
-      Phoenix.LiveView.TagEngine.compile(source,
-        line: 1,
-        file: path,
-        caller: __CALLER__,
-        source: source,
-        tag_handler: FooBarEngine
-      )
-
-  Where `:tag_handler` implements the behaviour defined by this module.
-  """
+  @moduledoc false
 
   @doc """
   Compiles the given string into Elixir AST.

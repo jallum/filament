@@ -1,11 +1,5 @@
 defmodule Filament.RenderContext do
-  @moduledoc """
-  Render context that lives in the process dictionary during component rendering.
-
-  The context tracks the current fiber being rendered, the full fiber tree,
-  the current hook index for stateful hooks, and any new fibers discovered
-  during the render pass.
-  """
+  @moduledoc false
 
   @enforce_keys [:fiber_id, :fiber_tree]
   defstruct [

@@ -1,7 +1,5 @@
 defmodule Filament.Application do
-  @moduledoc """
-  Application supervisor for Filament.
-  """
+  @moduledoc false
 
   use Supervisor
 

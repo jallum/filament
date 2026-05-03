@@ -63,7 +63,6 @@ defmodule Filament.MixProject do
   defp docs do
     [
       main: "Filament",
-      logo: ".tmp/logo.png",
       extras: [
         "CHANGELOG.md",
         "CONTRIBUTING.md",
@@ -71,6 +70,13 @@ defmodule Filament.MixProject do
         "guides/Observables.md",
         "guides/Resource Holds.md",
         "guides/Migration Guide.md"
+      ],
+      groups_for_modules: [
+        Components: [Filament.Component, Filament.Defcomponent, Filament.SigilF],
+        Hooks: [Filament.Hooks],
+        Observables: [Filament.Observable, Filament.Observable.GenServer],
+        Holds: [Filament.Hold, Filament.Hold.GenServer],
+        LiveView: [Filament.LiveView]
       ]
     ]
   end

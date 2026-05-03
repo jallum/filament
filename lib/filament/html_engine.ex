@@ -1,4 +1,6 @@
 defmodule Filament.HTMLEngine do
+  @moduledoc false
+
   @behaviour Filament.TagEngine
 
   @impl true

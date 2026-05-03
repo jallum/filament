@@ -1,26 +1,27 @@
 defmodule Filament.Hooks do
   @moduledoc """
-  Low-level hook slot primitives. Not called by application code directly.
-  Application code uses use_state/1, use_effect/2, use_observable/3, use_hold/3.
-  Compiler-generated code uses memo_at/3 and event_at/2.
+  Hooks for Filament components.
 
-  Rules of hooks:
-  1. Only call hooks at the top level of render/1.
-  2. Only call hooks during a render pass.
-  3. Hooks are identified by call order (slot index). Conditional hooks corrupt state.
+  ## Application-facing hooks
+
+  Call these at the top level of `render/1`:
+
+    - `use_state/1` — local mutable state; returns `{value, setter}`
+    - `use_observable/3` — subscribe to an `Observable.GenServer`
+    - `use_hold/3` — acquire a resource hold from a `Hold.GenServer`
+    - `use_effect/2` — side-effect with optional cleanup
+    - `memo_at/3` and `event_at/2` — invoked by compiler-generated code from `~F` templates
+
+  ## Rules of hooks
+
+  1. Only call hooks at the top level of `render/1` — not inside `if`, `case`, or comprehensions.
+  2. Hooks must be called during a render pass (a `RenderContext` must be active).
+  3. Hook identity is determined by call order (slot index). Conditional hooks corrupt state.
   """
 
   alias Filament.RenderContext
 
-  @doc """
-  Acquires the next hook slot. Returns {slot_index, previous_value, context} where:
-  - slot_index is the current index (0-based, increments with each call)
-  - previous_value is the value stored in this slot from the PREVIOUS render
-    (or the given default if this is the first render or the slot is empty)
-  - context is the current RenderContext (for use by the calling hook)
-
-  Raises if called outside a render pass (no context in process dictionary).
-  """
+  @doc false
   @spec use_slot(default :: term()) ::
           {slot_index :: non_neg_integer(), previous_value :: term(),
            context :: RenderContext.t()}
@@ -48,10 +49,7 @@ defmodule Filament.Hooks do
     {index, previous, ctx}
   end
 
-  @doc """
-  Writes a new value for the given slot index into the render context accumulator.
-  The value is committed to the fiber after the render pass completes.
-  """
+  @doc false
   @spec commit_slot(slot_index :: non_neg_integer(), value :: term()) :: :ok
   def commit_slot(index, value) do
     ctx =
@@ -63,10 +61,7 @@ defmodule Filament.Hooks do
     :ok
   end
 
-  @doc """
-  Returns the current render context, or nil if called outside a render pass.
-  Used by hooks that need owner_pid (C2) or to schedule effects (C4).
-  """
+  @doc false
   @spec current_context() :: RenderContext.t() | nil
   def current_context, do: Process.get(:filament_render_context)
 
@@ -262,7 +257,7 @@ defmodule Filament.Hooks do
   - `opts`    — reserved for future use (default `[]`)
 
   Returns the opaque token from `handle_acquire/3`.
-  Raises `Filament.HoldError` if the server rejects the request.
+  Raises if the server rejects the request.
   """
   @spec use_hold(server :: GenServer.server(), request :: term(), opts :: keyword()) ::
           token :: term()
@@ -308,15 +303,7 @@ defmodule Filament.Hooks do
     end
   end
 
-  @doc """
-  Reads or recomputes a memoized value at an explicit compile-time-assigned slot key.
-
-  `slot` is a `{:t, N}` tagged tuple (template namespace) or a plain non-negative integer.
-  Uses structural equality on `deps`. Pass `[]` to compute once on mount. Pass `:no_deps`
-  to recompute every render.
-
-  Called only by compiler-generated code.
-  """
+  @doc false
   @spec memo_at(
           slot :: non_neg_integer() | {:t, non_neg_integer()},
           deps :: [term()] | :no_deps,
@@ -384,14 +371,7 @@ defmodule Filament.Hooks do
     end
   end
 
-  @doc """
-  Registers an event handler at a specific compile-time-assigned slot index.
-  Returns the wire-ref string `"fiber_id:slot"` for embedding in DOM attributes.
-
-  `slot` is a non-negative integer literal assigned by the compiler.
-
-  Called only by compiler-generated code.
-  """
+  @doc false
   @spec event_at(slot :: non_neg_integer(), handler :: function()) :: wire_ref :: String.t()
   def event_at(slot, handler) when is_function(handler) do
     case Process.get(:filament_render_context) do
@@ -409,12 +389,7 @@ defmodule Filament.Hooks do
     end
   end
 
-  @doc """
-  Register an event handler function for the current fiber at the current render index.
-  Returns the wire ref string `"fiber_id:handler_index"` to embed in phx-click/phx-submit.
-
-  Called at render time by the `~F` template engine — do not call directly.
-  """
+  @doc false
   @spec register_event_handler(handler :: function()) :: wire_ref :: String.t()
   def register_event_handler(handler) when is_function(handler) do
     case Process.get(:filament_render_context) do

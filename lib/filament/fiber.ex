@@ -1,10 +1,5 @@
 defmodule Filament.Fiber do
-  @moduledoc """
-  Core in-memory node in the fiber tree — one per mounted component instance.
-
-  Fiber IDs are path-based strings (not UUIDs) for stability across re-renders.
-  The reconciler uses these stable IDs to match component instances.
-  """
+  @moduledoc false
 
   @enforce_keys [:id, :component]
   defstruct [

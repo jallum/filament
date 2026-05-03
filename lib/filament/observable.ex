@@ -7,8 +7,6 @@ defmodule Filament.Observable do
   acceptance and teardown.
   """
 
-  alias Filament.Observable.Subscriber
-
   @doc """
   Called when a new subscriber requests a subscription.
 
@@ -19,7 +17,7 @@ defmodule Filament.Observable do
   """
   @callback handle_subscribe(
               request :: term(),
-              subscriber :: Subscriber.t(),
+              subscriber :: term(),
               state :: term()
             ) ::
               {:ok, initial_value :: term(), new_state :: term()}
@@ -28,33 +26,25 @@ defmodule Filament.Observable do
   @doc """
   Called when a subscriber unsubscribes or its process terminates.
   """
-  @callback handle_unsubscribe(subscriber :: Subscriber.t(), state :: term()) ::
+  @callback handle_unsubscribe(subscriber :: term(), state :: term()) ::
               {:ok, new_state :: term()}
 
   @optional_callbacks handle_subscribe: 3, handle_unsubscribe: 2
 
   # ── Public API ──────────────────────────────────────────────────────────────
 
-  @doc """
-  Subscribe `subscriber` to `observable`, passing `request` to `handle_subscribe/3`.
-
-  Returns `{:ok, initial_projected_value}` or `{:error, reason}`.
-  Called by `use_observable/3` (D4). Do NOT call directly from application code.
-  """
+  @doc false
   @spec subscribe(
           observable :: GenServer.server(),
           request :: term(),
-          subscriber :: Subscriber.t()
+          subscriber :: term()
         ) ::
           {:ok, term()} | {:error, term()}
   def subscribe(observable, request, subscriber) do
     GenServer.call(observable, {:filament_subscribe, request, subscriber})
   end
 
-  @doc """
-  Unsubscribe the subscription identified by `{pid, fiber_id, slot_index}` from `observable`.
-  Called when a fiber's server prop changes. Do NOT call directly from application code.
-  """
+  @doc false
   @spec unsubscribe(
           observable :: GenServer.server(),
           sub_key :: {pid :: pid(), fiber_id :: term(), slot_index :: non_neg_integer()}

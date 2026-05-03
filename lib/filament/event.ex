@@ -1,20 +1,5 @@
 defmodule Filament.Event do
-  @moduledoc """
-  Macro for defining typed event structs with JSON encode/decode.
-
-  Usage (inside any module or at top-level):
-
-      import Filament.Event
-
-      defevent CartAdded do
-        field :product_id, :string, required: true
-        field :quantity,   :integer, default: 1
-        field :note,       :string                  # optional, no default
-      end
-
-  This creates the module `CartAdded` (namespaced under the calling module)
-  with a struct, `@type t`, `encode/1`, and `decode/1`.
-  """
+  @moduledoc false
 
   @supported_types [:string, :integer, :float, :boolean, :atom]
 

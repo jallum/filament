@@ -1,26 +1,49 @@
 defmodule Filament.Observable.GenServer do
   @moduledoc """
-  Macro that makes a GenServer observable.
+  Macro that makes a GenServer observable by Filament components.
 
-  Usage:
+  `use Filament.Observable.GenServer` injects:
 
-      defmodule MyServer do
+    - `handle_call({:filament_subscribe, request, subscriber}, from, state)` —
+      subscriber registration; calls `handle_subscribe/3` (overridable)
+    - `handle_cast({:filament_unsubscribe, sub_key}, state)` —
+      subscriber removal; calls `handle_unsubscribe/2` (overridable)
+    - `handle_info({:DOWN, ref, :process, pid, reason}, state)` —
+      automatic subscriber cleanup when a LiveView process terminates
+    - `notify_observers/1` — call this from your handlers whenever state changes
+      to push updates to all subscribed components
+
+  > #### Do not mix with Hold.GenServer {: .warning}
+  >
+  > Do **not** use both `use Filament.Observable.GenServer` and
+  > `use Filament.Hold.GenServer` in the same module. Both inject
+  > `handle_info/2` for `{:DOWN, ref, :process, ...}` and the compiler will
+  > raise a duplicate clause error. If you need both capabilities in one server,
+  > use only `Filament.Observable.GenServer` and implement lock/hold management
+  > manually in the server state.
+
+  ## Example
+
+      defmodule MyApp.Counter do
         use Filament.Observable.GenServer
 
-        def init(args), do: {:ok, %{count: 0}}
+        def start_link(opts \\\\ []) do
+          GenServer.start_link(__MODULE__, 0, name: Keyword.get(opts, :name, __MODULE__))
+        end
 
-        # Optional — override to control subscription acceptance:
+        @impl GenServer
+        def init(initial), do: {:ok, initial}
+
         @impl Filament.Observable
-        def handle_subscribe(_request, _subscriber, state), do: {:ok, state, state}
+        def handle_subscribe(_request, _subscriber, state) do
+          {:ok, state, state}
+        end
 
-        # Optional — override to run teardown on unsubscribe:
-        @impl Filament.Observable
-        def handle_unsubscribe(_subscriber, state), do: {:ok, state}
-
-        def handle_call(:increment, _from, state) do
-          new_state = %{state | count: state.count + 1}
-          notify_observers(new_state)
-          {:reply, :ok, new_state}
+        @impl GenServer
+        def handle_call(:increment, _from, count) do
+          new_count = count + 1
+          notify_observers(new_count)
+          {:reply, new_count, new_count}
         end
       end
   """

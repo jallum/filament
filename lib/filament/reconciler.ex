@@ -1,10 +1,5 @@
 defmodule Filament.Reconciler do
-  @moduledoc """
-  Fiber tree reconciler that manages component instances across renders.
-
-  The reconciler tracks component instances, preserves hook state by matching
-  fiber IDs, and manages mount/update/unmount lifecycle.
-  """
+  @moduledoc false
 
   alias Filament.{Fiber, RenderContext, Renderer, ReconcilerError}
 
