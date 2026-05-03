@@ -58,7 +58,7 @@ defmodule Filament.MixProject do
       {:ex_doc, "~> 0.36", only: [:dev, :docs], runtime: false},
       {:styler, "~> 1.4", only: [:dev, :test], runtime: false},
       # HTML parsing for test assertions
-      {:floki, "~> 0.38"},
+      {:floki, "~> 0.38", only: :test},
       # Phoenix LiveView dependencies for runtime and testing
       {:phoenix, "~> 1.7"},
       {:phoenix_live_view, "~> 1.0"},

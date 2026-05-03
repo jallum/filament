@@ -26,7 +26,6 @@ defmodule Filament do
     - `use_state/2` — local component state (re-renders on change)
     - `use_observable/2` — subscribe to an `Observable.GenServer` with an optional
       projection (only re-renders when the projected value changes)
-    - `use_memo/2` — memoised computation (recomputes only when deps change)
     - `use_effect/2` — side-effect with cleanup (run after render)
 
   **LiveView adapter** — use a Filament component tree as a LiveView:

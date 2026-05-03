@@ -59,7 +59,7 @@ Classify each assign:
 | `items`, `total` | Shared domain state | `Observable.GenServer` |
 | Form input, filter | Ephemeral UI state | `use_state` in component |
 | Checkout lock, seat hold | Resource claim | Custom hook (see [Hooks guide](hooks.html)) |
-| Derived totals, counts | Computed from domain | Computed in server or `use_memo` |
+| Derived totals, counts | Computed from domain | Computed in server |
 
 ## Phase 3: Extract domain state into an Observable.GenServer
 
