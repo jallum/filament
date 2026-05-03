@@ -13,21 +13,11 @@ defmodule Todo.Store do
     GenServer.start_link(__MODULE__, %{todos: [], next_id: 1}, opts)
   end
 
-  def add(pid, text) when is_binary(text) do
-    GenServer.call(pid, {:add, text})
-  end
-
-  def toggle(pid, id) do
-    GenServer.call(pid, {:toggle, id})
-  end
-
-  def remove(pid, id) do
-    GenServer.call(pid, {:remove, id})
-  end
-
-  def list(pid) do
-    GenServer.call(pid, :list)
-  end
+  def add(pid, text) when is_binary(text), do: GenServer.call(pid, {:add, text})
+  def toggle(pid, id), do: GenServer.call(pid, {:toggle, id})
+  def toggle_all(pid, completed), do: GenServer.call(pid, {:toggle_all, completed})
+  def remove(pid, id), do: GenServer.call(pid, {:remove, id})
+  def list(pid), do: GenServer.call(pid, :list)
 
   # Server callbacks
 
@@ -41,7 +31,7 @@ defmodule Todo.Store do
     todo = %{id: state.next_id, text: text, completed: false}
     new_state = %{state | todos: [todo | state.todos], next_id: state.next_id + 1}
     notify_observers(new_state.todos)
-    {:reply, :ok, new_state}
+    {:reply, {:ok, todo.id}, new_state}
   end
 
   @impl true
@@ -52,6 +42,14 @@ defmodule Todo.Store do
         other -> other
       end)
 
+    new_state = %{state | todos: new_todos}
+    notify_observers(new_state.todos)
+    {:reply, :ok, new_state}
+  end
+
+  @impl true
+  def handle_call({:toggle_all, completed}, _from, state) do
+    new_todos = Enum.map(state.todos, &%{&1 | completed: completed})
     new_state = %{state | todos: new_todos}
     notify_observers(new_state.todos)
     {:reply, :ok, new_state}

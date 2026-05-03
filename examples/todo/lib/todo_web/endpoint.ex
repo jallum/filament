@@ -21,6 +21,10 @@ defmodule TodoWeb.Endpoint do
     from: {:phoenix_live_view, "priv/static"},
     gzip: false
 
+  if code_reloading? do
+    plug Phoenix.CodeReloader
+  end
+
   plug Plug.Session, @session_options
   plug TodoWeb.Router
 end

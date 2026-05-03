@@ -213,6 +213,7 @@ defmodule TodoWeb.Layouts do
           .filters {
             display: flex;
             gap: 8px;
+            list-style: none;
           }
 
           .filters a {
@@ -297,8 +298,23 @@ defmodule TodoWeb.Layouts do
         <script src="/phoenix/phoenix.min.js"></script>
         <script src="/phoenix_live_view/phoenix_live_view.min.js"></script>
         <script>
+          let Hooks = {};
+          Hooks.AutoFocus = {
+            mounted() { this.el.focus() },
+            updated() {
+              if (this.el.dataset.clearKey !== this._clearKey) {
+                this._clearKey = this.el.dataset.clearKey;
+                this.el.value = "";
+                this.el.focus();
+              }
+            }
+          };
+
           let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
-          let liveSocket = new window.LiveView.LiveSocket("/live", window.Phoenix.Socket, {params: {_csrf_token: csrfToken}});
+          let liveSocket = new window.LiveView.LiveSocket("/live", window.Phoenix.Socket, {
+            params: {_csrf_token: csrfToken},
+            hooks: Hooks
+          });
           liveSocket.connect();
           window.liveSocket = liveSocket;
         </script>

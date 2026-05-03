@@ -10,7 +10,9 @@ config :todo, TodoWeb.Endpoint,
   ],
   pubsub_server: Todo.PubSub,
   live_view: [signing_salt: "todoexamplesalt"],
-  secret_key_base: "todo_example_secret_key_base_min_64_chars_xxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  secret_key_base: "todo_example_secret_key_base_min_64_chars_xxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  code_reloader: true,
+  reloadable_apps: [:todo, :filament]
 
 config :todo, :dev_routes, true
 

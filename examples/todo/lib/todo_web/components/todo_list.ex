@@ -12,10 +12,11 @@ defmodule TodoWeb.Components.TodoList do
     prop(:title, :string, default: "Todo List")
 
     def render(%{store: store, title: title}) do
-      raw = use_observable(store, nil, project: &Function.identity/1)
+      raw = use_observable(store, nil)
       todos = if raw == :uninitialized, do: [], else: raw
 
       {filter, set_filter} = use_state(:all)
+      {clear_key, bump_clear} = use_state(0)
       filtered = apply_filter(todos, filter)
 
       active_count = Enum.count(todos, &(!&1.completed))
@@ -25,19 +26,29 @@ defmodule TodoWeb.Components.TodoList do
       <section class="todoapp">
         <header class="header">
           <h1>{title}</h1>
-          <form phx-submit="add_todo">
+          <form on_submit={fn %{"text" => val} ->
+            if String.trim(val) != "", do: Todo.Store.add(store, val)
+            bump_clear.(:erlang.unique_integer([:positive]))
+          end}>
             <input
+              id="todo-input"
               name="text"
               class="new-todo"
               placeholder="What needs to be done?"
-              autofocus
+              data-clear-key={clear_key}
+              phx-hook="AutoFocus"
             />
           </form>
         </header>
 
         {if todos != [] do}
           <section class="main">
-            <input class="toggle-all" type="checkbox" checked={all_completed} />
+            <input
+              class="toggle-all"
+              type="checkbox"
+              checked={all_completed}
+              on_click={fn -> Todo.Store.toggle_all(store, !all_completed) end}
+            />
             <ul class="todo-list">
               {for todo <- filtered do}
                 <TodoItem todo={todo} on_toggle={fn -> Todo.Store.toggle(store, todo.id) end} on_remove={fn -> Todo.Store.remove(store, todo.id) end} />
@@ -52,14 +63,6 @@ defmodule TodoWeb.Components.TodoList do
         {end}
       </section>
       """
-    end
-
-    def handle_event("add_todo", %{"text" => text}, %{store: store} = props) do
-      if String.trim(text) != "" do
-        Todo.Store.add(store, text)
-      end
-
-      {props, :ok}
     end
 
     defp apply_filter(todos, :all), do: todos
