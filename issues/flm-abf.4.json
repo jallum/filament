@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-abf.1"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "flm-abf",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "I4: Guide — Resource Holds (use_hold, :DOWN lifecycle, Inventory example)",
   "type": "task",
-  "updated_at": "2026-05-01T20:59:04Z"
+  "updated_at": "2026-05-03T09:19:01Z"
 }
