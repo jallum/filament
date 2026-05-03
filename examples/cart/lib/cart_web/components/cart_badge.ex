@@ -2,9 +2,11 @@ defmodule CartWeb.Components.CartBadge do
   use Filament.Component
 
   defcomponent do
-    prop(:server, :any, default: Cart.Server)
+    prop(:session_id, :string, default: nil)
+    prop(:server, :any, default: nil)
 
-    def render(%{server: server}) do
+    def render(%{session_id: session_id, server: server}) do
+      server = server || Cart.Server.ensure_started(session_id)
       count = use_observable(server, project: &Cart.State.item_count/1, disconnected: 0)
 
       ~F"""

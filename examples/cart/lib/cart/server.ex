@@ -1,18 +1,27 @@
 defmodule Cart.Server do
   use Filament.Observable.GenServer
 
+  def via_registry(session_id), do: {:via, Registry, {Cart.Registry, session_id}}
+
+  def ensure_started(session_id) do
+    case DynamicSupervisor.start_child(Cart.DynamicSupervisor, {__MODULE__, [name: via_registry(session_id)]}) do
+      {:ok, pid} -> pid
+      {:error, {:already_started, pid}} -> pid
+    end
+  end
+
   # Public API
   def start_link(opts \\ []) do
-    {name, _} = Keyword.pop(opts, :name, __MODULE__)
+    {name, _} = Keyword.pop(opts, :name, nil)
     gen_opts = if name, do: [name: name], else: []
     GenServer.start_link(__MODULE__, %Cart.State{}, gen_opts)
   end
 
-  def add_item(server \\ __MODULE__, %Cart.Item{} = item) do
+  def add_item(server, %Cart.Item{} = item) do
     GenServer.call(server, {:add_item, item})
   end
 
-  def remove_item(server \\ __MODULE__, item_id) when is_binary(item_id) do
+  def remove_item(server, item_id) when is_binary(item_id) do
     GenServer.call(server, {:remove_item, item_id})
   end
 

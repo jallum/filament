@@ -1,10 +1,12 @@
-defmodule CartWeb.Components.CartPage do
+defmodule CartWeb.Components.Cart do
   use Filament.Component
 
   alias CartWeb.Components.CartBadge
-  alias CartWeb.Components.CartView
+  alias CartWeb.Components.CartItems
 
   defcomponent do
+    prop(:session_id, :string, required: true)
+
     defp products do
       [
         %{id: "apple", name: "Apple", price_cents: 99},
@@ -17,12 +19,12 @@ defmodule CartWeb.Components.CartPage do
       "$#{div(cents, 100)}.#{String.pad_leading(Integer.to_string(rem(cents, 100)), 2, "0")}"
     end
 
-    def render(_assigns) do
+    def render(%{session_id: session_id}) do
       ~F"""
       <div class="page">
         <header class="page-header">
           <h1>Shopping Demo</h1>
-          <CartBadge />
+          <CartBadge session_id={session_id} />
         </header>
 
         <section class="products">
@@ -31,13 +33,16 @@ defmodule CartWeb.Components.CartPage do
               <div class="product-name">{p.name}</div>
               <div class="product-price">{format_price(p.price_cents)}</div>
               <button class="btn-add" on_click={fn ->
-                Cart.Server.add_item(%Cart.Item{id: p.id, name: p.name, price_cents: p.price_cents})
+                Cart.Server.add_item(
+                  Cart.Server.via_registry(session_id),
+                  %Cart.Item{id: p.id, name: p.name, price_cents: p.price_cents}
+                )
               end}>Add to Cart</button>
             </div>
           {end}
         </section>
 
-        <CartView />
+        <CartItems session_id={session_id} />
       </div>
       """
     end

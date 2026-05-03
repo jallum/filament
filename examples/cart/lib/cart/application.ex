@@ -7,7 +7,8 @@ defmodule Cart.Application do
   def start(_type, _args) do
     children = [
       {Phoenix.PubSub, name: Cart.PubSub},
-      Cart.Server,
+      {Registry, keys: :unique, name: Cart.Registry},
+      {DynamicSupervisor, name: Cart.DynamicSupervisor, strategy: :one_for_one},
       CartWeb.Endpoint
     ]
 

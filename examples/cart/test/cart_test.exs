@@ -111,10 +111,10 @@ defmodule Cart.Test do
 
   # ── Rung 3: CartView with real Cart.Server ────────────────────────────────────
 
-  describe "CartView (rung-3)" do
+  describe "CartItems (rung-3)" do
     setup do
       server = start_supervised!(%{id: Cart.Server, start: {Cart.Server, :start_link, [[name: nil]]}})
-      {:ok, view} = mount(CartWeb.Components.CartView, %{server: server})
+      {:ok, view} = mount(CartWeb.Components.CartItems, %{server: server})
       %{server: server, view: view}
     end
 
