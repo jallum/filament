@@ -179,7 +179,8 @@ defmodule Filament.Hooks do
   When the server should be started by the component itself, omit the `server` argument
   and supply a `:start` function instead. Returns `{pid, value}` so the pid is available
   for mutations. When disconnected returns `{nil, disconnected_value}`.
-  - `:start`        — zero-arity fn called once on the first WebSocket render; must return a pid or `{:ok, pid}`
+  - `:start`        — zero-arity fn called once on the first WebSocket render (must return a pid or `{:ok, pid}`),
+                    or any GenServer name (pid, atom, `{:via, ...}`) used directly as the server
   - `:disconnected` — the *value* half of the `{nil, value}` tuple returned while disconnected
 
   Must be called at the top level of a component's `render/1`, in consistent order
@@ -214,8 +215,16 @@ defmodule Filament.Hooks do
   end
 
   defp do_use_observable(server, opts) do
-    start_fn = Keyword.get(opts, :start, nil)
-    start_mode = server == nil and is_function(start_fn, 0)
+    raw_start = Keyword.get(opts, :start, nil)
+    # Allow start: to be a 0-arity fn (starts a process) or any GenServer name
+    # (pid, atom, {:via, ...}) — wrap the latter so the rest of the path is uniform.
+    start_fn =
+      cond do
+        is_function(raw_start, 0) -> raw_start
+        raw_start != nil -> fn -> raw_start end
+        true -> nil
+      end
+    start_mode = server == nil and start_fn != nil
     request = Keyword.get(opts, :request, nil)
     project = Keyword.get(opts, :project, &Function.identity/1)
     disconnected = Keyword.get(opts, :disconnected, :disconnected)
