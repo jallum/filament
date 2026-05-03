@@ -10,6 +10,10 @@ defmodule Inventory.Server do
     GenServer.start_link(__MODULE__, initial_items, name: name)
   end
 
+  def list_items(server \\ __MODULE__) do
+    GenServer.call(server, :list_items)
+  end
+
   def get_item(server \\ __MODULE__, item_id) do
     GenServer.call(server, {:get_item, item_id})
   end
@@ -57,6 +61,10 @@ defmodule Inventory.Server do
   end
 
   @impl GenServer
+  def handle_call(:list_items, _from, state) do
+    {:reply, Map.values(state), state}
+  end
+
   def handle_call({:get_item, item_id}, _from, state) do
     {:reply, Map.get(state, item_id), state}
   end

@@ -8,40 +8,30 @@ defmodule InventoryWeb.Components.CheckoutLineItem do
     prop(:server, :any, default: Inventory.Server)
 
     def render(%{item_id: item_id, server: server}) do
-      {hold_acquired, _token} =
+      hold_acquired =
         try do
-          token = Hooks.use_hold(server, item_id)
-          {true, token}
+          Hooks.use_hold(server, item_id)
+          true
         rescue
-          Filament.HoldError ->
-            {false, nil}
+          Filament.HoldError -> false
         end
 
       item = Inventory.Server.get_item(server, item_id)
 
-      if !item do
-        ~F"""
-        <div>Item not found: {item_id}</div>
-        """
-      else
-        if hold_acquired do
-          ~F"""
-          <div>
-            <span>{item.name}</span>
-            <span>Available: {item.available}</span>
-            <span>Hold acquired</span>
-          </div>
-          """
-        else
-          ~F"""
-          <div>
-            <span>{item.name}</span>
-            <span>Available: {item.available}</span>
-            <span>Out of Stock</span>
-          </div>
-          """
-        end
-      end
+      ~F"""
+      <div class="inventory-item">
+        {if item do}
+          <strong>{item.name}</strong>
+          {if hold_acquired do}
+            <span class="status available">In Stock ({item.available} available)</span>
+          {else}
+            <span class="status out-of-stock">Out of Stock</span>
+          {end}
+        {else}
+          <em>Item not found: {item_id}</em>
+        {end}
+      </div>
+      """
     end
   end
 end
