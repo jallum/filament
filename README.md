@@ -6,25 +6,6 @@ to Elixir — so you can build rich real-time UIs without spreading state across
 socket assigns, `handle_event` callbacks, and manual PubSub wiring.
 
 ```elixir
-defmodule CartWeb.Components.CartBadge do
-  use Filament.Component
-
-  defcomponent do
-    prop(:cart_id, :string, required: true)
-
-    def render(%{cart_id: cart_id}) do
-      count = use_observable({:via, Registry, {Cart.Registry, cart_id}},
-        project: &Cart.State.item_count/1,
-        disconnected: 0
-      )
-
-      ~F"""
-      <span class="badge">{count} items</span>
-      """
-    end
-  end
-end
-
 defmodule CartWeb.Components.CartView do
   use Filament.Component
 
@@ -52,6 +33,25 @@ defmodule CartWeb.Components.CartView do
           {end}
         {end}
       </div>
+      """
+    end
+  end
+end
+
+defmodule CartWeb.Components.CartBadge do
+  use Filament.Component
+
+  defcomponent do
+    prop(:cart_id, :string, required: true)
+
+    def render(%{cart_id: cart_id}) do
+      count = use_observable({:via, Registry, {Cart.Registry, cart_id}},
+        project: &Cart.State.item_count/1,
+        disconnected: 0
+      )
+
+      ~F"""
+      <span class="badge">{count} items</span>
       """
     end
   end
