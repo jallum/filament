@@ -222,7 +222,9 @@ defmodule Filament.HooksTest do
 
   describe "register_event_handler/1" do
     test "raises when called outside render pass" do
-      assert_raise BadMapError, fn -> Hooks.register_event_handler(fn -> :action end) end
+      assert_raise ArgumentError,
+                   "hook called outside a render pass — hooks may only be called from render/1",
+                   fn -> Hooks.register_event_handler(fn -> :action end) end
     end
 
     test "stores handler and returns sequential wire ref" do
@@ -247,7 +249,9 @@ defmodule Filament.HooksTest do
 
   describe "event_at/2" do
     test "raises when called outside render pass" do
-      assert_raise BadMapError, fn -> Hooks.event_at(0, fn -> :action end) end
+      assert_raise ArgumentError,
+                   "hook called outside a render pass — hooks may only be called from render/1",
+                   fn -> Hooks.event_at(0, fn -> :action end) end
     end
 
     test "stores handler and returns wire ref" do

@@ -388,7 +388,10 @@ defmodule Filament.Hooks do
   @doc false
   @spec event_at(slot :: non_neg_integer(), handler :: function()) :: wire_ref :: String.t()
   def event_at(slot, handler) when is_function(handler) do
-    ctx = Process.get(:filament_render_context)
+    ctx =
+      Process.get(:filament_render_context) ||
+        raise ArgumentError, "hook called outside a render pass — hooks may only be called from render/1"
+
     fiber_id_str = to_string(ctx.fiber_id)
     new_handlers = Map.put(ctx.new_event_handlers, slot, handler)
     Process.put(:filament_render_context, %{ctx | new_event_handlers: new_handlers})
@@ -398,7 +401,10 @@ defmodule Filament.Hooks do
   @doc false
   @spec register_event_handler(handler :: function()) :: wire_ref :: String.t()
   def register_event_handler(handler) when is_function(handler) do
-    ctx = Process.get(:filament_render_context)
+    ctx =
+      Process.get(:filament_render_context) ||
+        raise ArgumentError, "hook called outside a render pass — hooks may only be called from render/1"
+
     idx = ctx.event_handler_index
     fiber_id_str = to_string(ctx.fiber_id)
 
