@@ -13,11 +13,11 @@ defmodule Collaboration.DocumentServer do
   defstruct [:doc_id, content: "", lock_holder: nil, presence: 0]
 
   @type t :: %__MODULE__{
-    doc_id: String.t(),
-    content: String.t(),
-    lock_holder: pid() | nil,
-    presence: non_neg_integer()
-  }
+          doc_id: String.t(),
+          content: String.t(),
+          lock_holder: pid() | nil,
+          presence: non_neg_integer()
+        }
 
   def start_link(opts \\ []) do
     doc_id = Keyword.fetch!(opts, :doc_id)
@@ -33,10 +33,6 @@ defmodule Collaboration.DocumentServer do
 
   def release_lock(server, holder_pid) do
     GenServer.call(server, {:release_lock, holder_pid})
-  end
-
-  def get_state(server) do
-    GenServer.call(server, :get_state)
   end
 
   # GenServer callbacks
@@ -90,11 +86,6 @@ defmodule Collaboration.DocumentServer do
     else
       {:reply, {:error, :not_holder}, state}
     end
-  end
-
-  @impl GenServer
-  def handle_call(:get_state, _from, state) do
-    {:reply, state, state}
   end
 
   # Private helpers

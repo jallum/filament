@@ -3,8 +3,9 @@ defmodule Cart.Server do
 
   # Public API
   def start_link(opts \\ []) do
-    name = Keyword.get(opts, :name, __MODULE__)
-    GenServer.start_link(__MODULE__, %Cart.State{}, name: name)
+    {name, _} = Keyword.pop(opts, :name, __MODULE__)
+    gen_opts = if name, do: [name: name], else: []
+    GenServer.start_link(__MODULE__, %Cart.State{}, gen_opts)
   end
 
   def add_item(server \\ __MODULE__, %Cart.Item{} = item) do
@@ -13,10 +14,6 @@ defmodule Cart.Server do
 
   def remove_item(server \\ __MODULE__, item_id) when is_binary(item_id) do
     GenServer.call(server, {:remove_item, item_id})
-  end
-
-  def get_state(server \\ __MODULE__) do
-    GenServer.call(server, :get_state)
   end
 
   # GenServer callbacks
@@ -45,10 +42,5 @@ defmodule Cart.Server do
     new_state = Cart.State.remove_item(state, item_id)
     notify_observers(new_state)
     {:reply, :ok, new_state}
-  end
-
-  @impl GenServer
-  def handle_call(:get_state, _from, state) do
-    {:reply, state, state}
   end
 end

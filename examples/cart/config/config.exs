@@ -7,7 +7,10 @@ config :cart, CartWeb.Endpoint,
   pubsub_server: Cart.PubSub,
   live_view: [signing_salt: "cartexamplesalt"],
   secret_key_base: "cart_example_secret_key_base_min_64_chars_xxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  render_errors: [formats: [html: CartWeb.ErrorHTML], layout: false]
+  render_errors: [formats: [html: CartWeb.ErrorHTML], layout: false],
+  code_reloader: true,
+  reloadable_apps: [:cart, :filament],
+  watchers: []
 
 config :phoenix, :json_library, JSON
 

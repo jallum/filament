@@ -113,7 +113,7 @@ defmodule Cart.Test do
 
   describe "CartView (rung-3)" do
     setup do
-      server = start_supervised!({Cart.Server, []})
+      server = start_supervised!(%{id: Cart.Server, start: {Cart.Server, :start_link, [[name: nil]]}})
       {:ok, view} = mount(CartWeb.Components.CartView, %{server: server})
       %{server: server, view: view}
     end
@@ -121,7 +121,7 @@ defmodule Cart.Test do
     test "renders empty cart", %{view: view} do
       text = render_text(view)
       assert text =~ "Your Cart"
-      assert text =~ "Total: 0 USD"
+      assert text =~ "Total: $0.00"
     end
 
     test "add_item updates rendered view", %{server: server, view: view} do
