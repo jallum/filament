@@ -10,7 +10,8 @@ defmodule Filament.MixProject do
       deps: deps(),
       docs: docs(),
       package: package(),
-      elixirc_paths: elixirc_paths(Mix.env())
+      elixirc_paths: elixirc_paths(Mix.env()),
+      test_paths: test_paths(Mix.env())
     ]
   end
 
@@ -27,6 +28,9 @@ defmodule Filament.MixProject do
     ]
 
   defp elixirc_paths(_), do: ["lib"]
+
+  defp test_paths(:test), do: ["test", "examples/todo/test"]
+  defp test_paths(_), do: ["test"]
 
   # Configure test paths to avoid ExUnit warnings for fixture/support files
   def cli do
