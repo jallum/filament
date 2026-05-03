@@ -1,6 +1,4 @@
 defmodule Filament.SigilFFormatter do
-  @dialyzer :no_behaviours
-
   @moduledoc """
   Format `~F` templates via `mix format`.
 
@@ -20,6 +18,8 @@ defmodule Filament.SigilFFormatter do
   alias Phoenix.LiveView.Tokenizer.ParseError
 
   require Logger
+
+  @dialyzer :no_behaviours
 
   defguard is_tag_open(tag_type)
            when tag_type in [:slot, :remote_component, :local_component, :tag]
