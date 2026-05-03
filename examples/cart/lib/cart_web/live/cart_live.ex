@@ -2,7 +2,7 @@ defmodule CartWeb.CartLive do
   use Filament.LiveView
 
   def mount(params, session, socket) do
-    socket = assign(socket, :session_id, session["_csrf_token"])
+    socket = assign(socket, :session_id, socket.id)
     super(params, session, socket)
   end
 
