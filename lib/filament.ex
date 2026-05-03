@@ -38,6 +38,15 @@ defmodule Filament do
         def root_component, do: MyApp.RootComponent
       end
 
+  ## Interop with existing LiveViews
+
+  To embed a Filament component inside an existing Phoenix LiveView, use
+  `Filament.LiveComponent`:
+
+      <.live_component module={Filament.LiveComponent} id="cart" component={CartView} />
+
+  See `Filament.LiveComponent` for the observable-forwarding requirement.
+
   ## Guides
 
   - "Getting Started" — first component, props, state, events, testing
