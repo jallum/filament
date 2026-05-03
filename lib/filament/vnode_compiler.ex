@@ -17,7 +17,8 @@ defmodule Filament.VNodeCompiler do
     in_scope = MapSet.new(Map.keys(caller.versioned_vars), fn {name, _ctx} -> name end)
     {transformed, reactive_vars} = transform_at_assigns(hoisted, in_scope)
 
-    assign_and_emit(transformed, reactive_vars)
+    in_scope_list = MapSet.to_list(in_scope)
+    assign_and_emit(transformed, {reactive_vars, in_scope_list})
   end
 
   # ─── JSX preprocessor ───────────────────────────────────────────────────────
@@ -323,8 +324,8 @@ defmodule Filament.VNodeCompiler do
   # Single-pass walk that assigns compile-time indices to every memo and event site
   # and emits memo_at/event_at calls directly. Does NOT recurse into fn literals,
   # so only the linear render body is affected (not PLV comprehension entry fns).
-  defp assign_and_emit(ast, reactive_vars) do
-    {result, _counters} = do_walk(ast, reactive_vars, {0, 0})
+  defp assign_and_emit(ast, rv) do
+    {result, _counters} = do_walk(ast, rv, {0, 0})
     result
   end
 
@@ -377,7 +378,7 @@ defmodule Filament.VNodeCompiler do
   defp emit_if_needed(
          {{:., _, [{:__aliases__, _, [:Phoenix, :LiveView, :Engine]}, :live_to_iodata]}, _,
           [inner]} = node,
-         reactive_vars,
+         {reactive_vars, _in_scope},
          {t_ctr, e_ctr}
        ) do
     deps = compute_deps(inner, reactive_vars)
@@ -401,12 +402,12 @@ defmodule Filament.VNodeCompiler do
   defp emit_if_needed(
          {{:., _, [{:__aliases__, _, [:Filament, :Hooks]}, :register_event_handler]}, _,
           [fn_node]},
-         reactive_vars,
+         {_reactive_vars, in_scope},
          {t_ctr, e_ctr}
        ) do
     case fn_node do
       {:fn, _, _} ->
-        deps = compute_closure_deps(fn_node, reactive_vars)
+        deps = compute_closure_deps(fn_node, in_scope)
         dep_vars = names_to_var_ast(deps)
 
         memoized =
@@ -517,10 +518,10 @@ defmodule Filament.VNodeCompiler do
 
   # ─── Dependency computation ───────────────────────────────────────────────────
 
-  defp compute_closure_deps(ast, reactive_vars) do
+  defp compute_closure_deps(ast, in_scope) do
     collect_variables_deep(ast)
     |> MapSet.new()
-    |> MapSet.intersection(MapSet.new(reactive_vars))
+    |> MapSet.intersection(MapSet.new(in_scope))
     |> MapSet.to_list()
   end
 
