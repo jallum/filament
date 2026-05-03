@@ -6,29 +6,31 @@ defmodule TodoWeb.Components.TodoList do
 
   alias TodoWeb.Components.FilterBar
   alias TodoWeb.Components.TodoItem
+  alias Todo.Store
 
   defcomponent do
-    prop(:store, :any, required: true)
     prop(:title, :string, default: "Todo List")
 
-    def render(%{store: store, title: title}) do
-      todos = use_observable(store, disconnected: [])
-
+    def render(%{title: title}) do
+      {store, todos} = use_observable(start: fn -> Store.start_link([]) end, disconnected: [])
       {filter, set_filter} = use_state(:all)
       {clear_key, bump_clear} = use_state(0)
+
       filtered = apply_filter(todos, filter)
 
       active_count = Enum.count(todos, &(!&1.completed))
       all_completed = todos != [] and Enum.all?(todos, & &1.completed)
 
+      on_submit = fn %{"text" => val} ->
+        if store && String.trim(val) != "", do: Store.add(store, val)
+        bump_clear.(clear_key + 1)
+      end
+
       ~F"""
       <section class="todoapp">
         <header class="header">
           <h1>{title}</h1>
-          <form on_submit={fn %{"text" => val} ->
-            if String.trim(val) != "", do: Todo.Store.add(store, val)
-            bump_clear.(:erlang.unique_integer([:positive]))
-          end}>
+          <form on_submit={on_submit}>
             <input
               id="todo-input"
               name="text"
@@ -46,18 +48,26 @@ defmodule TodoWeb.Components.TodoList do
               class="toggle-all"
               type="checkbox"
               checked={all_completed}
-              on_click={fn -> Todo.Store.toggle_all(store, !all_completed) end}
+              on_click={fn -> Store.toggle_all(store, !all_completed) end}
             />
             <ul class="todo-list">
               {for todo <- filtered do}
-                <TodoItem todo={todo} on_toggle={fn -> Todo.Store.toggle(store, todo.id) end} on_remove={fn -> Todo.Store.remove(store, todo.id) end} />
+                <TodoItem
+                  todo={todo}
+                  on_toggle={fn -> Store.toggle(store, todo.id) end}
+                  on_remove={fn -> Store.remove(store, todo.id) end}
+                />
               {end}
             </ul>
           </section>
 
           <footer class="footer">
             <span class="todo-count"><strong>{active_count}</strong> item(s) left</span>
-            <FilterBar filters={[all: "All", active: "Active", completed: "Completed"]} default={:all} on_change={set_filter} />
+            <FilterBar
+              filters={[all: "All", active: "Active", completed: "Completed"]}
+              default={:all}
+              on_change={set_filter}
+            />
           </footer>
         {end}
       </section>

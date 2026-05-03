@@ -109,7 +109,9 @@ def render(%{server: server}) do
 end
 ```
 
-`use_observable/2` signature:
+`use_observable` has two calling forms.
+
+**Server form** — when the server is already running (e.g. a singleton or passed as a prop):
 
 ```elixir
 use_observable(server, opts \\ [])
@@ -121,6 +123,34 @@ use_observable(server, opts \\ [])
     scope the subscription (default `nil`).
   - `:project` — a one-arity function applied to each new state before delivery.
   - `:disconnected` — value returned before the WebSocket connects (default `:disconnected`).
+
+**Start form** — when the component owns the server's lifecycle:
+
+```elixir
+use_observable(start: fn -> ... end, opts)
+```
+
+- `:start` — zero-arity fn called once on the first WebSocket render; returns a pid
+  or `{:ok, pid}`. The process is started with `start_link`, so it is linked to the
+  LiveView and terminates with it automatically.
+- Same `:request`, `:project`, and `:disconnected` opts as the server form.
+
+Returns `{pid, value}` so the pid is available for mutations. While disconnected
+returns `{nil, disconnected_value}`.
+
+```elixir
+{store, todos} = use_observable(start: fn -> Todo.Store.start_link([]) end, disconnected: [])
+```
+
+This eliminates the need to start the server in `mount/3` and thread it as a prop —
+the LiveView can reduce to:
+
+```elixir
+defmodule TodoWeb.TodoLive do
+  use Filament.LiveView
+  def root_component, do: TodoWeb.Components.TodoList
+end
+```
 
 On the **first render** (HTTP pre-connect), `use_observable` returns `:disconnected`
 (or your `disconnected:` override) because subscribing during an HTTP render would

@@ -77,8 +77,8 @@ Key points:
 `TodoList` component uses it to track the active filter:
 
 ```elixir
-def render(%{store: store, title: title}) do
-  todos = use_observable(store, disconnected: [])
+def render(%{title: title}) do
+  {store, todos} = use_observable(start: fn -> Todo.Store.start_link([]) end, disconnected: [])
 
   {filter, set_filter} = use_state(:all)
   filtered = apply_filter(todos, filter)
@@ -186,39 +186,27 @@ defmodule Filament.Examples.TodoTest do
   import Filament.Test
 
   describe "TodoList component" do
-    setup do
-      name = :"todo_store_#{System.unique_integer([:positive])}"
-      store = start_supervised!({ Todo.Store, [name: name] })
-      {:ok, _view} = mount(TodoWeb.Components.TodoList, %{store: store})
-      %{store: store}
+    test "renders empty state on first mount" do
+      {:ok, view} = mount(TodoWeb.Components.TodoList, %{})
+      refute view.rendered_html =~ "<li"
     end
 
-    test "renders empty state on first mount", %{store: store} do
-      {:ok, view} = mount(TodoWeb.Components.TodoList, %{store: store})
-      html = view.rendered_html
-      refute html =~ "<li"
-    end
-
-    test "renders todo items from store", %{store: store} do
-      {:ok, _} = Todo.Store.add(store, "First task")
-      {:ok, _} = Todo.Store.add(store, "Second task")
-
-      {:ok, view} = mount(TodoWeb.Components.TodoList, %{store: store})
+    test "renders todo items after submission" do
+      {:ok, view} = mount(TodoWeb.Components.TodoList, %{})
+      {:ok, view} = submit(view, "form.header form", %{"text" => "First task"})
+      {:ok, view} = submit(view, "form.header form", %{"text" => "Second task"})
 
       text = render_text(view)
       assert text =~ "First task"
       assert text =~ "Second task"
     end
 
-    test "completed items have 'completed' class", %{store: store} do
-      {:ok, _} = Todo.Store.add(store, "Done task")
-      [item | _] = Todo.Store.list(store)
-      :ok = Todo.Store.toggle(store, item.id)
+    test "toggling a todo marks it completed" do
+      {:ok, view} = mount(TodoWeb.Components.TodoList, %{})
+      {:ok, view} = submit(view, "form.header form", %{"text" => "Done task"})
+      {:ok, view} = click(view, ".todo-list li input[type=checkbox]")
 
-      {:ok, view} = mount(TodoWeb.Components.TodoList, %{store: store})
-      html = view.rendered_html
-
-      assert html =~ "class=\"completed"
+      assert view.rendered_html =~ "class=\"completed"
     end
   end
 end

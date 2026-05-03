@@ -163,11 +163,24 @@ defmodule Filament.Hooks do
   @doc """
   Subscribe this fiber to `server`, returning the current projected value.
 
-  - `server`  — PID or registered name of the observable GenServer
-  - `opts`    — keyword list:
-      `:request`      — passed to `handle_subscribe/3` (default `nil`)
-      `:project`      — `(state :: term() -> term())` projection function (default identity)
-      `:disconnected` — value to return before the WebSocket connects (default `:disconnected`)
+  ## Server form
+
+      use_observable(server, opts \\ [])
+
+  Returns the current projected value. Options:
+  - `:request`      — passed to `handle_subscribe/3` (default `nil`)
+  - `:project`      — `(state -> term())` projection applied to each update (default identity)
+  - `:disconnected` — value returned before the WebSocket connects (default `:disconnected`)
+
+  ## Start form
+
+      use_observable(start: fn -> ... end, opts)
+
+  When the server should be started by the component itself, omit the `server` argument
+  and supply a `:start` function instead. Returns `{pid, value}` so the pid is available
+  for mutations. When disconnected returns `{nil, disconnected_value}`.
+  - `:start`        — zero-arity fn called once on the first WebSocket render; must return a pid or `{:ok, pid}`
+  - `:disconnected` — the *value* half of the `{nil, value}` tuple returned while disconnected
 
   Must be called at the top level of a component's `render/1`, in consistent order
   across renders (like all hooks). Do not call inside conditionals or loops.
@@ -175,26 +188,66 @@ defmodule Filament.Hooks do
   ## Examples
 
       counter = use_observable(CounterServer, project: fn s -> s.count end)
-      todos   = use_observable(store, disconnected: [])
+
+      {store, todos} = use_observable(start: fn -> Todo.Store.start_link!([]) end, disconnected: [])
   """
   @spec use_observable(
           server :: GenServer.server(),
           opts :: [request: term(), project: (term() -> term()), disconnected: term()]
         ) :: term()
-  def use_observable(server, opts \\ []) do
-    request      = Keyword.get(opts, :request, nil)
-    project      = Keyword.get(opts, :project, &Function.identity/1)
+  @spec use_observable(
+          opts :: [
+            start: (-> pid()),
+            request: term(),
+            project: (term() -> term()),
+            disconnected: term()
+          ]
+        ) :: {pid() | nil, term()}
+  def use_observable(server_or_opts, opts \\ [])
+
+  def use_observable(opts, []) when is_list(opts) do
+    do_use_observable(nil, opts)
+  end
+
+  def use_observable(server, opts) do
+    do_use_observable(server, opts)
+  end
+
+  defp do_use_observable(server, opts) do
+    start_fn = Keyword.get(opts, :start, nil)
+    start_mode = server == nil and is_function(start_fn, 0)
+    request = Keyword.get(opts, :request, nil)
+    project = Keyword.get(opts, :project, &Function.identity/1)
     disconnected = Keyword.get(opts, :disconnected, :disconnected)
     {slot_index, previous, ctx} = use_slot(:uninitialized)
-    server = Map.get(ctx.observable_stubs, server, server)
 
     # Skip subscription during disconnected (HTTP static) mounts — subscribing
     # in the HTTP render creates zombie subscribers that inflate presence counts
     # and race with the real WebSocket connection.
     if not ctx.subscribe_enabled do
       commit_slot(slot_index, :uninitialized)
-      disconnected
+      if start_mode, do: {nil, disconnected}, else: disconnected
     else
+      # Resolve the server pid: explicit arg > reuse from slot > call start:
+      server =
+        cond do
+          server != nil ->
+            Map.get(ctx.observable_stubs, server, server)
+
+          match?({:subscribed, _pid, _}, previous) ->
+            {:subscribed, pid, _} = previous
+            pid
+
+          start_mode ->
+            case start_fn.() do
+              {:ok, pid} -> pid
+              pid -> pid
+            end
+
+          true ->
+            raise ArgumentError, "use_observable requires a server or a start: function"
+        end
+
       value =
         case previous do
           :uninitialized ->
@@ -225,7 +278,7 @@ defmodule Filament.Hooks do
         end
 
       commit_slot(slot_index, {:subscribed, server, value})
-      value
+      if start_mode, do: {server, value}, else: value
     end
   end
 
