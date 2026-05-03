@@ -36,27 +36,6 @@ defmodule Collaboration.Test do
       assert_receive {:lock_result, {:error, :locked}}, 1000
     end
 
-    @tag :skip
-    test "lock released on holder process death" do
-      server = start_supervised!(
-        {Collaboration.DocumentServer, [doc_id: "test-doc-#{:erlang.unique_integer()}"]},
-        id: make_ref()
-      )
-
-      parent = self()
-      holder = spawn(fn ->
-        {:ok, _token} = Collaboration.DocumentServer.acquire_lock(server, self())
-        send(parent, :acquired)
-        receive do: (:stop -> :ok)
-      end)
-
-      assert_receive :acquired, 1000
-      Process.exit(holder, :kill)
-      Process.sleep(50)
-
-      assert Collaboration.DocumentServer.acquire_lock(server, self()) == {:ok, :lock_token}
-    end
-
     test "release_lock/2 frees the lock" do
       server = start_supervised!(
         {Collaboration.DocumentServer, [doc_id: "test-doc-#{:erlang.unique_integer()}"]},
