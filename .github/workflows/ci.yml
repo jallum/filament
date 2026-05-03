@@ -34,16 +34,16 @@ jobs:
             ${{ runner.os }}-mix-
 
       - name: Install dependencies
-        run: cd filament && mix deps.get
+        run: mix deps.get
 
       - name: Compile
-        run: cd filament && mix compile --warnings-as-undef
+        run: mix compile --warnings-as-errors
 
       - name: Run tests
-        run: cd filament && mix test
+        run: mix test
 
       - name: Credo
-        run: cd filament && mix credo --strict
+        run: mix credo --strict
 
       - name: Dialyzer
-        run: cd filament && mix dialyzer
+        run: mix dialyzer
