@@ -1,7 +1,6 @@
 defmodule CollaborationWeb.Components.DocumentEditor do
   use Filament.Component
 
-  import Filament.Hooks
 
   defcomponent do
     prop(:doc_id, :string, required: true)

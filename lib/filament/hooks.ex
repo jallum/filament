@@ -419,11 +419,6 @@ defmodule Filament.Hooks do
   def register_event_handler(handler) when is_function(handler) do
     case Process.get(:filament_render_context) do
       nil ->
-        # Called outside a Filament render pass — Phoenix's diff engine is
-        # re-evaluating the previously-rendered struct's dynamic closure.
-        # Return a stable ref using a per-process diff-phase counter so the
-        # wire ref format stays valid (fiber_id:index). The real handlers were
-        # already committed to the fiber tree during the render pass.
         {fiber_id, idx} = Process.get(:filament_diff_eval_state, {"unknown", 0})
         Process.put(:filament_diff_eval_state, {fiber_id, idx + 1})
         "#{fiber_id}:#{idx}"

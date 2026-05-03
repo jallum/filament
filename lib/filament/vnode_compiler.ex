@@ -83,20 +83,28 @@ defmodule Filament.VNodeCompiler do
   end
 
   # Walk the AST looking for comprehension entry tuples — {nil, var_map, entry_fn} —
-  # and hoist any register_event_handler(fn_expr) calls out of the entry fn body to
-  # new variable bindings immediately before the fn. The fn closes over those vars.
+  # and hoist any register_event_handler(fn_expr) or TagEngine.component(...) calls
+  # out of the entry fn body to new variable bindings immediately before the fn.
+  # The fn closes over those vars.
+  #
+  # This prevents PLV's diff engine from re-calling component renders or event
+  # registrations outside the Filament render context (which would produce wrong
+  # wire refs using the stale diff_eval_state fallback).
   defp hoist_comprehension_handlers(ast) do
     Macro.postwalk(ast, fn
       {:{}, tuple_meta,
        [nil, map_expr, {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body]}]}] = entry_parts} ->
-        {new_fn_body, hoisted} = extract_reg_handlers(fn_body)
+        {fn_body1, reg_hoisted} = extract_reg_handlers(fn_body)
+        {fn_body2, comp_hoisted} = extract_component_calls(fn_body1)
 
-        if hoisted == [] do
+        all_hoisted = reg_hoisted ++ comp_hoisted
+
+        if all_hoisted == [] do
           {:{}, tuple_meta, entry_parts}
         else
-          new_fn = {:fn, fn_meta, [{:->, arrow_meta, [fn_args, new_fn_body]}]}
+          new_fn = {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body2]}]}
           new_tuple = {:{}, tuple_meta, [nil, map_expr, new_fn]}
-          assigns = Enum.map(hoisted, fn {var, expr} -> {:=, [], [var, expr]} end)
+          assigns = Enum.map(all_hoisted, fn {var, expr} -> {:=, [], [var, expr]} end)
           {:__block__, [], assigns ++ [new_tuple]}
         end
 
@@ -124,6 +132,31 @@ defmodule Filament.VNodeCompiler do
              call_meta, [fn_expr]}
 
           {var_ast, {counter + 1, [{var_ast, original} | acc]}}
+
+        other, acc ->
+          {other, acc}
+      end)
+
+    {new_body, Enum.reverse(hoisted)}
+  end
+
+  # Replace Filament.TagEngine.component(...) calls in fn_body with fresh variable refs.
+  # Returns {new_fn_body, [{var_ast, original_component_expr}]}.
+  #
+  # Child component renders must happen eagerly (with the Filament render context
+  # active) so their wire refs are computed correctly. PLV's diff engine re-calls
+  # comprehension entry fns outside the render context, so any component call left
+  # inside an entry fn would produce wrong "root:0" wire refs.
+  defp extract_component_calls(fn_body) do
+    base = System.unique_integer([:positive, :monotonic])
+
+    {new_body, {_counter, hoisted}} =
+      Macro.postwalk(fn_body, {base, []}, fn
+        {{:., _, [{:__aliases__, _, [:Filament, :TagEngine]}, :component]}, _, _} = node,
+        {counter, acc} ->
+          var_name = :"fchild_#{counter}"
+          var_ast = {var_name, [], nil}
+          {var_ast, {counter + 1, [{var_ast, node} | acc]}}
 
         other, acc ->
           {other, acc}

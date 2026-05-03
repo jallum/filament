@@ -111,7 +111,8 @@ defmodule Filament.Renderer do
   @spec render_component_child(RenderContext.t(), module(), map()) ::
           Phoenix.LiveView.Rendered.t()
   def render_component_child(parent_ctx, mod, props) do
-    index = parent_ctx.child_component_index
+    indices = parent_ctx.child_component_indices
+    index = Map.get(indices, mod, 0)
     parent_fiber = Map.get(parent_ctx.fiber_tree, parent_ctx.fiber_id)
 
     child_id =
@@ -162,7 +163,7 @@ defmodule Filament.Renderer do
       parent_ctx
       | new_fibers: updated_new_fibers,
         pending_effects: parent_ctx.pending_effects ++ child_pending_effects,
-        child_component_index: index + 1
+        child_component_indices: Map.put(indices, mod, index + 1)
     }
 
     Process.put(:filament_render_context, updated_ctx)

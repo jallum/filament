@@ -33,8 +33,10 @@ defmodule Filament.RenderContext do
     subscribe_enabled: true,
     # %{non_neg_integer() => term()} - existing hook slot state for new child fibers
     hook_slots: %{},
-    # non_neg_integer() - counter for unique child component discriminators within this render
-    child_component_index: 0
+    # %{module() => non_neg_integer()} - per-module counter for stable child fiber IDs.
+    # Using a per-module counter means the Nth instance of a given component keeps a
+    # stable ID regardless of how many other component types were rendered before it.
+    child_component_indices: %{}
   ]
 
   @type t :: %__MODULE__{
@@ -50,6 +52,6 @@ defmodule Filament.RenderContext do
           observable_stubs: %{term() => pid()},
           subscribe_enabled: boolean(),
           hook_slots: %{non_neg_integer() => term()},
-          child_component_index: non_neg_integer()
+          child_component_indices: %{module() => non_neg_integer()}
         }
 end

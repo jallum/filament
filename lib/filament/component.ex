@@ -27,6 +27,7 @@ defmodule Filament.Component do
     quote do
       import Filament.Defcomponent
       import Filament.SigilF
+      import Filament.Hooks
     end
   end
 end

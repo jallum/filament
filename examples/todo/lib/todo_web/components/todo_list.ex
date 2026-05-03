@@ -4,7 +4,6 @@ defmodule TodoWeb.Components.TodoList do
   """
   use Filament.Component
 
-  import Filament.Hooks
   alias TodoWeb.Components.FilterBar
   alias TodoWeb.Components.TodoItem
 
@@ -25,7 +24,7 @@ defmodule TodoWeb.Components.TodoList do
       ~F"""
       <section class="todoapp">
         <header class="header">
-          <h1>{title || "Todo List"}</h1>
+          <h1>{title}</h1>
           <form phx-submit="add_todo">
             <input
               name="text"
