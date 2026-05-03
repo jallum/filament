@@ -1,4 +1,5 @@
 defmodule CartWeb.CartLive do
+  @moduledoc false
   use Filament.LiveView
 
   def mount(params, session, socket) do

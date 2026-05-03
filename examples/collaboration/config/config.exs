@@ -12,6 +12,6 @@ config :collaboration, CollaborationWeb.Endpoint,
   reloadable_apps: [:collaboration, :filament],
   watchers: []
 
-config :phoenix, :json_library, JSON
-
 config :logger, level: :warning
+
+config :phoenix, :json_library, JSON

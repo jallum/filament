@@ -18,6 +18,8 @@ defmodule Filament.Test do
       assert render_text(view) =~ "Count: 1"
   """
 
+  alias Phoenix.LiveView.Rendered
+
   defstruct [
     :component,
     :props,
@@ -32,7 +34,7 @@ defmodule Filament.Test do
           component: module(),
           props: map(),
           fiber_tree: map(),
-          rendered: Phoenix.LiveView.Rendered.t(),
+          rendered: Rendered.t(),
           rendered_html: String.t(),
           owner_pid: pid(),
           stubs: %{term() => pid()}
@@ -102,7 +104,7 @@ defmodule Filament.Test do
 
       elements ->
         Enum.any?(elements, fn el ->
-          class_attr = Floki.attribute(el, "class") |> List.first() || ""
+          class_attr = el |> Floki.attribute("class") |> List.first() || ""
           class_name in String.split(class_attr, ~r/\s+/, trim: true)
         end)
     end
@@ -185,7 +187,7 @@ defmodule Filament.Test do
   # ── HTML rendering helpers ────────────────────────────────────────────────
 
   @doc false
-  def rendered_to_string(%Phoenix.LiveView.Rendered{static: static, dynamic: dynamic}) do
+  def rendered_to_string(%Rendered{static: static, dynamic: dynamic}) do
     old_ctx = Process.get(:filament_render_context)
 
     # Set up a minimal context so register_event_handler works during string
@@ -205,7 +207,7 @@ defmodule Filament.Test do
 
     try do
       parts = dynamic.(false)
-      interleave(static, parts) |> IO.iodata_to_binary()
+      static |> interleave(parts) |> IO.iodata_to_binary()
     after
       if old_ctx do
         Process.put(:filament_render_context, old_ctx)
@@ -225,7 +227,7 @@ defmodule Filament.Test do
   defp part_to_iodata(nil), do: ""
   defp part_to_iodata(s) when is_binary(s), do: s
   defp part_to_iodata({:safe, data}), do: data
-  defp part_to_iodata(%Phoenix.LiveView.Rendered{} = r), do: rendered_to_string(r)
+  defp part_to_iodata(%Rendered{} = r), do: rendered_to_string(r)
   defp part_to_iodata(list) when is_list(list), do: list
   defp part_to_iodata(other), do: Phoenix.HTML.Engine.encode_to_iodata!(other)
 

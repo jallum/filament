@@ -4,9 +4,11 @@ defmodule Filament.FiberTest do
   alias Filament.Fiber
 
   defmodule TestComponent do
+    @moduledoc false
   end
 
   defmodule AnotherComponent do
+    @moduledoc false
   end
 
   describe "new/1" do

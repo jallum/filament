@@ -1,7 +1,9 @@
 defmodule Filament.Renderer do
   @moduledoc false
 
-  alias Filament.{Fiber, RenderContext}
+  alias Filament.Fiber
+  alias Filament.RenderContext
+  alias Phoenix.LiveView.Rendered
 
   @doc """
   Renders a component with the given props and context.
@@ -15,8 +17,8 @@ defmodule Filament.Renderer do
   6. Return {Rendered, new_hook_slots, pending_effects, new_fibers}
   """
   @spec render(module(), map(), RenderContext.t()) ::
-          {Phoenix.LiveView.Rendered.t(), %{non_neg_integer() => term()}, list(),
-           %{String.t() => Fiber.t()}, %{non_neg_integer() => function()}}
+          {Rendered.t(), %{non_neg_integer() => term()}, list(), %{String.t() => Fiber.t()},
+           %{non_neg_integer() => function()}}
   def render(component_module, props, %RenderContext{} = context) do
     # Apply prop defaults for any props not supplied.
     # Code.ensure_loaded is required because function_exported?/3 returns false
@@ -64,7 +66,7 @@ defmodule Filament.Renderer do
       # If render returns a vnode instead of Rendered, recursively render it
       rendered =
         case result do
-          %Phoenix.LiveView.Rendered{} ->
+          %Rendered{} ->
             result
 
           vnode when is_tuple(vnode) ->
@@ -103,7 +105,7 @@ defmodule Filament.Renderer do
   so that sub-components get isolated fibers (and thus isolated hook state).
   """
   @spec render_component_child(RenderContext.t(), module(), map()) ::
-          Phoenix.LiveView.Rendered.t()
+          Rendered.t()
   def render_component_child(parent_ctx, mod, props) do
     indices = parent_ctx.child_component_indices
     index = Map.get(indices, mod, 0)
@@ -134,8 +136,8 @@ defmodule Filament.Renderer do
       hook_slots: hook_slots
     }
 
-    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers,
-     child_event_handlers} = render(mod, props, child_ctx)
+    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers, child_event_handlers} =
+      render(mod, props, child_ctx)
 
     child_fiber = %Fiber{
       id: child_id,
@@ -209,8 +211,8 @@ defmodule Filament.Renderer do
     # Save parent context before child render/3 overwrites and deletes it
     parent_ctx = Process.get(:filament_render_context)
 
-    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers,
-     child_event_handlers} = render(mod, props, child_context)
+    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers, child_event_handlers} =
+      render(mod, props, child_context)
 
     child_fiber = %Fiber{
       id: child_id,

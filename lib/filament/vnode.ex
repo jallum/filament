@@ -42,8 +42,7 @@ defmodule Filament.VNode do
     Enum.each(children, &validate_node!(&1, in_keyed_list?))
   end
 
-  defp validate_node!({:component, module, _props, key}, true = _in_keyed_list?)
-       when is_nil(key) do
+  defp validate_node!({:component, module, _props, key}, true = _in_keyed_list?) when is_nil(key) do
     raise Error, message: "component #{inspect(module)} inside keyed_list must have a non-nil key"
   end
 

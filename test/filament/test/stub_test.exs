@@ -1,11 +1,13 @@
 defmodule Filament.Test.StubTest do
   use ExUnit.Case
+
+  alias Filament.Observable.Subscriber
   alias Filament.Test.Stub
 
   test "initial value returned via subscribe" do
     {:ok, stub} = Stub.start(fn _req -> 42 end)
 
-    sub = %Filament.Observable.Subscriber{
+    sub = %Subscriber{
       pid: self(),
       fiber_id: :test,
       slot_index: 0,
@@ -18,7 +20,7 @@ defmodule Filament.Test.StubTest do
   test "push delivers update to subscriber" do
     {:ok, stub} = Stub.start(fn _req -> 0 end)
 
-    sub = %Filament.Observable.Subscriber{
+    sub = %Subscriber{
       pid: self(),
       fiber_id: :fiber_a,
       slot_index: 1,
@@ -33,7 +35,7 @@ defmodule Filament.Test.StubTest do
   test "push with projection — change-or-bust applies" do
     {:ok, stub} = Stub.start(fn _req -> 0 end)
 
-    sub = %Filament.Observable.Subscriber{
+    sub = %Subscriber{
       pid: self(),
       fiber_id: :fiber_b,
       slot_index: 0,

@@ -1,6 +1,9 @@
 defmodule Filament.LiveViewTest do
   use ExUnit.Case, async: false
 
+  alias Phoenix.HTML.Safe
+  alias Phoenix.LiveView.Lifecycle
+  alias Phoenix.LiveView.Rendered
   alias Phoenix.LiveView.Socket
 
   # Helper: create a socket with proper lifecycle structures for attach_hook
@@ -9,13 +12,14 @@ defmodule Filament.LiveViewTest do
       assigns: Map.merge(%{__changed__: %{}}, assigns),
       private: %{
         live_temp: %{},
-        lifecycle: Phoenix.LiveView.Lifecycle.__struct__()
+        lifecycle: Lifecycle.__struct__()
       }
     }
   end
 
   # Define test modules inline
   defmodule CounterComponent do
+    @moduledoc false
     use Filament.Component
 
     defcomponent do
@@ -34,7 +38,7 @@ defmodule Filament.LiveViewTest do
   defmodule CounterLiveView do
     use Filament.LiveView
 
-    def root_component(), do: CounterComponent
+    def root_component, do: CounterComponent
   end
 
   describe "module injection" do
@@ -70,10 +74,10 @@ defmodule Filament.LiveViewTest do
       {:ok, socket} = CounterLiveView.mount(%{}, %{}, socket)
 
       rendered = CounterLiveView.render(socket.assigns)
-      assert %Phoenix.LiveView.Rendered{} = rendered
+      assert %Rendered{} = rendered
 
       # Convert to HTML and verify
-      html = Phoenix.HTML.Safe.to_iodata(rendered) |> IO.iodata_to_binary()
+      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "Counter: 5"
     end
 
@@ -83,7 +87,7 @@ defmodule Filament.LiveViewTest do
       {:ok, socket} = CounterLiveView.mount(%{}, %{}, socket)
 
       rendered = CounterLiveView.render(socket.assigns)
-      html = Phoenix.HTML.Safe.to_iodata(rendered) |> IO.iodata_to_binary()
+      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
 
       refute html =~ ~r/filament:/
       refute html =~ ~r/_filament/
@@ -101,7 +105,7 @@ defmodule Filament.LiveViewTest do
       assert socket.assigns._filament_tree["root"]
 
       assert Map.has_key?(socket.assigns, :_filament_rendered)
-      assert %Phoenix.LiveView.Rendered{} = socket.assigns._filament_rendered
+      assert %Rendered{} = socket.assigns._filament_rendered
 
       assert Map.has_key?(socket.assigns, :_filament_pending_effects)
       assert socket.assigns._filament_pending_effects == []
@@ -118,29 +122,29 @@ defmodule Filament.LiveViewTest do
 
   describe "handle_event/3" do
     test "handles filament: prefixed events" do
-      socket = %Phoenix.LiveView.Socket{
+      socket = %Socket{
         assigns: %{
           count: 0,
           _filament_tree: %{},
-          _filament_rendered: %Phoenix.LiveView.Rendered{},
+          _filament_rendered: %Rendered{},
           __changed__: %{}
         },
-        private: %{live_temp: %{}, lifecycle: Phoenix.LiveView.Lifecycle.__struct__()}
+        private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}
       }
 
       assert {:noreply, _socket} = CounterLiveView.handle_event("filament:test", %{}, socket)
     end
 
     test "forwards regular events to root component when handle_event/3 is defined" do
-      socket = %Phoenix.LiveView.Socket{
+      socket = %Socket{
         assigns: %{
           count: 0,
           _filament_tree: %{"root" => %{component: CounterComponent, props: %{count: 0}}},
-          _filament_rendered: %Phoenix.LiveView.Rendered{},
+          _filament_rendered: %Rendered{},
           _filament_pending_effects: [],
           __changed__: %{}
         },
-        private: %{live_temp: %{}, lifecycle: Phoenix.LiveView.Lifecycle.__struct__()}
+        private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}
       }
 
       # Counter component doesn't define handle_event, so this should be a noop
@@ -150,14 +154,14 @@ defmodule Filament.LiveViewTest do
 
   describe "handle_info/2" do
     test "handles filament_observable_update messages" do
-      socket = %Phoenix.LiveView.Socket{
+      socket = %Socket{
         assigns: %{
           count: 0,
           _filament_tree: %{},
-          _filament_rendered: %Phoenix.LiveView.Rendered{},
+          _filament_rendered: %Rendered{},
           __changed__: %{}
         },
-        private: %{live_temp: %{}, lifecycle: Phoenix.LiveView.Lifecycle.__struct__()}
+        private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}
       }
 
       assert {:noreply, _socket} =

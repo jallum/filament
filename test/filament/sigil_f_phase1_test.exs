@@ -1,7 +1,11 @@
 defmodule Filament.SigilFPhase1Test do
   use ExUnit.Case, async: true
-  import Phoenix.Component
+
   import Filament.SigilF
+  import Phoenix.Component
+
+  alias Phoenix.HTML.Safe
+  alias Phoenix.LiveView.Rendered
 
   describe "~F sigil Phase 1: basic functionality" do
     test "static template produces Rendered struct" do
@@ -9,7 +13,7 @@ defmodule Filament.SigilFPhase1Test do
       <div>hello</div>
       """
 
-      assert %Phoenix.LiveView.Rendered{} = result
+      assert %Rendered{} = result
       assert is_list(result.static)
       assert result.static == ["<div>hello</div>"]
       assert is_function(result.dynamic)
@@ -22,7 +26,7 @@ defmodule Filament.SigilFPhase1Test do
       <p>{@text}</p>
       """
 
-      assert %Phoenix.LiveView.Rendered{} = result
+      assert %Rendered{} = result
       assert length(result.static) > 0
       assert is_function(result.dynamic)
     end
@@ -60,7 +64,7 @@ defmodule Filament.SigilFPhase1Test do
       </div>
       """
 
-      assert %Phoenix.LiveView.Rendered{} = result
+      assert %Rendered{} = result
       dynamic_result = result.dynamic.(false)
       assert is_list(dynamic_result)
       assert length(dynamic_result) == 2
@@ -70,6 +74,7 @@ defmodule Filament.SigilFPhase1Test do
       # on_click triggers event_at, which requires a fiber context.
       # Templates with event handlers must run inside a render pass.
       defmodule EventHandlerComp do
+        @moduledoc false
         use Filament.Component
 
         defcomponent EventHandler do
@@ -86,7 +91,7 @@ defmodule Filament.SigilFPhase1Test do
       {tree, rendered, _} =
         Filament.Reconciler.mount(EventHandlerComp.EventHandler, %{}, owner_pid: self())
 
-      assert %Phoenix.LiveView.Rendered{} = rendered
+      assert %Rendered{} = rendered
       assert is_function(rendered.dynamic)
       assert Filament.FiberTree.get_event_handler(tree, "root", 0)
     end
@@ -102,8 +107,8 @@ defmodule Filament.SigilFPhase1Test do
       <div class="test"><span>Content</span></div>
       """
 
-      filament_iodata = Phoenix.HTML.Safe.to_iodata(filament_result)
-      heex_iodata = Phoenix.HTML.Safe.to_iodata(heex_result)
+      filament_iodata = Safe.to_iodata(filament_result)
+      heex_iodata = Safe.to_iodata(heex_result)
 
       assert filament_iodata == heex_iodata
     end

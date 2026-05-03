@@ -1,7 +1,9 @@
 defmodule Filament.HooksTest do
   use ExUnit.Case, async: true
 
-  alias Filament.{Hooks, Fiber, RenderContext}
+  alias Filament.Fiber
+  alias Filament.Hooks
+  alias Filament.RenderContext
 
   describe "use_slot/1" do
     test "raises ArgumentError when called outside render pass" do

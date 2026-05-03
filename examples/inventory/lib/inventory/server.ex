@@ -1,4 +1,5 @@
 defmodule Inventory.Server do
+  @moduledoc false
   use Filament.Observable.GenServer
 
   # State: items map + per-pid hold tracking
@@ -7,6 +8,7 @@ defmodule Inventory.Server do
 
   def start_link(opts \\ []) do
     initial_items = Keyword.get(opts, :items, [])
+
     gen_opts =
       case Keyword.fetch(opts, :name) do
         {:ok, name} -> [name: name]
@@ -99,5 +101,4 @@ defmodule Inventory.Server do
       {:noreply, state}
     end
   end
-
 end

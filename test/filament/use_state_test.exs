@@ -1,7 +1,9 @@
 defmodule Filament.UseStateTest do
   use ExUnit.Case, async: true
 
-  alias Filament.{Hooks, Fiber, RenderContext}
+  alias Filament.Fiber
+  alias Filament.Hooks
+  alias Filament.RenderContext
 
   describe "use_state/1" do
     test "first render returns {initial, setter}" do

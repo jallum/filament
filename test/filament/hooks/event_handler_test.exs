@@ -1,11 +1,15 @@
 defmodule Filament.Hooks.EventHandlerTest do
   use ExUnit.Case
 
-  alias Filament.{Hooks, Fiber, RenderContext, FiberTree}
+  alias Filament.Fiber
+  alias Filament.FiberTree
+  alias Filament.Hooks
+  alias Filament.RenderContext
 
   defmodule TestLiveView do
     use Filament.LiveView
-    def root_component(), do: nil
+
+    def root_component, do: nil
   end
 
   # --- Tests ---

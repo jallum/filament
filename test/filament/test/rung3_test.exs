@@ -1,8 +1,10 @@
 defmodule Filament.Test.Rung3Test do
   use ExUnit.Case, async: true
+
   import Filament.Test
 
   defmodule TestCounter do
+    @moduledoc false
     use Filament.Observable.GenServer
 
     def start_link(n), do: GenServer.start_link(__MODULE__, n)
@@ -17,6 +19,7 @@ defmodule Filament.Test.Rung3Test do
   end
 
   defmodule CountingComp do
+    @moduledoc false
     use Filament.Component
 
     defcomponent Counter do

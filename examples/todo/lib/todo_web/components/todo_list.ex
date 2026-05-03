@@ -4,9 +4,9 @@ defmodule TodoWeb.Components.TodoList do
   """
   use Filament.Component
 
+  alias Todo.Store
   alias TodoWeb.Components.FilterBar
   alias TodoWeb.Components.TodoItem
-  alias Todo.Store
 
   defcomponent do
     prop(:title, :string, default: "Todo List")

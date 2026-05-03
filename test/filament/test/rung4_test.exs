@@ -9,6 +9,7 @@ defmodule Filament.Test.Rung4Test do
   """
 
   use ExUnit.Case
+
   @moduletag :pending
 
   test "placeholder — rung 4 requires endpoint (Track G/I)" do

@@ -3,12 +3,13 @@ defmodule Filament.HTMLEngine do
 
   @behaviour Filament.TagEngine
 
+  alias Phoenix.HTML.Engine
+
   @impl true
   def classify_type(":inner_block"), do: {:error, "the slot name :inner_block is reserved"}
   def classify_type(":" <> name), do: {:slot, name}
 
-  def classify_type(<<first, _::binary>> = name) when first in ?A..?Z,
-    do: {:remote_component, name}
+  def classify_type(<<first, _::binary>> = name) when first in ?A..?Z, do: {:remote_component, name}
 
   def classify_type("."), do: {:error, "a component name is required after ."}
   def classify_type("." <> name), do: {:local_component, name}
@@ -62,16 +63,14 @@ defmodule Filament.HTMLEngine do
         {"phx-click", quote(do: "filament:" <> Filament.Hooks.register_event_handler(unquote(v)))}
 
       "on_submit" ->
-        {"phx-submit",
-         quote(do: "filament:" <> Filament.Hooks.register_event_handler(unquote(v)))}
+        {"phx-submit", quote(do: "filament:" <> Filament.Hooks.register_event_handler(unquote(v)))}
 
       _other ->
         {k, v}
     end
   end
 
-  defp literal_keys?([{key, _value} | rest]) when is_atom(key) or is_binary(key),
-    do: literal_keys?(rest)
+  defp literal_keys?([{key, _value} | rest]) when is_atom(key) or is_binary(key), do: literal_keys?(rest)
 
   defp literal_keys?([]), do: true
   defp literal_keys?(_other), do: false
@@ -143,14 +142,11 @@ defmodule Filament.HTMLEngine do
       [quoted_binary_encode(binary, meta) | acc]
   end
 
-  defp extract_binaries(binary, _root?, acc, _meta) when is_binary(binary),
-    do: [binary_encode(binary) | acc]
+  defp extract_binaries(binary, _root?, acc, _meta) when is_binary(binary), do: [binary_encode(binary) | acc]
 
-  defp extract_binaries(value, false, acc, meta),
-    do: [quoted_binary_encode(value, meta) | acc]
+  defp extract_binaries(value, false, acc, meta), do: [quoted_binary_encode(value, meta) | acc]
 
-  defp extract_binaries(_value, true, _acc, _meta),
-    do: :error
+  defp extract_binaries(_value, true, _acc, _meta), do: :error
 
   @doc false
   def attributes_escape(attrs) do
@@ -163,11 +159,9 @@ defmodule Filament.HTMLEngine do
   end
 
   @doc false
-  def class_attribute_encode(list) when is_list(list),
-    do: list |> class_attribute_list() |> Phoenix.HTML.Engine.encode_to_iodata!()
+  def class_attribute_encode(list) when is_list(list), do: list |> class_attribute_list() |> Engine.encode_to_iodata!()
 
-  def class_attribute_encode(other),
-    do: empty_attribute_encode(other)
+  def class_attribute_encode(other), do: empty_attribute_encode(other)
 
   defp class_attribute_list(list), do: class_attribute_list(list, [])
 
@@ -186,12 +180,12 @@ defmodule Filament.HTMLEngine do
   def empty_attribute_encode(nil), do: ""
   def empty_attribute_encode(false), do: ""
   def empty_attribute_encode(true), do: ""
-  def empty_attribute_encode(value), do: Phoenix.HTML.Engine.encode_to_iodata!(value)
+  def empty_attribute_encode(value), do: Engine.encode_to_iodata!(value)
 
   @doc false
   def binary_encode(value) when is_binary(value) do
     value
-    |> Phoenix.HTML.Engine.encode_to_iodata!()
+    |> Engine.encode_to_iodata!()
     |> IO.iodata_to_binary()
   end
 

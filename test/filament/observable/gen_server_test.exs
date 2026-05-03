@@ -5,6 +5,7 @@ defmodule Filament.Observable.GenServerTest do
   alias Filament.Observable.Subscriber
 
   defmodule TestCounter do
+    @moduledoc false
     use Observable.GenServer
 
     def start_link(initial), do: GenServer.start_link(__MODULE__, initial)
@@ -20,6 +21,7 @@ defmodule Filament.Observable.GenServerTest do
   end
 
   defmodule Minimal do
+    @moduledoc false
     use Observable.GenServer
 
     def start_link, do: GenServer.start_link(__MODULE__, :ok)
@@ -27,12 +29,13 @@ defmodule Filament.Observable.GenServerTest do
   end
 
   defmodule Rejecting do
+    @moduledoc false
     use Observable.GenServer
 
     def start_link, do: GenServer.start_link(__MODULE__, :ok)
     def init(:ok), do: {:ok, :no_state}
 
-    @impl Filament.Observable
+    @impl Observable
     def handle_subscribe(:reject_me, _subscriber, state) do
       {:error, :rejected, state}
     end
@@ -44,12 +47,13 @@ defmodule Filament.Observable.GenServerTest do
   end
 
   defmodule WithTeardown do
+    @moduledoc false
     use Observable.GenServer
 
     def start_link(test_pid), do: GenServer.start_link(__MODULE__, test_pid)
     def init(test_pid), do: {:ok, test_pid}
 
-    @impl Filament.Observable
+    @impl Observable
     def handle_unsubscribe(_subscriber, test_pid) do
       send(test_pid, :handle_unsubscribe_called)
       {:ok, test_pid}
@@ -209,6 +213,7 @@ defmodule Filament.Observable.GenServerTest do
   # --- Projection tests (D3) ---
 
   defmodule ProjectionCounter do
+    @moduledoc false
     use Observable.GenServer
 
     def start_link(n), do: GenServer.start_link(__MODULE__, n)

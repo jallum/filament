@@ -1,6 +1,11 @@
 defmodule Filament.SigilFPhase2Test do
   use ExUnit.Case, async: true
+
   import Filament.SigilF
+
+  alias Phoenix.HTML.Safe
+  alias Phoenix.LiveView.Comprehension
+  alias Phoenix.LiveView.Rendered
 
   describe "~F sigil Phase 2: :for comprehension" do
     test ":for comprehension produces Comprehension struct with items" do
@@ -14,17 +19,17 @@ defmodule Filament.SigilFPhase2Test do
       </ul>
       """
 
-      assert %Phoenix.LiveView.Rendered{} = result
+      assert %Rendered{} = result
       dynamic_result = result.dynamic.(false)
       assert is_list(dynamic_result)
 
       comprehension =
         Enum.find(dynamic_result, fn
-          %Phoenix.LiveView.Comprehension{} -> true
+          %Comprehension{} -> true
           _ -> false
         end)
 
-      assert %Phoenix.LiveView.Comprehension{} = comprehension
+      assert %Comprehension{} = comprehension
       assert length(comprehension.entries) == 2
     end
 
@@ -39,8 +44,8 @@ defmodule Filament.SigilFPhase2Test do
       </ul>
       """
 
-      assert %Phoenix.LiveView.Rendered{} = result
-      iodata = Phoenix.HTML.Safe.to_iodata(result)
+      assert %Rendered{} = result
+      iodata = Safe.to_iodata(result)
       html = IO.iodata_to_binary(iodata)
       assert html =~ "key="
       assert html =~ "Item 1"
@@ -57,10 +62,10 @@ defmodule Filament.SigilFPhase2Test do
       </ul>
       """
 
-      assert %Phoenix.LiveView.Rendered{} = result
+      assert %Rendered{} = result
       dynamic_result = result.dynamic.(false)
 
-      assert [%Phoenix.LiveView.Comprehension{} = comprehension] = dynamic_result
+      assert [%Comprehension{} = comprehension] = dynamic_result
       assert length(comprehension.entries) == 3
     end
   end
@@ -77,16 +82,16 @@ defmodule Filament.SigilFPhase2Test do
       </ul>
       """
 
-      assert %Phoenix.LiveView.Rendered{} = result
+      assert %Rendered{} = result
       dynamic_result = result.dynamic.(false)
 
       comprehension =
         Enum.find(dynamic_result, fn
-          %Phoenix.LiveView.Comprehension{} -> true
+          %Comprehension{} -> true
           _ -> false
         end)
 
-      assert %Phoenix.LiveView.Comprehension{} = comprehension
+      assert %Comprehension{} = comprehension
       assert length(comprehension.entries) == 3
     end
 
@@ -101,7 +106,7 @@ defmodule Filament.SigilFPhase2Test do
       </ul>
       """
 
-      html = result |> Phoenix.HTML.Safe.to_iodata() |> IO.iodata_to_binary()
+      html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "alpha"
       assert html =~ "beta"
     end

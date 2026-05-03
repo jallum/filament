@@ -1,11 +1,13 @@
 defmodule Filament.VNodeCompilerTest do
   use ExUnit.Case, async: true
 
-  alias Filament.{Reconciler, FiberTree}
+  alias Filament.FiberTree
+  alias Filament.Reconciler
 
   describe "assigns-free render" do
     test "render without assigns in scope compiles and renders correctly" do
       defmodule AssignsFreeComp do
+        @moduledoc false
         use Filament.Component
 
         defcomponent AssignsFree do
@@ -21,9 +23,7 @@ defmodule Filament.VNodeCompilerTest do
       end
 
       {_tree, rendered, _} =
-        Reconciler.mount(AssignsFreeComp.AssignsFree, %{text: "hello", count: 3},
-          owner_pid: self()
-        )
+        Reconciler.mount(AssignsFreeComp.AssignsFree, %{text: "hello", count: 3}, owner_pid: self())
 
       html = rendered |> Phoenix.HTML.Safe.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "hello"
@@ -60,6 +60,7 @@ defmodule Filament.VNodeCompilerTest do
   describe "wire-ref stability" do
     test "multiple handlers keep stable slot indices across re-renders" do
       defmodule MultiHandlerComp do
+        @moduledoc false
         use Filament.Component
 
         defcomponent MultiHandler do
@@ -107,6 +108,7 @@ defmodule Filament.VNodeCompilerTest do
     # every render.
     test "stable closure produces identical fn reference across renders" do
       defmodule StableClosureComp do
+        @moduledoc false
         use Filament.Component
 
         defcomponent StableClosure do
@@ -135,6 +137,7 @@ defmodule Filament.VNodeCompilerTest do
     # When count changes, memo_at invalidates and produces a new fn.
     test "reactive closure produces new fn reference when dep changes" do
       defmodule ReactiveClosureComp do
+        @moduledoc false
         use Filament.Component
 
         defcomponent ReactiveClosure do
@@ -165,6 +168,7 @@ defmodule Filament.VNodeCompilerTest do
 
     test "reactive closure reuses fn reference when dep unchanged" do
       defmodule ReactiveClosureStableComp do
+        @moduledoc false
         use Filament.Component
 
         defcomponent ReactiveClosureStable do
@@ -192,6 +196,7 @@ defmodule Filament.VNodeCompilerTest do
   describe "comprehension memoization" do
     test "for-loop with handlers reuses result when outer-scope deps unchanged" do
       defmodule CompMemoComp do
+        @moduledoc false
         use Filament.Component
 
         defcomponent CompMemo do
@@ -237,6 +242,7 @@ defmodule Filament.VNodeCompilerTest do
 
     test "for-loop with handlers recomputes when items prop changes" do
       defmodule CompMemoRebuildComp do
+        @moduledoc false
         use Filament.Component
 
         defcomponent CompMemoRebuild do

@@ -12,7 +12,7 @@ config :cart, CartWeb.Endpoint,
   reloadable_apps: [:cart, :filament],
   watchers: []
 
-config :phoenix, :json_library, JSON
-
 # Enable dev debug output
 config :logger, level: :warning
+
+config :phoenix, :json_library, JSON

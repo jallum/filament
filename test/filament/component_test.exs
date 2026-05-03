@@ -1,7 +1,10 @@
 defmodule Filament.ComponentTest do
   use ExUnit.Case, async: true
 
+  alias Phoenix.LiveView.Rendered
+
   defmodule TestComponents do
+    @moduledoc false
     use Filament.Component
 
     defcomponent MinimalComponent do
@@ -9,10 +12,10 @@ defmodule Filament.ComponentTest do
 
       def render(%{value: value}) do
         # In a real implementation, this would return %Phoenix.LiveView.Rendered{}
-        %Phoenix.LiveView.Rendered{
+        %Rendered{
           static: ["<span>", "</span>"],
           dynamic: fn _ -> [value] end,
-          fingerprint: 12345,
+          fingerprint: 12_345,
           root: true
         }
       end
@@ -24,16 +27,17 @@ defmodule Filament.ComponentTest do
       prop(:another_optional, :integer, default: 42)
 
       def render(props) do
-        %Phoenix.LiveView.Rendered{
+        %Rendered{
           static: ["<div>", "</div>"],
           dynamic: fn _ -> [inspect(props)] end,
-          fingerprint: 67890,
+          fingerprint: 67_890,
           root: true
         }
       end
     end
 
     defmodule NotAComponent do
+      @moduledoc false
       def some_function, do: :not_a_component
     end
   end
@@ -119,6 +123,7 @@ defmodule Filament.ComponentTest do
 
   describe "prop validation with multiple required props" do
     defmodule MultiPropComponent do
+      @moduledoc false
       use Filament.Component
 
       defcomponent MultiProp do
@@ -127,10 +132,10 @@ defmodule Filament.ComponentTest do
         prop(:prop3, :string, default: "optional")
 
         def render(_props) do
-          %Phoenix.LiveView.Rendered{
+          %Rendered{
             static: ["<div>", "</div>"],
             dynamic: fn _ -> [] end,
-            fingerprint: 11111,
+            fingerprint: 11_111,
             root: true
           }
         end

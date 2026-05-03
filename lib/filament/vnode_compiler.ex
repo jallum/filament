@@ -1,6 +1,8 @@
 defmodule Filament.VNodeCompiler do
   @moduledoc false
 
+  alias Phoenix.LiveView.Engine
+
   @spec compile(String.t(), Macro.Env.t() | nil) :: term()
   def compile(source, caller) do
     quoted =
@@ -78,8 +80,7 @@ defmodule Filament.VNodeCompiler do
   # wire refs using the stale diff_eval_state fallback).
   defp hoist_comprehension_handlers(ast) do
     Macro.postwalk(ast, fn
-      {:{}, tuple_meta,
-       [nil, map_expr, {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body]}]}] = entry_parts} ->
+      {:{}, tuple_meta, [nil, map_expr, {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body]}]}] = entry_parts} ->
         {fn_body1, reg_hoisted} = extract_reg_handlers(fn_body)
         {fn_body2, comp_hoisted} = extract_component_calls(fn_body1)
 
@@ -106,16 +107,14 @@ defmodule Filament.VNodeCompiler do
 
     {new_body, {_counter, hoisted}} =
       Macro.postwalk(fn_body, {base, []}, fn
-        {{:., meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
-         call_meta, [fn_expr]},
+        {{:., meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]}, call_meta, [fn_expr]},
         {counter, acc} ->
           var_name = :"freh_#{counter}"
           var_ast = {var_name, [], nil}
 
           original =
-            {{:., meta,
-              [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]},
-             call_meta, [fn_expr]}
+            {{:., meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]}, call_meta,
+             [fn_expr]}
 
           {var_ast, {counter + 1, [{var_ast, original} | acc]}}
 
@@ -138,8 +137,7 @@ defmodule Filament.VNodeCompiler do
 
     {new_body, {_counter, hoisted}} =
       Macro.postwalk(fn_body, {base, []}, fn
-        {{:., _, [{:__aliases__, _, [:Filament, :TagEngine]}, :component]}, _, _} = node,
-        {counter, acc} ->
+        {{:., _, [{:__aliases__, _, [:Filament, :TagEngine]}, :component]}, _, _} = node, {counter, acc} ->
           var_name = :"fchild_#{counter}"
           var_ast = {var_name, [], nil}
           {var_ast, {counter + 1, [{var_ast, node} | acc]}}
@@ -161,7 +159,7 @@ defmodule Filament.VNodeCompiler do
   defp strip_outer_change_tracking({:fn, _, _} = node), do: node
 
   @generated [generated: true]
-  @plv Phoenix.LiveView.Engine
+  @plv Engine
 
   defp strip_outer_change_tracking({:=, _, [{:changed, _, @plv}, nil]}),
     do: {:=, @generated, [{:changed, @generated, @plv}, nil]}
@@ -177,20 +175,17 @@ defmodule Filament.VNodeCompiler do
     {tag, meta, Enum.map(args, &strip_outer_change_tracking/1)}
   end
 
-  defp strip_outer_change_tracking({a, b}),
-    do: {strip_outer_change_tracking(a), strip_outer_change_tracking(b)}
+  defp strip_outer_change_tracking({a, b}), do: {strip_outer_change_tracking(a), strip_outer_change_tracking(b)}
 
-  defp strip_outer_change_tracking(list) when is_list(list),
-    do: Enum.map(list, &strip_outer_change_tracking/1)
+  defp strip_outer_change_tracking(list) when is_list(list), do: Enum.map(list, &strip_outer_change_tracking/1)
 
   defp strip_outer_change_tracking(other), do: other
 
   defp maybe_hoist_block(meta, exprs, caller_ast) do
     case exprs do
       [
-        {:=, _, [{:dynamic, [], Phoenix.LiveView.Engine}, fn_ast]},
-        {:%, struct_meta,
-         [{:__aliases__, alias_meta, [:Phoenix, :LiveView, :Rendered]}, {:%{}, map_meta, fields}]}
+        {:=, _, [{:dynamic, [], Engine}, fn_ast]},
+        {:%, struct_meta, [{:__aliases__, alias_meta, [:Phoenix, :LiveView, :Rendered]}, {:%{}, map_meta, fields}]}
       ] ->
         {slot_assigns, return_list} = extract_fn_slots(fn_ast)
 
@@ -212,7 +207,7 @@ defmodule Filament.VNodeCompiler do
         # Inject `changed = nil` so comprehension inner fns have a value to close over.
         # (`vars_changed = nil` is already present at the outer level from Phoenix's boilerplate.)
         changed_nil =
-          {:=, [generated: true], [{:changed, [generated: true], Phoenix.LiveView.Engine}, nil]}
+          {:=, [generated: true], [{:changed, [generated: true], Engine}, nil]}
 
         {:__block__, meta, [changed_nil | slot_assigns] ++ [new_rendered]}
 
@@ -268,31 +263,21 @@ defmodule Filament.VNodeCompiler do
   # Pattern A: PLV.Engine.changed_assign?(changed, :key) / nested_changed_assign?(...)
   #   case PLV.Engine.*(changed, ...) do true -> EXPR; false -> nil end
   defp simplify_slot_expr(
-         {:case, _,
-          [
-            {{:., _, [Phoenix.LiveView.Engine, _fn_name]}, _, _},
-            [do: [{:->, _, [[true], expr]}, {:->, _, [[false], nil]}]]
-          ]}
+         {:case, _, [{{:., _, [Engine, _fn_name]}, _, _}, [do: [{:->, _, [[true], expr]}, {:->, _, [[false], nil]}]]]}
        ) do
     expr
   end
 
   # Pattern B: direct `changed` guard — case changed do %{} -> nil; _ -> EXPR end
   defp simplify_slot_expr(
-         {:case, _,
-          [
-            {:changed, _, Phoenix.LiveView.Engine},
-            [do: [{:->, _, [[{:%{}, _, []}], nil]}, {:->, _, [[_], expr]}]]
-          ]}
+         {:case, _, [{:changed, _, Engine}, [do: [{:->, _, [[{:%{}, _, []}], nil]}, {:->, _, [[_], expr]}]]]}
        ) do
     expr
   end
 
   # Pattern C: compound condition — case (f1 or f2 or ...) do true -> EXPR; false -> nil end
   # Emitted when a slot depends on multiple assigns (Phoenix ORs the changed checks).
-  defp simplify_slot_expr(
-         {:case, _, [_, [do: [{:->, _, [[true], expr]}, {:->, _, [[false], nil]}]]]}
-       ) do
+  defp simplify_slot_expr({:case, _, [_, [do: [{:->, _, [[true], expr]}, {:->, _, [[false], nil]}]]]}) do
     expr
   end
 
@@ -376,14 +361,15 @@ defmodule Filament.VNodeCompiler do
 
   # live_to_iodata(expr) with reactive deps → memo_at({:t, N}, deps, factory)
   defp emit_if_needed(
-         {{:., _, [{:__aliases__, _, [:Phoenix, :LiveView, :Engine]}, :live_to_iodata]}, _,
-          [inner]} = node,
+         {{:., _, [{:__aliases__, _, [:Phoenix, :LiveView, :Engine]}, :live_to_iodata]}, _, [inner]} = node,
          {reactive_vars, _in_scope},
          {t_ctr, e_ctr}
        ) do
     deps = compute_deps(inner, reactive_vars)
 
-    if deps != [] do
+    if deps == [] do
+      {node, {t_ctr, e_ctr}}
+    else
       dep_vars = names_to_var_ast(deps)
 
       new_node =
@@ -393,15 +379,12 @@ defmodule Filament.VNodeCompiler do
                 end)
 
       {new_node, {t_ctr + 1, e_ctr}}
-    else
-      {node, {t_ctr, e_ctr}}
     end
   end
 
   # register_event_handler(fn) → event_at(M, memo_at({:t, N}, deps, fn -> fn end))
   defp emit_if_needed(
-         {{:., _, [{:__aliases__, _, [:Filament, :Hooks]}, :register_event_handler]}, _,
-          [fn_node]},
+         {{:., _, [{:__aliases__, _, [:Filament, :Hooks]}, :register_event_handler]}, _, [fn_node]},
          {_reactive_vars, in_scope},
          {t_ctr, e_ctr}
        ) do
@@ -430,8 +413,7 @@ defmodule Filament.VNodeCompiler do
   defp has_register_event_handler?(ast) do
     {_, found} =
       Macro.prewalk(ast, false, fn
-        {{:., _, [{:__aliases__, _, [:Filament, :Hooks]}, :register_event_handler]}, _, _} = node,
-        _ ->
+        {{:., _, [{:__aliases__, _, [:Filament, :Hooks]}, :register_event_handler]}, _, _} = node, _ ->
           {node, true}
 
         node, acc ->
@@ -476,7 +458,7 @@ defmodule Filament.VNodeCompiler do
       |> MapSet.difference(body_nil_names)
       |> Enum.map(fn name -> {name, [], nil} end)
 
-    (gen_collections ++ outer_nil_vars) |> Enum.uniq()
+    Enum.uniq(gen_collections ++ outer_nil_vars)
   end
 
   # Collect all nil-context variable names from an AST (descends into fn literals
@@ -519,14 +501,16 @@ defmodule Filament.VNodeCompiler do
   # ─── Dependency computation ───────────────────────────────────────────────────
 
   defp compute_closure_deps(ast, in_scope) do
-    collect_variables_deep(ast)
+    ast
+    |> collect_variables_deep()
     |> MapSet.new()
     |> MapSet.intersection(MapSet.new(in_scope))
     |> MapSet.to_list()
   end
 
   defp compute_deps(ast, reactive_vars) do
-    collect_variables(ast)
+    ast
+    |> collect_variables()
     |> MapSet.new()
     |> MapSet.intersection(MapSet.new(reactive_vars))
     |> MapSet.to_list()

@@ -1,9 +1,14 @@
 defmodule Filament.RendererTest do
   use ExUnit.Case, async: true
 
-  alias Filament.{Renderer, RenderContext, Fiber}
+  alias Filament.Fiber
+  alias Filament.RenderContext
+  alias Filament.Renderer
+  alias Phoenix.HTML.Safe
+  alias Phoenix.LiveView.Rendered
 
   defmodule SimpleItem do
+    @moduledoc false
     use Filament.Component
 
     defcomponent SimpleItem do
@@ -18,6 +23,7 @@ defmodule Filament.RendererTest do
   end
 
   defmodule StatefulComp do
+    @moduledoc false
     use Filament.Component
 
     defcomponent StatefulComp do
@@ -35,6 +41,7 @@ defmodule Filament.RendererTest do
 
   # Define test component inline
   defmodule TestHello do
+    @moduledoc false
     use Filament.Component
 
     defcomponent TestHello do
@@ -58,7 +65,7 @@ defmodule Filament.RendererTest do
       {result, hook_slots, pending_effects, new_fibers, event_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "world"}, context)
 
-      assert %Phoenix.LiveView.Rendered{} = result
+      assert %Rendered{} = result
       assert hook_slots == %{}
       assert pending_effects == []
       assert new_fibers == %{}
@@ -74,7 +81,7 @@ defmodule Filament.RendererTest do
       {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "Alice"}, context)
 
-      iodata = Phoenix.HTML.Safe.to_iodata(result)
+      iodata = Safe.to_iodata(result)
       html = IO.iodata_to_binary(iodata)
 
       assert html =~ "Hello, Alice"
@@ -100,7 +107,7 @@ defmodule Filament.RendererTest do
       {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "Bob"}, context)
 
-      iodata = Phoenix.HTML.Safe.to_iodata(result)
+      iodata = Safe.to_iodata(result)
       html = IO.iodata_to_binary(iodata)
 
       assert html =~ "Bob"
@@ -167,8 +174,8 @@ defmodule Filament.RendererTest do
       {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "vnode"}, context)
 
-      assert %Phoenix.LiveView.Rendered{} = result
-      html = Phoenix.HTML.Safe.to_iodata(result) |> IO.iodata_to_binary()
+      assert %Rendered{} = result
+      html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "vnode"
     end
 
@@ -276,7 +283,7 @@ defmodule Filament.RendererTest do
       Process.delete(:filament_render_context)
 
       first_child_fiber = Map.get(first_ctx.new_fibers, child_id)
-      assert first_child_fiber != nil
+      assert first_child_fiber
 
       # Second render: provide existing fiber in fiber_tree for state continuity
       context2 = %RenderContext{

@@ -1,6 +1,7 @@
 defmodule Filament.LiveComponentTest do
   use ExUnit.Case, async: true
 
+  alias Phoenix.HTML.Safe
   alias Phoenix.LiveView.Socket
 
   defp test_socket(assigns \\ %{}) do
@@ -14,6 +15,7 @@ defmodule Filament.LiveComponentTest do
   end
 
   defmodule LabelComp do
+    @moduledoc false
     use Filament.Component
 
     defcomponent do
@@ -28,6 +30,7 @@ defmodule Filament.LiveComponentTest do
   end
 
   defmodule CounterComp do
+    @moduledoc false
     use Filament.Component
 
     defcomponent do
@@ -80,11 +83,11 @@ defmodule Filament.LiveComponentTest do
       assigns = %{id: "test", component: LabelComp, label: "World"}
       {:ok, socket} = Filament.LiveComponent.update(assigns, socket)
 
-      assert socket.assigns._filament_tree != nil
+      assert socket.assigns._filament_tree
       rendered = socket.assigns._filament_rendered
       assert %Phoenix.LiveView.Rendered{} = rendered
 
-      html = Phoenix.HTML.Safe.to_iodata(rendered) |> IO.iodata_to_binary()
+      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "World"
     end
 
@@ -95,7 +98,7 @@ defmodule Filament.LiveComponentTest do
 
       html =
         socket.assigns._filament_rendered
-        |> Phoenix.HTML.Safe.to_iodata()
+        |> Safe.to_iodata()
         |> IO.iodata_to_binary()
 
       assert html =~ "Custom"
@@ -113,7 +116,7 @@ defmodule Filament.LiveComponentTest do
 
       html =
         socket.assigns._filament_rendered
-        |> Phoenix.HTML.Safe.to_iodata()
+        |> Safe.to_iodata()
         |> IO.iodata_to_binary()
 
       assert html =~ "Second"

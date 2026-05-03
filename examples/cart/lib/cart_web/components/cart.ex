@@ -1,4 +1,5 @@
 defmodule CartWeb.Components.Cart do
+  @moduledoc false
   use Filament.Component
 
   alias CartWeb.Components.CartBadge

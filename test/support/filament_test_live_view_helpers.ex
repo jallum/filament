@@ -8,12 +8,14 @@ defmodule Filament.Test.LiveView.Helpers do
 
   import Phoenix.LiveViewTest
 
+  alias Phoenix.LiveViewTest.View
+
   @doc """
   Click the element matching `selector` in a live view.
   Wraps Phoenix.LiveViewTest.element/2 + render_click/1.
   Returns the updated rendered HTML string.
   """
-  @spec filament_click(view :: Phoenix.LiveViewTest.View.t(), selector :: String.t()) ::
+  @spec filament_click(view :: View.t(), selector :: String.t()) ::
           String.t()
   def filament_click(view, selector) do
     view |> element(selector) |> render_click()
@@ -25,7 +27,7 @@ defmodule Filament.Test.LiveView.Helpers do
   Returns the updated rendered HTML string.
   """
   @spec filament_submit(
-          view :: Phoenix.LiveViewTest.View.t(),
+          view :: View.t(),
           selector :: String.t(),
           params :: map()
         ) :: String.t()
@@ -36,7 +38,7 @@ defmodule Filament.Test.LiveView.Helpers do
   @doc """
   Return the current rendered text content (tags stripped) for the live view.
   """
-  @spec filament_text(view :: Phoenix.LiveViewTest.View.t()) :: String.t()
+  @spec filament_text(view :: View.t()) :: String.t()
   def filament_text(view) do
     view
     |> render()
@@ -50,7 +52,7 @@ defmodule Filament.Test.LiveView.Helpers do
   Raises RuntimeError with a descriptive message on failure.
   """
   @spec assert_has_class(
-          view :: Phoenix.LiveViewTest.View.t(),
+          view :: View.t(),
           selector :: String.t(),
           class_name :: String.t()
         ) :: :ok
@@ -67,14 +69,15 @@ defmodule Filament.Test.LiveView.Helpers do
         has_it? =
           Enum.any?(elements, fn el ->
             classes =
-              Floki.attribute(el, "class")
+              el
+              |> Floki.attribute("class")
               |> List.first("")
               |> String.split(~r/\s+/, trim: true)
 
             class_name in classes
           end)
 
-        unless has_it? do
+        if !has_it? do
           raise RuntimeError,
             message:
               "assert_has_class: expected #{inspect(selector)} to have class " <>

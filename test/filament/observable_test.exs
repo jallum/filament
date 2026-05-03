@@ -5,6 +5,7 @@ defmodule Filament.ObservableTest do
   alias Filament.Observable.Subscriber
 
   defmodule TestObservable do
+    @moduledoc false
     use GenServer
 
     def start_link(test_pid) do

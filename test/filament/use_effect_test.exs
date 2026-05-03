@@ -1,7 +1,11 @@
 defmodule Filament.UseEffectTest do
   use ExUnit.Case, async: true
 
-  alias Filament.{Hooks, Fiber, RenderContext, LiveView, Reconciler}
+  alias Filament.Fiber
+  alias Filament.Hooks
+  alias Filament.LiveView
+  alias Filament.Reconciler
+  alias Filament.RenderContext
 
   # --- Rung-1: unit tests (simulated render, no LiveView) ---
 

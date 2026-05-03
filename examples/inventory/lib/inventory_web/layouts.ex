@@ -1,4 +1,5 @@
 defmodule InventoryWeb.Layouts do
+  @moduledoc false
   use Phoenix.Component
 
   def root(assigns) do

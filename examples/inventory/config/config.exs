@@ -9,6 +9,6 @@ config :inventory, InventoryWeb.Endpoint,
   secret_key_base: "inventory_example_secret_key_base_min_64_chars_xxxxxxxxxxxxxxxxxx",
   render_errors: [formats: [html: InventoryWeb.ErrorHTML], layout: false]
 
-config :phoenix, :json_library, JSON
-
 config :logger, level: :warning
+
+config :phoenix, :json_library, JSON

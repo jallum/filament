@@ -130,7 +130,7 @@ defmodule Filament.Event do
   end
 
   defp validate_field!(%{name: name, type: type, required: req, default: def_}, caller) do
-    unless type in @supported_types do
+    if type not in @supported_types do
       raise CompileError,
         file: caller.file,
         line: caller.line,
@@ -143,8 +143,7 @@ defmodule Filament.Event do
       raise CompileError,
         file: caller.file,
         line: caller.line,
-        description:
-          "defevent field #{inspect(name)}: :required and :default are mutually exclusive"
+        description: "defevent field #{inspect(name)}: :required and :default are mutually exclusive"
     end
   end
 

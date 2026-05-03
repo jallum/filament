@@ -1,4 +1,5 @@
 defmodule InventoryWeb.Components.InventoryItem do
+  @moduledoc false
   use Filament.Component
 
   import InventoryWeb.Hooks

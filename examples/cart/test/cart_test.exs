@@ -1,8 +1,11 @@
 defmodule Cart.Test do
   use ExUnit.Case, async: true
+
   import Filament.Test
 
   # ── Rung 1: Cart.State pure domain ──────────────────────────────────────────
+  alias CartWeb.Components.CartBadge
+  alias Filament.Test.Stub
 
   describe "Cart.State" do
     test "starts empty" do
@@ -60,16 +63,16 @@ defmodule Cart.Test do
 
   describe "CartBadge (rung-2)" do
     test "renders item count from stub observable" do
-      {:ok, stub} = Filament.Test.Stub.start(fn _req -> %Cart.State{} end)
-      {:ok, view} = mount(CartWeb.Components.CartBadge, %{server: stub})
+      {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
+      {:ok, view} = mount(CartBadge, %{server: stub})
 
       assert view.rendered_html =~ "cart-badge"
       refute view.rendered_html =~ "data-count=\"1\""
     end
 
     test "badge updates when count changes" do
-      {:ok, stub} = Filament.Test.Stub.start(fn _req -> %Cart.State{} end)
-      {:ok, view} = mount(CartWeb.Components.CartBadge, %{server: stub})
+      {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
+      {:ok, view} = mount(CartBadge, %{server: stub})
       assert view.rendered_html =~ "data-count=\"0\""
 
       new_state =
@@ -78,13 +81,13 @@ defmodule Cart.Test do
           %Cart.Item{id: "x", name: "Test", price_cents: 100, quantity: 1}
         )
 
-      Filament.Test.Stub.push(stub, new_state)
+      Stub.push(stub, new_state)
       view = Filament.Test.update(view)
       assert view.rendered_html =~ "data-count=\"1\""
     end
 
     test "projection suppresses update when count is unchanged" do
-      {:ok, stub} = Filament.Test.Stub.start(fn _req -> %Cart.State{} end)
+      {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
 
       sub = %Filament.Observable.Subscriber{
         pid: self(),
@@ -101,10 +104,10 @@ defmodule Cart.Test do
           %Cart.Item{id: "a", name: "A", price_cents: 100, quantity: 1}
         )
 
-      Filament.Test.Stub.push(stub, state1)
+      Stub.push(stub, state1)
       assert_receive {:filament_observable_update, :badge_test_fiber, 0, 1}, 500
 
-      Filament.Test.Stub.push(stub, state1)
+      Stub.push(stub, state1)
       refute_receive {:filament_observable_update, :badge_test_fiber, 0, _}, 100
     end
   end

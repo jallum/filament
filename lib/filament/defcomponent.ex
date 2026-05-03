@@ -136,7 +136,7 @@ defmodule Filament.Defcomponent do
       unquote(build_typespec(props))
 
       # Enforce render/1 exists
-      unless Module.defines?(__MODULE__, {:render, 1}) do
+      if !Module.defines?(__MODULE__, {:render, 1}) do
         raise CompileError,
           description: "defcomponent #{inspect(__MODULE__)} must define render/1"
       end
@@ -162,7 +162,7 @@ defmodule Filament.Defcomponent do
       quote do
         prop_name = unquote(prop)
 
-        unless Map.has_key?(props, prop_name) do
+        if !Map.has_key?(props, prop_name) do
           raise ArgumentError,
                 "required prop #{inspect(prop_name)} missing from #{inspect(props)}"
         end

@@ -26,8 +26,8 @@ defmodule Filament.Component do
   defmacro __using__(_opts) do
     quote do
       import Filament.Defcomponent
-      import Filament.SigilF
       import Filament.Hooks
+      import Filament.SigilF
     end
   end
 end

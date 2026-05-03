@@ -1,7 +1,11 @@
 defmodule Filament.Reconciler do
   @moduledoc false
 
-  alias Filament.{Fiber, RenderContext, Renderer, ReconcilerError}
+  alias Filament.Fiber
+  alias Filament.ReconcilerError
+  alias Filament.RenderContext
+  alias Filament.Renderer
+  alias Phoenix.LiveView.Rendered
 
   @type fiber_tree() :: %{String.t() => Fiber.t()}
 
@@ -12,7 +16,7 @@ defmodule Filament.Reconciler do
     * `:owner_pid` - the LiveView process that owns this render tree (default: nil)
   """
   @spec mount(module(), map(), keyword()) ::
-          {fiber_tree(), Phoenix.LiveView.Rendered.t(), list()}
+          {fiber_tree(), Rendered.t(), list()}
   def mount(root_component, props, opts \\ []) do
     owner_pid = Keyword.get(opts, :owner_pid)
 
@@ -58,7 +62,7 @@ defmodule Filament.Reconciler do
     * `:owner_pid` - the LiveView process that owns this render tree (default: nil)
   """
   @spec update(fiber_tree(), String.t(), map(), keyword()) ::
-          {fiber_tree(), Phoenix.LiveView.Rendered.t(), list()}
+          {fiber_tree(), Rendered.t(), list()}
   def update(tree, fiber_id, new_props, opts \\ []) do
     owner_pid = Keyword.get(opts, :owner_pid)
 
@@ -94,7 +98,8 @@ defmodule Filament.Reconciler do
 
     # Reconcile children
     final_tree =
-      reconcile_children(new_tree, fiber_id, updated_fiber, new_fibers, owner_pid)
+      new_tree
+      |> reconcile_children(fiber_id, updated_fiber, new_fibers, owner_pid)
       |> Map.update!(fiber_id, &%{&1 | status: :stable})
 
     {final_tree, rendered, pending_effects}
@@ -143,10 +148,10 @@ defmodule Filament.Reconciler do
 
     tree_after_unmount =
       Enum.reduce(old_child_ids, tree, fn child_id, acc ->
-        if child_id not in new_child_ids do
-          unmount_fiber(acc, child_id, owner_pid)
-        else
+        if child_id in new_child_ids do
           acc
+        else
+          unmount_fiber(acc, child_id, owner_pid)
         end
       end)
 

@@ -1,4 +1,5 @@
 defmodule Cart.Server do
+  @moduledoc false
   use Filament.Observable.GenServer
 
   def via_registry(session_id), do: {:via, Registry, {Cart.Registry, session_id}}

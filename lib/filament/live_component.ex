@@ -138,11 +138,7 @@ defmodule Filament.LiveComponent do
 
   # ── Private ─────────────────────────────────────────────────────────────────
 
-  defp process_filament_msg(
-         {:filament_set_state, fiber_id, slot_index, new_value},
-         tree,
-         owner_pid
-       ) do
+  defp process_filament_msg({:filament_set_state, fiber_id, slot_index, new_value}, tree, owner_pid) do
     case Map.get(tree, fiber_id) do
       nil ->
         :ignore
@@ -160,11 +156,7 @@ defmodule Filament.LiveComponent do
     end
   end
 
-  defp process_filament_msg(
-         {:filament_observable_update, fiber_id, slot_index, new_value},
-         tree,
-         owner_pid
-       ) do
+  defp process_filament_msg({:filament_observable_update, fiber_id, slot_index, new_value}, tree, owner_pid) do
     case Map.get(tree, fiber_id) do
       nil ->
         :ignore
@@ -188,11 +180,7 @@ defmodule Filament.LiveComponent do
     end
   end
 
-  defp process_filament_msg(
-         {:filament_observable_resubscribe, fiber_id, slot_index},
-         tree,
-         owner_pid
-       ) do
+  defp process_filament_msg({:filament_observable_resubscribe, fiber_id, slot_index}, tree, owner_pid) do
     case Map.get(tree, fiber_id) do
       nil ->
         :ignore

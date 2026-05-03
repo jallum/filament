@@ -95,8 +95,7 @@ defmodule Filament.Fiber do
       "root.MyApp.CartView[0]"
   """
   def child_id(parent_fiber, component_module, {:index, index})
-      when is_struct(parent_fiber, __MODULE__) and is_atom(component_module) and is_integer(index) and
-             index >= 0 do
+      when is_struct(parent_fiber, __MODULE__) and is_atom(component_module) and is_integer(index) and index >= 0 do
     "#{parent_fiber.id}.#{component_module}[#{index}]"
   end
 

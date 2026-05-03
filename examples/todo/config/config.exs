@@ -1,5 +1,7 @@
 import Config
 
+config :phoenix, :json_library, JSON
+
 config :todo, TodoWeb.Endpoint,
   url: [host: "localhost"],
   http: [port: 4000],
@@ -15,5 +17,3 @@ config :todo, TodoWeb.Endpoint,
   reloadable_apps: [:todo, :filament]
 
 config :todo, :dev_routes, true
-
-config :phoenix, :json_library, JSON

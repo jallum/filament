@@ -1,9 +1,12 @@
 defmodule Filament.TestTest do
   use ExUnit.Case, async: true
+
   import Filament.Test
+
   alias Filament.Test.Stub
 
   defmodule CounterComp do
+    @moduledoc false
     use Filament.Component
 
     defcomponent Counter do
@@ -24,6 +27,7 @@ defmodule Filament.TestTest do
   end
 
   defmodule ClassComp do
+    @moduledoc false
     use Filament.Component
 
     defcomponent Class do
@@ -40,6 +44,7 @@ defmodule Filament.TestTest do
   end
 
   defmodule ObservableComp do
+    @moduledoc false
     use Filament.Component
 
     defcomponent Observable do
@@ -56,6 +61,7 @@ defmodule Filament.TestTest do
   end
 
   defmodule FormComp do
+    @moduledoc false
     use Filament.Component
 
     defcomponent Form do
@@ -108,18 +114,14 @@ defmodule Filament.TestTest do
 
   test "6. stub observable injected at mount" do
     {:ok, view} =
-      mount(ObservableComp.Observable, %{server: :my_server},
-        stub: [{:my_server, fn _req -> 42 end}]
-      )
+      mount(ObservableComp.Observable, %{server: :my_server}, stub: [{:my_server, fn _req -> 42 end}])
 
     assert render_text(view) =~ "42"
   end
 
   test "7. stub push updates rendered output" do
     {:ok, view} =
-      mount(ObservableComp.Observable, %{server: :my_server},
-        stub: [{:my_server, fn _req -> 0 end}]
-      )
+      mount(ObservableComp.Observable, %{server: :my_server}, stub: [{:my_server, fn _req -> 0 end}])
 
     assert render_text(view) =~ "0"
 

@@ -3,17 +3,18 @@ defmodule Filament.Observable.BackpressureTest do
 
   import ExUnit.CaptureLog
 
-  alias Filament.{Observable, Observable.Subscriber}
+  alias Filament.Observable
+  alias Filament.Observable.Subscriber
 
   defmodule PressureCounter do
+    @moduledoc false
     use Observable.GenServer
 
     def start_link(n), do: GenServer.start_link(__MODULE__, n)
     def init(n), do: {:ok, n}
     def set(pid, n), do: GenServer.call(pid, {:set, n})
 
-    def get_subscriber(pid, sub_key),
-      do: GenServer.call(pid, {:get_subscriber, sub_key})
+    def get_subscriber(pid, sub_key), do: GenServer.call(pid, {:get_subscriber, sub_key})
 
     def handle_call({:set, n}, _from, _state) do
       notify_observers(n)

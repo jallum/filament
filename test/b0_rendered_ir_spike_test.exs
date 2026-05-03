@@ -16,7 +16,11 @@ defmodule B0RenderedIRSpikeTest do
   """
 
   use ExUnit.Case
+
   import Phoenix.Component
+
+  alias Phoenix.HTML.Safe
+  alias Phoenix.LiveView.Rendered
 
   @doc """
   Example 1 — Static template
@@ -32,15 +36,15 @@ defmodule B0RenderedIRSpikeTest do
   """
   test "example 1: static template" do
     # Manually construct the Rendered struct
-    rendered = %Phoenix.LiveView.Rendered{
+    rendered = %Rendered{
       static: ["<div class=\"box\">hello</div>"],
       dynamic: fn _changed? -> [] end,
-      fingerprint: 12345,
+      fingerprint: 12_345,
       root: true
     }
 
     # Verify it's valid by converting to iodata
-    iodata = Phoenix.HTML.Safe.to_iodata(rendered)
+    iodata = Safe.to_iodata(rendered)
     assert iodata == ["<div class=\"box\">hello</div>"]
 
     # The dynamic function receives a boolean indicating if we should track changes
@@ -81,19 +85,19 @@ defmodule B0RenderedIRSpikeTest do
     # (This would show the actual Rendered struct in practice)
 
     # Now manually construct the equivalent structure
-    rendered = %Phoenix.LiveView.Rendered{
+    rendered = %Rendered{
       static: ["<p>", "</p>"],
       dynamic: fn _changed? ->
         # In real usage, changed? would control what we return
         # For this example, we just return the text value
         ["Hello, World!"]
       end,
-      fingerprint: 67890,
+      fingerprint: 67_890,
       root: true
     }
 
     # Verify conversion to HTML
-    iodata = Phoenix.HTML.Safe.to_iodata(rendered)
+    iodata = Safe.to_iodata(rendered)
     # The renderer interleaves static and dynamic parts
     assert iodata == ["<p>", "Hello, World!", "</p>"]
 
@@ -126,16 +130,16 @@ defmodule B0RenderedIRSpikeTest do
   """
   test "example 3: nested component reference with nested Rendered struct" do
     # Create a nested Rendered struct for a component's output
-    nested_rendered = %Phoenix.LiveView.Rendered{
+    nested_rendered = %Rendered{
       static: ["<span>", "</span>"],
       dynamic: fn _changed? -> ["nested content"] end,
-      fingerprint: 11111,
+      fingerprint: 11_111,
       # This is NOT the root template
       root: false
     }
 
     # Parent template that includes the nested Rendered struct in its dynamic section
-    parent_rendered = %Phoenix.LiveView.Rendered{
+    parent_rendered = %Rendered{
       static: ["<div>", "</div>"],
       dynamic: fn _changed? ->
         # The dynamic section can contain:
@@ -145,18 +149,18 @@ defmodule B0RenderedIRSpikeTest do
         # %Phoenix.LiveView.Component{} (for LiveComponents)
         [nested_rendered]
       end,
-      fingerprint: 22222,
+      fingerprint: 22_222,
       # This IS the root template
       root: true
     }
 
     # The renderer recursively processes nested Rendered structs
-    iodata = Phoenix.HTML.Safe.to_iodata(parent_rendered)
+    iodata = Safe.to_iodata(parent_rendered)
     # The renderer recursively processes nested Rendered structs, creating nested lists
     assert iodata == ["<div>", ["<span>", "nested content", "</span>"], "</div>"]
 
     # Verify nested_rendered is valid on its own too
-    nested_iodata = Phoenix.HTML.Safe.to_iodata(nested_rendered)
+    nested_iodata = Safe.to_iodata(nested_rendered)
     assert nested_iodata == ["<span>", "nested content", "</span>"]
   end
 
@@ -169,18 +173,18 @@ defmodule B0RenderedIRSpikeTest do
   The static list has 3 elements, dynamic has 2 elements.
   """
   test "example 4: multiple dynamic interpolations" do
-    rendered = %Phoenix.LiveView.Rendered{
+    rendered = %Rendered{
       static: ["<div class=\"", "\">", "</div>"],
       dynamic: fn _changed? ->
         # In a real scenario, changed? would determine what to return
         # For this example, we return both values
         ["alert-box", "Warning message"]
       end,
-      fingerprint: 33333,
+      fingerprint: 33_333,
       root: true
     }
 
-    iodata = Phoenix.HTML.Safe.to_iodata(rendered)
+    iodata = Safe.to_iodata(rendered)
     assert iodata == ["<div class=\"", "alert-box", "\">", "Warning message", "</div>"]
   end
 
@@ -198,10 +202,10 @@ defmodule B0RenderedIRSpikeTest do
     }
 
     # The component goes in the dynamic section of a Rendered struct
-    _rendered = %Phoenix.LiveView.Rendered{
+    _rendered = %Rendered{
       static: ["<div>", "</div>"],
       dynamic: fn _changed? -> [component_struct] end,
-      fingerprint: 44444,
+      fingerprint: 44_444,
       root: true
     }
 
@@ -209,7 +213,7 @@ defmodule B0RenderedIRSpikeTest do
     # because components must be returned directly from templates,
     # not nested inside other markup.
     assert_raise ArgumentError, fn ->
-      Phoenix.HTML.Safe.to_iodata(component_struct)
+      Safe.to_iodata(component_struct)
     end
   end
 
@@ -225,10 +229,10 @@ defmodule B0RenderedIRSpikeTest do
       {0, %{},
        fn _vars_changed, _changed? ->
          [
-           %Phoenix.LiveView.Rendered{
+           %Rendered{
              static: ["<li>", "</li>"],
              dynamic: fn _ -> ["Item 1"] end,
-             fingerprint: 55555,
+             fingerprint: 55_555,
              root: false
            }
          ]
@@ -237,10 +241,10 @@ defmodule B0RenderedIRSpikeTest do
       {1, %{},
        fn _vars_changed, _changed? ->
          [
-           %Phoenix.LiveView.Rendered{
+           %Rendered{
              static: ["<li>", "</li>"],
              dynamic: fn _ -> ["Item 2"] end,
-             fingerprint: 55555,
+             fingerprint: 55_555,
              root: false
            }
          ]
@@ -251,19 +255,19 @@ defmodule B0RenderedIRSpikeTest do
       static: ["<ul>", "</ul>"],
       has_key?: true,
       entries: entries,
-      fingerprint: 66666,
+      fingerprint: 66_666,
       stream: nil
     }
 
     # The comprehension can appear in a Rendered struct's dynamic section
-    rendered = %Phoenix.LiveView.Rendered{
+    rendered = %Rendered{
       static: ["", ""],
       dynamic: fn _changed? -> [comprehension] end,
-      fingerprint: 77777,
+      fingerprint: 77_777,
       root: true
     }
 
-    iodata = Phoenix.HTML.Safe.to_iodata(rendered)
+    iodata = Safe.to_iodata(rendered)
     # The comprehension is rendered as nested lists with recursive processing
     assert iodata == [
              "",

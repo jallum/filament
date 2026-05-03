@@ -33,7 +33,7 @@ defmodule Filament.LiveView do
 
         # Run the new effect
         new_cleanup = effect_fn.()
-        new_cleanup = if is_function(new_cleanup, 0), do: new_cleanup, else: nil
+        new_cleanup = if is_function(new_cleanup, 0), do: new_cleanup
 
         # Store {deps, new_cleanup} back into the fiber's hook_slots
         fiber = acc_tree[fiber_id]
@@ -66,8 +66,9 @@ defmodule Filament.LiveView do
 
   defmacro __using__(_opts) do
     quote do
-      use Phoenix.LiveView
       @behaviour Filament.LiveView
+
+      use Phoenix.LiveView
 
       @doc """
       Phoenix LiveView mount callback.
@@ -170,22 +171,20 @@ defmodule Filament.LiveView do
         tree = socket.assigns._filament_tree
         root_fiber = tree["root"]
 
-        case function_exported?(root_fiber.component, :handle_event, 3) do
-          true ->
-            new_props =
-              root_fiber.component.handle_event(event, params, root_fiber.props)
+        if function_exported?(root_fiber.component, :handle_event, 3) do
+          new_props =
+            root_fiber.component.handle_event(event, params, root_fiber.props)
 
-            {new_tree, rendered, pending_effects} =
-              Reconciler.update(tree, "root", new_props, owner_pid: self())
+          {new_tree, rendered, pending_effects} =
+            Reconciler.update(tree, "root", new_props, owner_pid: self())
 
-            {:noreply,
-             socket
-             |> Phoenix.Component.assign(:_filament_tree, new_tree)
-             |> Phoenix.Component.assign(:_filament_rendered, rendered)
-             |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
-
-          false ->
-            {:noreply, socket}
+          {:noreply,
+           socket
+           |> Phoenix.Component.assign(:_filament_tree, new_tree)
+           |> Phoenix.Component.assign(:_filament_rendered, rendered)
+           |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
+        else
+          {:noreply, socket}
         end
       end
 

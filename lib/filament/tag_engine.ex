@@ -1,6 +1,12 @@
 defmodule Filament.TagEngine do
   @moduledoc false
 
+  @behaviour EEx.Engine
+
+  alias Phoenix.Component.MacroComponent
+  alias Phoenix.LiveView.Tokenizer
+  alias Phoenix.LiveView.Tokenizer.ParseError
+
   @doc """
   Compiles the given string into Elixir AST.
 
@@ -15,7 +21,8 @@ defmodule Filament.TagEngine do
   """
   def compile(source, options) do
     options =
-      Keyword.validate!(options, [
+      options
+      |> Keyword.validate!([
         :caller,
         :tag_handler,
         line: 1,
@@ -122,8 +129,7 @@ defmodule Filament.TagEngine do
   ```
 
   """
-  def component(func, assigns, caller)
-      when (is_function(func, 1) and is_list(assigns)) or is_map(assigns) do
+  def component(func, assigns, caller) when (is_function(func, 1) and is_list(assigns)) or is_map(assigns) do
     assigns =
       case assigns do
         %{__changed__: _} -> assigns
@@ -220,11 +226,6 @@ defmodule Filament.TagEngine do
     end
   end
 
-  alias Phoenix.LiveView.Tokenizer
-  alias Phoenix.LiveView.Tokenizer.ParseError
-
-  @behaviour EEx.Engine
-
   @impl true
   def init(opts) do
     {subengine, opts} = Keyword.pop(opts, :subengine, Phoenix.LiveView.Engine)
@@ -269,6 +270,7 @@ defmodule Filament.TagEngine do
 
     quote do
       require Filament.TagEngine
+
       unquote(ast)
     end
   end
@@ -279,11 +281,7 @@ defmodule Filament.TagEngine do
 
   # If we find a slot, discard everything in the slot and continue looking
   defp has_tags?([{:slot, _, _, _} | tokens]),
-    do:
-      tokens
-      |> Enum.drop_while(&(not match?({:close, :slot, _, _}, &1)))
-      |> Enum.drop(1)
-      |> has_tags?()
+    do: tokens |> Enum.drop_while(&(not match?({:close, :slot, _, _}, &1))) |> Enum.drop(1) |> has_tags?()
 
   # If we find a closing tag, we missed the opening one, so we are at the end
   defp has_tags?([{:close, _, _, _} | _]), do: false
@@ -401,15 +399,12 @@ defmodule Filament.TagEngine do
   defp maybe_prune_text_after_macro_component("", tokens), do: prune_text(tokens)
   defp maybe_prune_text_after_macro_component(_ast, tokens), do: tokens
 
-  defp prune_text([{:text, text, meta} | tokens]),
-    do: [{:text, String.trim_leading(text), meta} | tokens]
+  defp prune_text([{:text, text, meta} | tokens]), do: [{:text, String.trim_leading(text), meta} | tokens]
 
-  defp prune_text(tokens),
-    do: tokens
+  defp prune_text(tokens), do: tokens
 
   defp validate_slot!(%{tags: [{type, _, _, _} | _]}, _name, _tag_meta)
-       when type in [:remote_component, :local_component],
-       do: :ok
+       when type in [:remote_component, :local_component], do: :ok
 
   defp validate_slot!(state, slot_name, meta) do
     message =
@@ -421,8 +416,7 @@ defmodule Filament.TagEngine do
   defp pop_slots(%{slots: [slots | other_slots]} = state) do
     # Perform group_by by hand as we need to group two distinct maps.
     {acc_assigns, acc_info, specials} =
-      Enum.reduce(slots, {%{}, %{}, %{}}, fn {key, assigns, special, info},
-                                             {acc_assigns, acc_info, specials} ->
+      Enum.reduce(slots, {%{}, %{}, %{}}, fn {key, assigns, special, info}, {acc_assigns, acc_info, specials} ->
         special? = Map.has_key?(special, ":if") or Map.has_key?(special, ":for")
         specials = Map.update(specials, key, special?, &(&1 or special?))
 
@@ -439,7 +433,7 @@ defmodule Filament.TagEngine do
       end)
 
     acc_assigns =
-      Enum.into(acc_assigns, %{}, fn {key, assigns_ast} ->
+      Map.new(acc_assigns, fn {key, assigns_ast} ->
         cond do
           # No special entry, return it as a list
           not Map.fetch!(specials, key) ->
@@ -467,10 +461,7 @@ defmodule Filament.TagEngine do
     %{state | tags: tags}
   end
 
-  defp pop_tag!(
-         %{tags: [{type, tag_name, _attrs, _meta} = tag | tags]} = state,
-         {:close, type, tag_name, _}
-       ) do
+  defp pop_tag!(%{tags: [{type, tag_name, _attrs, _meta} = tag | tags]} = state, {:close, type, tag_name, _}) do
     {tag, %{state | tags: tags}}
   end
 
@@ -537,10 +528,7 @@ defmodule Filament.TagEngine do
 
   # Remote function component (self close)
 
-  defp handle_token(
-         [{:remote_component, name, attrs, %{closing: :self} = tag_meta} | tokens],
-         state
-       ) do
+  defp handle_token([{:remote_component, name, attrs, %{closing: :self} = tag_meta} | tokens], state) do
     attrs = postprocess_attrs(attrs, state)
     {mod_ast, mod_size, fun} = decompose_remote_component_tag!(name, tag_meta, state)
     %{line: line, column: column} = tag_meta
@@ -626,7 +614,7 @@ defmodule Filament.TagEngine do
     meta = [line: line, column: column + mod_size]
     call = {{:., meta, [mod_ast, fun]}, meta, []}
 
-    ast =
+    quote_result =
       quote line: line do
         Filament.TagEngine.component(
           &(unquote(call) / 1),
@@ -634,7 +622,8 @@ defmodule Filament.TagEngine do
           {__MODULE__, __ENV__.function, __ENV__.file, unquote(line)}
         )
       end
-      |> tag_slots(slot_info)
+
+    ast = tag_slots(quote_result, slot_info)
 
     state
     |> pop_substate_from_stack()
@@ -646,10 +635,7 @@ defmodule Filament.TagEngine do
 
   # Slot (self close)
 
-  defp handle_token(
-         [{:slot, slot_name, attrs, %{closing: :self} = tag_meta} | tokens],
-         state
-       ) do
+  defp handle_token([{:slot, slot_name, attrs, %{closing: :self} = tag_meta} | tokens], state) do
     slot_name = String.to_atom(slot_name)
     validate_slot!(state, slot_name, tag_meta)
     attrs = postprocess_attrs(attrs, state)
@@ -665,7 +651,8 @@ defmodule Filament.TagEngine do
     attrs = [__slot__: slot_name, inner_block: nil] ++ attrs
     assigns = wrap_special_slot(special, merge_component_attrs(roots, attrs, line))
 
-    add_slot(state, slot_name, assigns, attr_info, tag_meta, special)
+    state
+    |> add_slot(slot_name, assigns, attr_info, tag_meta, special)
     |> continue(prune_text(tokens))
   end
 
@@ -707,10 +694,7 @@ defmodule Filament.TagEngine do
 
   # Local function component (self close)
 
-  defp handle_token(
-         [{:local_component, name, attrs, %{closing: :self} = tag_meta} | tokens],
-         state
-       ) do
+  defp handle_token([{:local_component, name, attrs, %{closing: :self} = tag_meta} | tokens], state) do
     fun = String.to_atom(name)
     %{line: line, column: column} = tag_meta
     attrs = postprocess_attrs(attrs, state)
@@ -795,7 +779,7 @@ defmodule Filament.TagEngine do
     meta = [line: line, column: column]
     call = {fun, meta, __MODULE__}
 
-    ast =
+    quote_result =
       quote line: line do
         Filament.TagEngine.component(
           &(unquote(call) / 1),
@@ -803,7 +787,8 @@ defmodule Filament.TagEngine do
           {__MODULE__, __ENV__.function, __ENV__.file, unquote(line)}
         )
       end
-      |> tag_slots(slot_info)
+
+    ast = tag_slots(quote_result, slot_info)
 
     state
     |> pop_substate_from_stack()
@@ -883,11 +868,7 @@ defmodule Filament.TagEngine do
 
   defp handle_token([], state), do: state
 
-  defp handle_macro_component(
-         [{:tag, _name, _attrs, tag_meta} | _] = tokens,
-         module_string,
-         state
-       ) do
+  defp handle_macro_component([{:tag, _name, _attrs, tag_meta} | _] = tokens, module_string, state) do
     # Macro components work by converting the HEEx tokens into an AST
     # (see Phoenix.Component.MacroComponent) and then calling the transform
     # function on the macro component module, which can return a transformed
@@ -904,7 +885,7 @@ defmodule Filament.TagEngine do
 
     try do
       {ast, rest} =
-        case Phoenix.Component.MacroComponent.build_ast(tokens, state.caller) do
+        case MacroComponent.build_ast(tokens, state.caller) do
           {:ok, ast, rest} -> {ast, rest}
           {:error, message, meta} -> raise_syntax_error!(message, meta, state)
         end
@@ -978,7 +959,7 @@ defmodule Filament.TagEngine do
   defp handle_ast_attrs(state, attrs, tag_open_meta) do
     Enum.reduce(attrs, state, fn
       {name, value}, state when is_binary(value) ->
-        attr = Phoenix.Component.MacroComponent.encode_binary_attribute(name, value)
+        attr = MacroComponent.encode_binary_attribute(name, value)
         update_subengine(state, :handle_text, [[], attr])
 
       {name, nil}, state ->
@@ -991,7 +972,8 @@ defmodule Filament.TagEngine do
 
   defp validate_module!(module_string, tag_meta, state) do
     module =
-      Code.string_to_quoted!(module_string,
+      module_string
+      |> Code.string_to_quoted!(
         file: state.file,
         line: tag_meta.line,
         column: tag_meta.column
@@ -1179,8 +1161,7 @@ defmodule Filament.TagEngine do
     Code.string_to_quoted!(value, line: line, column: col, file: file)
   end
 
-  defp literal_keys?([{key, _value} | rest]) when is_atom(key) or is_binary(key),
-    do: literal_keys?(rest)
+  defp literal_keys?([{key, _value} | rest]) when is_atom(key) or is_binary(key), do: literal_keys?(rest)
 
   defp literal_keys?([]), do: true
   defp literal_keys?(_other), do: false
@@ -1192,8 +1173,7 @@ defmodule Filament.TagEngine do
           for_expr = maybe_keyed(tag_meta)
 
           quote do
-            for unquote(for_expr), unquote(if_expr),
-              do: unquote(invoke_subengine(state, :handle_end, []))
+            for unquote(for_expr), unquote(if_expr), do: unquote(invoke_subengine(state, :handle_end, []))
           end
 
         %{for: _for_expr} ->
@@ -1295,12 +1275,7 @@ defmodule Filament.TagEngine do
   end
 
   @special_attrs ~w(:let :if :for :key)
-  defp split_component_attr(
-         {":key", _expr, attr_meta},
-         _,
-         state,
-         {"slot", slot_name}
-       ) do
+  defp split_component_attr({":key", _expr, attr_meta}, _, state, {"slot", slot_name}) do
     message = ":key is not supported on slots: #{slot_name}"
     raise_syntax_error!(message, attr_meta, state)
   end
@@ -1328,8 +1303,7 @@ defmodule Filament.TagEngine do
     end
   end
 
-  defp split_component_attr({attr, _, meta}, _state, state, {type, component_or_slot})
-       when attr in @special_attrs do
+  defp split_component_attr({attr, _, meta}, _state, state, {type, component_or_slot}) when attr in @special_attrs do
     message = "#{attr} must be a pattern between {...} in #{type}: #{component_or_slot}"
     raise_syntax_error!(message, meta, state)
   end
@@ -1349,21 +1323,11 @@ defmodule Filament.TagEngine do
     {special, r, [{String.to_atom(name), quoted_value} | a], [line_column(attr_meta) | locs]}
   end
 
-  defp split_component_attr(
-         {name, {:string, value, _meta}, attr_meta},
-         {special, r, a, locs},
-         _state,
-         _type_component
-       ) do
+  defp split_component_attr({name, {:string, value, _meta}, attr_meta}, {special, r, a, locs}, _state, _type_component) do
     {special, r, [{String.to_atom(name), value} | a], [line_column(attr_meta) | locs]}
   end
 
-  defp split_component_attr(
-         {name, nil, attr_meta},
-         {special, r, a, locs},
-         _state,
-         _type_component
-       ) do
+  defp split_component_attr({name, nil, attr_meta}, {special, r, a, locs}, _state, _type_component) do
     {special, r, [{String.to_atom(name), true} | a], [line_column(attr_meta) | locs]}
   end
 
@@ -1385,7 +1349,7 @@ defmodule Filament.TagEngine do
   defp decompose_remote_component_tag!(tag_name, tag_meta, state) do
     %{line: line, column: column} = tag_meta
 
-    case String.split(tag_name, ".") |> Enum.reverse() do
+    case tag_name |> String.split(".") |> Enum.reverse() do
       [<<first, _::binary>> = fun_name | [_ | _] = rest] when first in ?a..?z ->
         # Standard Phoenix HEEx: <Module.function /> → Module.function(assigns)
         size = byte_size(tag_name) - byte_size(fun_name) + 1
@@ -1512,7 +1476,7 @@ defmodule Filament.TagEngine do
 
   defp attr_type({:<<>>, _, _} = value), do: {:string, value}
   defp attr_type(value) when is_list(value), do: {:list, value}
-  defp attr_type(value = {:%{}, _, _}), do: {:map, value}
+  defp attr_type({:%{}, _, _} = value), do: {:map, value}
   defp attr_type(value) when is_binary(value), do: {:string, value}
   defp attr_type(value) when is_integer(value), do: {:integer, value}
   defp attr_type(value) when is_float(value), do: {:float, value}
@@ -1600,8 +1564,7 @@ defmodule Filament.TagEngine do
     validate_phx_attrs!(attrs, meta, state, nil, false)
   end
 
-  defp validate_phx_attrs!([], meta, state, attr, false)
-       when attr in ["phx-update", "phx-hook"] do
+  defp validate_phx_attrs!([], meta, state, attr, false) when attr in ["phx-update", "phx-hook"] do
     message = "attribute \"#{attr}\" requires the \"id\" attribute to be set"
 
     raise_syntax_error!(message, meta, state)
@@ -1617,13 +1580,7 @@ defmodule Filament.TagEngine do
   defp validate_phx_attrs!([{"id", _, _} | t], meta, state, attr, _id?),
     do: validate_phx_attrs!(t, meta, state, attr, true)
 
-  defp validate_phx_attrs!(
-         [{"phx-update", {:string, value, _meta}, attr_meta} | t],
-         meta,
-         state,
-         _attr,
-         id?
-       ) do
+  defp validate_phx_attrs!([{"phx-update", {:string, value, _meta}, attr_meta} | t], meta, state, _attr, id?) do
     cond do
       value in ~w(ignore stream replace) ->
         validate_phx_attrs!(t, meta, state, "phx-update", id?)
@@ -1671,8 +1628,7 @@ defmodule Filament.TagEngine do
     raise_syntax_error!(message, attr_meta, state)
   end
 
-  defp validate_phx_attrs!([_h | t], meta, state, attr, id?),
-    do: validate_phx_attrs!(t, meta, state, attr, id?)
+  defp validate_phx_attrs!([_h | t], meta, state, attr, id?), do: validate_phx_attrs!(t, meta, state, attr, id?)
 
   defp validate_quoted_special_attr!(attr, quoted_value, attr_meta, state) do
     if attr == ":for" and not match?({:<-, _, [_, _]}, quoted_value) do

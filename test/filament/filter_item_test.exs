@@ -1,18 +1,19 @@
 defmodule Filament.FilterItemTest do
   use ExUnit.Case, async: true
 
-  alias Filament.{Reconciler, FiberTree}
+  alias Filament.FiberTree
+  alias Filament.Reconciler
+  alias Phoenix.HTML.Safe
+  alias TodoWeb.Components.FilterBar
 
   @filters [all: "All", active: "Active", completed: "Done"]
 
   describe "FilterBar with FilterItem sub-components" do
     test "renders filter buttons as HTML" do
       {_tree, rendered, _} =
-        Reconciler.mount(TodoWeb.Components.FilterBar, %{filters: @filters, default: :all},
-          owner_pid: self()
-        )
+        Reconciler.mount(FilterBar, %{filters: @filters, default: :all}, owner_pid: self())
 
-      html = rendered |> Phoenix.HTML.Safe.to_iodata() |> IO.iodata_to_binary()
+      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "All"
       assert html =~ "Active"
       assert html =~ "Done"
@@ -20,19 +21,15 @@ defmodule Filament.FilterItemTest do
 
     test "active item has selected class" do
       {_tree, rendered, _} =
-        Reconciler.mount(TodoWeb.Components.FilterBar, %{filters: @filters, default: :active},
-          owner_pid: self()
-        )
+        Reconciler.mount(FilterBar, %{filters: @filters, default: :active}, owner_pid: self())
 
-      html = rendered |> Phoenix.HTML.Safe.to_iodata() |> IO.iodata_to_binary()
+      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
       assert html =~ ~s(class="selected")
     end
 
     test "each FilterItem gets its own fiber" do
       {tree, _rendered, _} =
-        Reconciler.mount(TodoWeb.Components.FilterBar, %{filters: @filters, default: :all},
-          owner_pid: self()
-        )
+        Reconciler.mount(FilterBar, %{filters: @filters, default: :all}, owner_pid: self())
 
       fiber_ids = FiberTree.fiber_ids(tree)
       # root fiber for FilterBar + one fiber per FilterItem (3 items)
@@ -41,9 +38,7 @@ defmodule Filament.FilterItemTest do
 
     test "on_click handler exists for each item" do
       {tree, _rendered, _} =
-        Reconciler.mount(TodoWeb.Components.FilterBar, %{filters: @filters, default: :all},
-          owner_pid: self()
-        )
+        Reconciler.mount(FilterBar, %{filters: @filters, default: :all}, owner_pid: self())
 
       fiber_ids = FiberTree.fiber_ids(tree)
       item_fibers = fiber_ids -- ["root"]

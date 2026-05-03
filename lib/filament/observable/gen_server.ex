@@ -41,8 +41,9 @@ defmodule Filament.Observable.GenServer do
 
   defmacro __using__(_opts) do
     quote do
-      use GenServer
       @behaviour Filament.Observable
+
+      use GenServer
 
       alias Filament.Observable.Subscriber
 
@@ -85,7 +86,7 @@ defmodule Filament.Observable.GenServer do
           end
 
         ref = Process.monitor(sub_info.pid)
-        subscriber = %Subscriber{sub_info | ref: ref, last_projected: :unset}
+        subscriber = %{sub_info | ref: ref, last_projected: :unset}
 
         # Use apply/3 to disable Elixir's strict type-checker from seeing
         # the concrete return type at compile time, preventing dead-branch
@@ -179,16 +180,15 @@ defmodule Filament.Observable.GenServer do
             else
               new_projected = subscriber.project.(new_state)
 
-              if new_projected !== subscriber.last_projected do
+              if new_projected === subscriber.last_projected do
+                {sub_key, subscriber}
+              else
                 send(
                   subscriber.pid,
-                  {:filament_observable_update, subscriber.fiber_id, subscriber.slot_index,
-                   new_projected}
+                  {:filament_observable_update, subscriber.fiber_id, subscriber.slot_index, new_projected}
                 )
 
                 {sub_key, %{subscriber | last_projected: new_projected}}
-              else
-                {sub_key, subscriber}
               end
             end
           end)

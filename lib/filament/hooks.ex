@@ -22,8 +22,7 @@ defmodule Filament.Hooks do
 
   @doc false
   @spec use_slot(default :: term()) ::
-          {slot_index :: non_neg_integer(), previous_value :: term(),
-           context :: RenderContext.t()}
+          {slot_index :: non_neg_integer(), previous_value :: term(), context :: RenderContext.t()}
   def use_slot(default) do
     ctx =
       Process.get(:filament_render_context) ||
@@ -223,6 +222,7 @@ defmodule Filament.Hooks do
         raw_start != nil -> fn -> raw_start end
         true -> nil
       end
+
     start_mode = server == nil and start_fn != nil
     request = Keyword.get(opts, :request, nil)
     project = Keyword.get(opts, :project, &Function.identity/1)
@@ -232,10 +232,7 @@ defmodule Filament.Hooks do
     # Skip subscription during disconnected (HTTP static) mounts — subscribing
     # in the HTTP render creates zombie subscribers that inflate presence counts
     # and race with the real WebSocket connection.
-    if not ctx.subscribe_enabled do
-      commit_slot(slot_index, :uninitialized)
-      if start_mode, do: {nil, disconnected}, else: disconnected
-    else
+    if ctx.subscribe_enabled do
       # Resolve the server pid: explicit arg > reuse from slot > call subscribe:
       server =
         cond do
@@ -264,7 +261,8 @@ defmodule Filament.Hooks do
           {:subscribed, ^server, _current} ->
             # Same server — value comes from handle_info updates, just read it.
             # The current value was stored by handle_info during the last update.
-            Map.get(ctx.new_hook_slots, slot_index, previous)
+            ctx.new_hook_slots
+            |> Map.get(slot_index, previous)
             |> case do
               {:subscribed, ^server, current} -> current
               value -> value
@@ -287,6 +285,9 @@ defmodule Filament.Hooks do
 
       commit_slot(slot_index, {:subscribed, server, value})
       if start_mode, do: {server, value}, else: value
+    else
+      commit_slot(slot_index, :uninitialized)
+      if start_mode, do: {nil, disconnected}, else: disconnected
     end
   end
 

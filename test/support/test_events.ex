@@ -1,4 +1,5 @@
 defmodule Filament.TestEvents do
+  @moduledoc false
   import Filament.Event
 
   defevent TestPurchased do

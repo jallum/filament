@@ -1,8 +1,10 @@
 defmodule Filament.VNodeTest do
   use ExUnit.Case, async: true
+
   alias Filament.VNode
 
   defmodule TestComponent do
+    @moduledoc false
   end
 
   describe "VNode variants" do

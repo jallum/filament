@@ -1,9 +1,12 @@
 defmodule Filament.Hooks.UseObservableTest do
   use ExUnit.Case
 
-  alias Filament.{Hooks, Fiber, RenderContext}
+  alias Filament.Fiber
+  alias Filament.Hooks
+  alias Filament.RenderContext
 
   defmodule TestObservable do
+    @moduledoc false
     use Filament.Observable.GenServer
 
     def start_link(n), do: GenServer.start_link(__MODULE__, n)
@@ -24,6 +27,7 @@ defmodule Filament.Hooks.UseObservableTest do
   end
 
   defmodule RejectingObservable do
+    @moduledoc false
     use Filament.Observable.GenServer
 
     def start_link, do: GenServer.start_link(__MODULE__, :ok)
@@ -150,8 +154,10 @@ defmodule Filament.Hooks.UseObservableTest do
     observable = start_supervised!({TestObservable, 42})
 
     # Subscribe self first so observable has a subscriber
-    %Filament.Observable.Subscriber{pid: self(), fiber_id: "root", slot_index: 0, project: & &1}
-    |> then(&Filament.Observable.subscribe(observable, :any, &1))
+    then(
+      %Filament.Observable.Subscriber{pid: self(), fiber_id: "root", slot_index: 0, project: & &1},
+      &Filament.Observable.subscribe(observable, :any, &1)
+    )
 
     assert TestObservable.get_subs(observable).count == 1
 

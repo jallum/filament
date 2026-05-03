@@ -64,9 +64,9 @@ defmodule Filament.EventTest do
   end
 
   test "9. module namespaced under calling module" do
-    assert Code.ensure_loaded?(Filament.TestEvents.TestPurchased)
-    assert function_exported?(Filament.TestEvents.TestPurchased, :encode, 1)
-    assert function_exported?(Filament.TestEvents.TestPurchased, :decode, 1)
+    assert Code.ensure_loaded?(TestPurchased)
+    assert function_exported?(TestPurchased, :encode, 1)
+    assert function_exported?(TestPurchased, :decode, 1)
   end
 
   test "10. compile error on unsupported type" do

@@ -21,7 +21,7 @@ defmodule Filament.Test.LiveView do
       setup do
         endpoint = unquote(opts[:endpoint])
 
-        unless endpoint do
+        if !endpoint do
           raise "Filament.Test.LiveView requires endpoint: MyApp.Endpoint"
         end
 

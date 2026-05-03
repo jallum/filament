@@ -1,5 +1,7 @@
 defmodule CollaborationWeb.Components.DocumentEditor do
+  @moduledoc false
   use Filament.Component
+
   alias Collaboration.DocumentServer
 
   defcomponent do

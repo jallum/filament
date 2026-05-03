@@ -1,8 +1,11 @@
 defmodule Inventory.Test do
   use ExUnit.Case, async: true
+
   import Filament.Test
 
   # ── Rung 1: Inventory.Server domain ─────────────────────────────────────────
+  alias Filament.Observable.Subscriber
+  alias InventoryWeb.Components.InventoryItem
 
   describe "Inventory.Server" do
     setup do
@@ -41,7 +44,7 @@ defmodule Inventory.Test do
 
       holder =
         spawn(fn ->
-          sub = %Filament.Observable.Subscriber{
+          sub = %Subscriber{
             pid: self(),
             fiber_id: :holder_fiber,
             slot_index: 0,
@@ -68,7 +71,7 @@ defmodule Inventory.Test do
 
       for i <- [1, 2] do
         spawn(fn ->
-          sub = %Filament.Observable.Subscriber{
+          sub = %Subscriber{
             pid: self(),
             fiber_id: :"holder_#{i}",
             slot_index: 0,
@@ -95,12 +98,10 @@ defmodule Inventory.Test do
   describe "InventoryItem (rung-2)" do
     test "renders out of stock when item has available=0" do
       server =
-        start_supervised!(
-          {Inventory.Server, items: [%Inventory.Item{id: "oos", name: "Scarce", available: 0}]}
-        )
+        start_supervised!({Inventory.Server, items: [%Inventory.Item{id: "oos", name: "Scarce", available: 0}]})
 
       {:ok, view} =
-        mount(InventoryWeb.Components.InventoryItem, %{server: server, item_id: "oos"})
+        mount(InventoryItem, %{server: server, item_id: "oos"})
 
       assert render_text(view) =~ "Out of Stock"
     end
@@ -108,12 +109,11 @@ defmodule Inventory.Test do
     test "renders hold button when item is available" do
       server =
         start_supervised!(
-          {Inventory.Server,
-           items: [%Inventory.Item{id: "avail", name: "In Stock Item", available: 3}]}
+          {Inventory.Server, items: [%Inventory.Item{id: "avail", name: "In Stock Item", available: 3}]}
         )
 
       {:ok, view} =
-        mount(InventoryWeb.Components.InventoryItem, %{server: server, item_id: "avail"})
+        mount(InventoryItem, %{server: server, item_id: "avail"})
 
       text = render_text(view)
       refute text =~ "Out of Stock"
@@ -122,17 +122,14 @@ defmodule Inventory.Test do
 
     test "second component sees Out of Stock once first has acquired a hold" do
       server =
-        start_supervised!(
-          {Inventory.Server,
-           items: [%Inventory.Item{id: "last", name: "LastUnit", available: 1}]}
-        )
+        start_supervised!({Inventory.Server, items: [%Inventory.Item{id: "last", name: "LastUnit", available: 1}]})
 
       parent = self()
 
       # Spawn a subscriber that acquires the hold, then waits
       holder =
         spawn(fn ->
-          sub = %Filament.Observable.Subscriber{
+          sub = %Subscriber{
             pid: self(),
             fiber_id: :holder,
             slot_index: 0,
@@ -149,7 +146,7 @@ defmodule Inventory.Test do
 
       # A second component subscribing now should see 0 available → Out of Stock
       {:ok, view2} =
-        mount(InventoryWeb.Components.InventoryItem, %{server: server, item_id: "last"})
+        mount(InventoryItem, %{server: server, item_id: "last"})
 
       assert render_text(view2) =~ "Out of Stock"
 

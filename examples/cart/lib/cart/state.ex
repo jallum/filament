@@ -1,10 +1,11 @@
 defmodule Cart.State do
+  @moduledoc false
   defstruct items: [], total_cents: 0
 
   @type t :: %__MODULE__{
-    items: [Cart.Item.t()],
-    total_cents: non_neg_integer()
-  }
+          items: [Cart.Item.t()],
+          total_cents: non_neg_integer()
+        }
 
   def add_item(%__MODULE__{} = state, %Cart.Item{} = item) do
     # If item already in cart, increment quantity; otherwise append.
@@ -26,6 +27,7 @@ defmodule Cart.State do
     case Enum.find(state.items, &(&1.id == item_id)) do
       nil ->
         state
+
       removed ->
         items = Enum.reject(state.items, &(&1.id == item_id))
         total = state.total_cents - removed.price_cents * removed.quantity
