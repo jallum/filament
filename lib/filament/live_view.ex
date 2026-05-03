@@ -210,7 +210,6 @@ defmodule Filament.LiveView do
   end
 
   defp invoke_event_handler(nil, _params, socket), do: {:noreply, socket}
-  defp invoke_event_handler(other, _params, socket) when not is_function(other), do: {:noreply, socket}
 
   defp invoke_event_handler(fun, _params, socket) when is_function(fun, 0) do
     fun.()

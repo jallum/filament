@@ -1,4 +1,6 @@
 defmodule Filament.SigilFFormatter do
+  @dialyzer :no_behaviours
+
   @moduledoc """
   Format `~F` templates via `mix format`.
 
@@ -104,8 +106,8 @@ defmodule Filament.SigilFFormatter do
     IO.iodata_to_binary([formatted, newline])
   end
 
-  defp format_trailing_newline(delimiter, formatted) do
-    if match?(<<_>>, delimiter) or formatted == [] or formatted == "", do: [], else: ?\n
+  defp format_trailing_newline(delimiter, _formatted) do
+    if match?(<<_>>, delimiter), do: [], else: ?\n
   end
 
   @eex_expr [:start_expr, :expr, :end_expr, :middle_expr]

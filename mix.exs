@@ -8,6 +8,7 @@ defmodule Filament.MixProject do
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      dialyzer: [plt_add_apps: [:mix]],
       docs: docs(),
       package: package(),
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -90,7 +91,7 @@ defmodule Filament.MixProject do
 
   defp package do
     [
-      description: "Filament is a Phoenix LiveView component library",
+      description: "JSX-like LiveView components — events as closures, state as hooks, servers as observables",
       licenses: ["Apache-2.0"],
       links: %{}
     ]

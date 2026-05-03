@@ -191,14 +191,6 @@ defmodule Filament.Hooks do
           server :: GenServer.server(),
           opts :: [request: term(), project: (term() -> term()), disconnected: term()]
         ) :: term()
-  @spec use_observable(
-          opts :: [
-            subscribe: (-> pid()),
-            request: term(),
-            project: (term() -> term()),
-            disconnected: term()
-          ]
-        ) :: {pid() | nil, term()}
   def use_observable(server_or_opts, opts \\ [])
 
   def use_observable(opts, []) when is_list(opts) do
