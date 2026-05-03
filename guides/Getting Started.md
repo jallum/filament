@@ -1,0 +1,236 @@
+# Getting Started
+
+Filament is a process-aware UI framework for Phoenix LiveView that brings
+React-style component composition and hooks to your Elixir applications. This
+guide walks you through building a working TodoList component — the same one
+in the `examples/todo` directory — so you understand `defcomponent`, props,
+`use_state`, event closures, child components, and how to test everything with
+Filament's rung-2 isolation API. By the end you will have a passing test suite
+and a clear mental model of the Filament component lifecycle.
+
+## What you need
+
+- Elixir 1.17+ and Phoenix LiveView 1.0+
+- Add Filament to your project:
+
+```elixir
+# mix.exs
+{:filament, "~> 0.1"}
+```
+
+- Run `mix deps.get` and then `use Filament.Component` in any module where you
+  want to define components.
+
+## Defining a component
+
+Every Filament component lives inside a `defcomponent` block. Here is the real
+`TodoItem` component from `examples/todo`:
+
+```elixir
+defmodule TodoWeb.Components.TodoItem do
+  use Filament.Component
+
+  defcomponent do
+    prop(:todo, :map, required: true)
+    prop(:on_toggle, :function, default: nil)
+    prop(:on_remove, :function, default: nil)
+
+    defp item_class(%{completed: true}), do: "completed"
+    defp item_class(_), do: ""
+
+    def render(%{todo: todo, on_toggle: on_toggle, on_remove: on_remove}) do
+      ~F"""
+      <li class={item_class(todo)}>
+        <div class="view">
+          <input
+            class="toggle"
+            type="checkbox"
+            checked={todo.completed}
+            on_click={on_toggle}
+          />
+          <label>{todo.text}</label>
+          <button class="destroy" on_click={on_remove}>×</button>
+        </div>
+      </li>
+      """
+    end
+  end
+end
+```
+
+Key points:
+
+- `use Filament.Component` imports `defcomponent`, `prop`, the `~F` sigil, and
+  all hooks into your module.
+- `prop(:name, :type, opts)` declares a typed attribute. Pass `required: true`
+  to make the prop mandatory or `default: value` to make it optional.
+- `render/1` receives a plain map of props — pattern-match directly.
+- Inside `~F""" ... """`, use `{expression}` for interpolation and `@prop_name`
+  as a shorthand for the same — both resolve to local variables, not an assigns
+  map.
+- Event attributes like `on_click={handler}` accept zero-arity or one-arity
+  functions; Filament wires them to `phx-click` automatically.
+
+## Local state with use_state
+
+`use_state/1` gives a component a piece of mutable local state. The
+`TodoList` component uses it to track the active filter:
+
+```elixir
+def render(%{store: store, title: title}) do
+  raw = use_observable(store, nil, project: &Function.identity/1)
+  todos = if raw == :uninitialized, do: [], else: raw
+
+  {filter, set_filter} = use_state(:all)
+  filtered = apply_filter(todos, filter)
+  # ...
+end
+```
+
+- `use_state(initial)` returns `{current_value, setter}`.
+- On the first render, `current_value` is `initial`. On subsequent renders it
+  is whatever was last passed to `setter.(new_value)`.
+- Calling `setter.(new_value)` sends a message to the owning LiveView, which
+  triggers a re-render of only the affected fiber.
+- **Rules of hooks**: call `use_state` (and all hooks) at the top level of
+  `render/1`, never inside `if`, `case`, or comprehensions. Hook identity
+  depends on call order.
+
+## Event closures
+
+Filament event handlers are plain Elixir closures attached to template
+attributes. The `TodoList` component adds todos through a Phoenix form event
+and toggles / removes items through Filament closures:
+
+```elixir
+~F"""
+<ul class="todo-list">
+  {for todo <- filtered do}
+    <TodoItem
+      todo={todo}
+      on_toggle={fn -> Todo.Store.toggle(store, todo.id) end}
+      on_remove={fn -> Todo.Store.remove(store, todo.id) end}
+    />
+  {end}
+</ul>
+"""
+```
+
+- Closures passed to `on_click` or any `on_*` prop are registered in the
+  fiber's event handler table at render time.
+- When the user clicks, `Filament.LiveView` routes the `phx-click="filament:..."` 
+  event back to the correct closure. The wire format is internal — you never
+  write it by hand.
+- Zero-arity closures receive no arguments; one-arity closures receive the
+  event params map.
+- Because closures capture the render-time environment, `todo.id` in the loop
+  above is correctly bound for each iteration.
+
+## Composing components and keyed lists
+
+Child components are rendered with their module name as a tag in `~F` templates:
+
+```elixir
+~F"""
+<section class="main">
+  <ul class="todo-list">
+    {for todo <- filtered do}
+      <TodoItem
+        todo={todo}
+        on_toggle={fn -> Todo.Store.toggle(store, todo.id) end}
+        on_remove={fn -> Todo.Store.remove(store, todo.id) end}
+      />
+    {end}
+  </ul>
+</section>
+"""
+```
+
+- `<TodoItem prop={value} />` passes props to the child component exactly like
+  HTML attributes.
+- Each iteration of the `for` loop creates a separate fiber tracked by position
+  (index). For lists that can be reordered or have items deleted, add a `:key`
+  attribute:
+
+  ```elixir
+  <TodoItem :key={todo.id} todo={todo} on_toggle={...} on_remove={...} />
+  ```
+
+  Without `:key`, Filament matches children by position; removing an item in
+  the middle shifts all subsequent fibers. With `:key={todo.id}`, Filament
+  matches by identity and cleanly unmounts only the removed item.
+
+## Testing with Filament.Test
+
+Filament's rung-2 API mounts a component tree in-process with no WebSocket
+required. Tests run with `async: true` and complete in milliseconds.
+
+Here are the rung-2 tests from `test/filament/examples/todo_test.exs`:
+
+```elixir
+defmodule Filament.Examples.TodoTest do
+  use ExUnit.Case, async: true
+  import Filament.Test
+
+  describe "TodoList component" do
+    setup do
+      name = :"todo_store_#{System.unique_integer([:positive])}"
+      {:ok, store} = Todo.Store.start_link(name: name)
+      {:ok, _view} = mount(TodoWeb.Components.TodoList, %{store: store})
+      %{store: store}
+    end
+
+    test "renders empty state on first mount", %{store: store} do
+      {:ok, view} = mount(TodoWeb.Components.TodoList, %{store: store})
+      html = view.rendered_html
+      refute html =~ "<li"
+    end
+
+    test "renders todo items from store", %{store: store} do
+      :ok = Todo.Store.add(store, "First task")
+      :ok = Todo.Store.add(store, "Second task")
+
+      {:ok, view} = mount(TodoWeb.Components.TodoList, %{store: store})
+
+      text = render_text(view)
+      assert text =~ "First task"
+      assert text =~ "Second task"
+    end
+
+    test "completed items have 'completed' class", %{store: store} do
+      :ok = Todo.Store.add(store, "Done task")
+      [item | _] = Todo.Store.list(store)
+      :ok = Todo.Store.toggle(store, item.id)
+
+      {:ok, view} = mount(TodoWeb.Components.TodoList, %{store: store})
+      html = view.rendered_html
+
+      assert html =~ "class=\"completed"
+    end
+  end
+end
+```
+
+Key API functions:
+
+- `mount(Component, props)` — renders the component in isolation and returns
+  `{:ok, view}`. The `view` struct holds `rendered_html` and a live
+  `fiber_tree`.
+- `render_text(view)` — strips HTML tags and returns plain text, useful for
+  content assertions.
+- `click(view, selector)` — fires the `on_click` handler on the first element
+  matching the CSS selector and returns `{:ok, updated_view}`.
+- `submit(view, selector, params)` — fires a form submit handler with the
+  given params map.
+
+Because rung-2 tests use in-process message passing rather than a browser,
+they are safe to run with `async: true` and typically finish in under 5 ms.
+
+## Next steps
+
+- **Observables guide** — learn `Observable.GenServer`, projections, and
+  the change-or-bust pattern for efficient re-renders.
+- **Resource Holds guide** — learn `Hold.GenServer`, the `:DOWN` lifecycle,
+  and how to model out-of-stock or reservation UX.
+- **API reference** — see `Filament.Hooks` for the full hook signatures and
+  `Filament.Component` for the behaviour callbacks.
