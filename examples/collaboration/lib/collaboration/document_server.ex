@@ -48,11 +48,7 @@ defmodule Collaboration.DocumentServer do
 
   # Observable callback — called when a subscriber joins.
   @impl Filament.Observable
-  def handle_subscribe(_request, subscriber, state) do
-    require Logger
-    msg = "[DocServer] handle_subscribe: presence=#{state.presence}->#{state.presence + 1}, pid=#{inspect(subscriber.pid)}, fiber=#{inspect(subscriber.fiber_id)}, slot=#{subscriber.slot_index}"
-    Logger.warning(msg)
-    File.write("/tmp/docserver.log", "#{DateTime.utc_now()} #{msg}\n", [:append])
+  def handle_subscribe(_request, _subscriber, state) do
     new_state = %{state | presence: state.presence + 1}
     initial_view = observable_view(new_state)
     notify_observers(initial_view)
@@ -63,10 +59,6 @@ defmodule Collaboration.DocumentServer do
   # The first arg is a %Filament.Observable.Subscriber{} struct — extract .pid for lock comparison.
   @impl Filament.Observable
   def handle_unsubscribe(subscriber, state) do
-    require Logger
-    msg = "[DocServer] handle_unsubscribe: presence=#{state.presence}->#{max(0, state.presence - 1)}, pid=#{inspect(subscriber.pid)}, fiber=#{inspect(subscriber.fiber_id)}, slot=#{subscriber.slot_index}"
-    Logger.warning(msg)
-    File.write("/tmp/docserver.log", "#{DateTime.utc_now()} #{msg}\n", [:append])
     new_state =
       state
       |> maybe_release_lock(subscriber.pid)
