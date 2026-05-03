@@ -240,6 +240,8 @@ defmodule Filament.VNodeCompiler do
     end
   end
 
+  defp extract_fn_slots(_), do: {[], []}
+
   defp extract_fn_slots_from_block(exprs) do
     return_list = List.last(exprs)
 
@@ -261,8 +263,6 @@ defmodule Filament.VNodeCompiler do
         []
     end
   end
-
-  defp extract_fn_slots(_), do: {[], []}
 
   # Phoenix wraps slot expressions in change-tracking cases. Since we always call
   # the dynamic fn with track_changes? = false, `changed` is always nil and the

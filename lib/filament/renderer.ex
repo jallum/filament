@@ -263,6 +263,10 @@ defmodule Filament.Renderer do
     rendered_items
   end
 
+  def render_vnode(invalid, _context) do
+    raise ArgumentError, "invalid vnode: #{inspect(invalid)}"
+  end
+
   defp mark_children_unmounting(child_ids, new_fibers, fiber_tree) do
     Enum.reduce(child_ids, new_fibers, fn child_id, acc ->
       case Map.get(acc, child_id) do
@@ -277,10 +281,6 @@ defmodule Filament.Renderer do
       nil -> acc
       existing -> Map.put(acc, child_id, %{existing | status: :unmounting})
     end
-  end
-
-  def render_vnode(invalid, _context) do
-    raise ArgumentError, "invalid vnode: #{inspect(invalid)}"
   end
 
   defp apply_prop_defaults(component_module, props) do
