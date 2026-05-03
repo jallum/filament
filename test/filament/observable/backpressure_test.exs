@@ -47,7 +47,7 @@ defmodule Filament.Observable.BackpressureTest do
   # --- Tests ---
 
   test "1. normal delivery with empty mailbox" do
-    {:ok, observable} = PressureCounter.start_link(1)
+    observable = start_supervised!({PressureCounter, 1})
     sub_pid = spawn_sleeper()
 
     Observable.subscribe(observable, :any, %Subscriber{
@@ -55,7 +55,7 @@ defmodule Filament.Observable.BackpressureTest do
       fiber_id: :root,
       slot_index: 0,
       project: & &1
-    })
+   })
 
     PressureCounter.set(observable, 2)
 
@@ -68,7 +68,7 @@ defmodule Filament.Observable.BackpressureTest do
   end
 
   test "2. saturated subscriber receives resubscribe, not update" do
-    {:ok, observable} = PressureCounter.start_link(1)
+    observable = start_supervised!({PressureCounter, 1})
     sub_pid = spawn_sleeper()
 
     Observable.subscribe(observable, :any, %Subscriber{
@@ -76,7 +76,7 @@ defmodule Filament.Observable.BackpressureTest do
       fiber_id: :root,
       slot_index: 0,
       project: & &1
-    })
+   })
 
     # Flood the subscriber's mailbox to >= threshold of 100
     flood_mailbox(sub_pid, 110)
@@ -96,7 +96,7 @@ defmodule Filament.Observable.BackpressureTest do
   end
 
   test "3. last_projected not updated on saturation" do
-    {:ok, observable} = PressureCounter.start_link(1)
+    observable = start_supervised!({PressureCounter, 1})
 
     # First: subscribe with non-saturated mailbox, set to 1
     sub_pid = spawn_sleeper()
@@ -106,7 +106,7 @@ defmodule Filament.Observable.BackpressureTest do
       fiber_id: :root,
       slot_index: 0,
       project: & &1
-    })
+   })
 
     PressureCounter.set(observable, 1)
 
@@ -124,7 +124,7 @@ defmodule Filament.Observable.BackpressureTest do
       fiber_id: :root,
       slot_index: 0,
       project: & &1
-    })
+   })
 
     flood_mailbox(sub_pid2, 110)
 
@@ -141,7 +141,7 @@ defmodule Filament.Observable.BackpressureTest do
   end
 
   test "4. dead process handled gracefully" do
-    {:ok, observable} = PressureCounter.start_link(1)
+    observable = start_supervised!({PressureCounter, 1})
     sub_pid = spawn_sleeper()
 
     Observable.subscribe(observable, :any, %Subscriber{
@@ -149,7 +149,7 @@ defmodule Filament.Observable.BackpressureTest do
       fiber_id: :root,
       slot_index: 0,
       project: & &1
-    })
+   })
 
     # Kill without waiting for DOWN (background cleanup)
     Process.exit(sub_pid, :kill)
@@ -163,7 +163,7 @@ defmodule Filament.Observable.BackpressureTest do
   end
 
   test "5. warning logged on saturation" do
-    {:ok, observable} = PressureCounter.start_link(1)
+    observable = start_supervised!({PressureCounter, 1})
     sub_pid = spawn_sleeper()
 
     Observable.subscribe(observable, :any, %Subscriber{
@@ -171,7 +171,7 @@ defmodule Filament.Observable.BackpressureTest do
       fiber_id: :backpressure_test,
       slot_index: 0,
       project: & &1
-    })
+   })
 
     flood_mailbox(sub_pid, 110)
 

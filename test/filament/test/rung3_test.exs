@@ -33,7 +33,7 @@ defmodule Filament.Test.Rung3Test do
   end
 
   test "1. update/1 processes pending message" do
-    {:ok, counter} = TestCounter.start_link(0)
+    counter = start_supervised!({TestCounter, 0})
 
     {:ok, view} = mount(CountingComp.Counter, %{server: counter})
     assert render_text(view) =~ "Count: 0"
@@ -44,7 +44,7 @@ defmodule Filament.Test.Rung3Test do
   end
 
   test "2. update/1 is idempotent with empty mailbox" do
-    {:ok, counter} = TestCounter.start_link(0)
+    counter = start_supervised!({TestCounter, 0})
     {:ok, view} = mount(CountingComp.Counter, %{server: counter})
 
     html_before = view.rendered_html
@@ -55,7 +55,7 @@ defmodule Filament.Test.Rung3Test do
   end
 
   test "3. eventually/2 passes when condition met" do
-    {:ok, counter} = TestCounter.start_link(0)
+    counter = start_supervised!({TestCounter, 0})
     {:ok, view} = mount(CountingComp.Counter, %{server: counter})
 
     spawn(fn ->
@@ -74,7 +74,7 @@ defmodule Filament.Test.Rung3Test do
   end
 
   test "4. eventually/2 raises on timeout" do
-    {:ok, counter} = TestCounter.start_link(0)
+    counter = start_supervised!({TestCounter, 0})
     {:ok, view} = mount(CountingComp.Counter, %{server: counter})
 
     assert_raise RuntimeError, ~r/timed out after 100ms/, fn ->
@@ -89,7 +89,7 @@ defmodule Filament.Test.Rung3Test do
   end
 
   test "5. multiple increments before update" do
-    {:ok, counter} = TestCounter.start_link(0)
+    counter = start_supervised!({TestCounter, 0})
     {:ok, view} = mount(CountingComp.Counter, %{server: counter})
 
     TestCounter.increment(counter)

@@ -97,7 +97,7 @@ defmodule Filament.ComponentTest do
       assert :ok =
                TestComponents.ComponentWithDefaults.__validate_props__!(%{
                  required_prop: "provided"
-               })
+              })
     end
 
     test "uses default values when not provided" do
@@ -148,7 +148,7 @@ defmodule Filament.ComponentTest do
                MultiPropComponent.MultiProp.__validate_props__!(%{
                  prop1: "value1",
                  prop2: "value2"
-               })
+              })
     end
   end
 

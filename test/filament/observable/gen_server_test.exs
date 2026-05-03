@@ -59,7 +59,7 @@ defmodule Filament.Observable.GenServerTest do
   # --- Tests ---
 
   test "1. subscribe returns initial value" do
-    {:ok, pid} = TestCounter.start_link(0)
+    pid = start_supervised!({TestCounter, 0})
 
     sub = %Subscriber{
       pid: self(),
@@ -74,7 +74,7 @@ defmodule Filament.Observable.GenServerTest do
   end
 
   test "2. notify delivers update" do
-    {:ok, pid} = TestCounter.start_link(0)
+    pid = start_supervised!({TestCounter, 0})
 
     sub = %Subscriber{
       pid: self(),
@@ -90,7 +90,7 @@ defmodule Filament.Observable.GenServerTest do
   end
 
   test "3. multiple subscribers each receive update" do
-    {:ok, pid} = TestCounter.start_link(0)
+    pid = start_supervised!({TestCounter, 0})
 
     # First subscriber (self)
     assert {:ok, _} =
@@ -99,7 +99,7 @@ defmodule Filament.Observable.GenServerTest do
                fiber_id: :me,
                slot_index: 0,
                project: & &1.count
-             })
+            })
 
     # Second subscriber (separate process)
     other = spawn_receiver(self(), :other)
@@ -110,7 +110,7 @@ defmodule Filament.Observable.GenServerTest do
                fiber_id: :other,
                slot_index: 0,
                project: & &1.count
-             })
+            })
 
     :ok = TestCounter.increment(pid)
 
@@ -119,7 +119,7 @@ defmodule Filament.Observable.GenServerTest do
   end
 
   test "4. DOWN removes subscriber" do
-    {:ok, pid} = TestCounter.start_link(0)
+    pid = start_supervised!({TestCounter, 0})
 
     {:ok, dead_pid} = Agent.start(fn -> nil end)
 
@@ -128,7 +128,7 @@ defmodule Filament.Observable.GenServerTest do
       fiber_id: :dead,
       slot_index: 0,
       project: & &1.count
-    })
+   })
 
     # Kill the subscriber
     Process.exit(dead_pid, :kill)
@@ -141,7 +141,7 @@ defmodule Filament.Observable.GenServerTest do
                fiber_id: :alive,
                slot_index: 1,
                project: & &1.count
-             })
+            })
 
     :ok = TestCounter.increment(pid)
 
@@ -151,7 +151,7 @@ defmodule Filament.Observable.GenServerTest do
   end
 
   test "5. unsubscribe removes subscriber" do
-    {:ok, pid} = TestCounter.start_link(0)
+    pid = start_supervised!({TestCounter, 0})
 
     sub = %Subscriber{
       pid: self(),
@@ -170,7 +170,7 @@ defmodule Filament.Observable.GenServerTest do
   end
 
   test "6. handle_unsubscribe called on DOWN" do
-    {:ok, observable} = WithTeardown.start_link(self())
+    observable = start_supervised!({WithTeardown, self()})
 
     {:ok, dead_pid} = Agent.start(fn -> nil end)
 
@@ -180,7 +180,7 @@ defmodule Filament.Observable.GenServerTest do
                fiber_id: :root,
                slot_index: 0,
                project: & &1
-             })
+            })
 
     Process.exit(dead_pid, :kill)
 
@@ -188,7 +188,7 @@ defmodule Filament.Observable.GenServerTest do
   end
 
   test "7. subscribe rejected by handle_subscribe" do
-    {:ok, pid} = Rejecting.start_link()
+    pid = start_supervised!(%{id: Rejecting, start: {Rejecting, :start_link, []}})
 
     sub = %Subscriber{
       pid: self(),
@@ -202,7 +202,7 @@ defmodule Filament.Observable.GenServerTest do
   end
 
   test "8. minimal module compiles without custom callbacks" do
-    {:ok, pid} = Minimal.start_link()
+    pid = start_supervised!(%{id: Minimal, start: {Minimal, :start_link, []}})
     assert Process.alive?(pid)
   end
 
@@ -222,7 +222,7 @@ defmodule Filament.Observable.GenServerTest do
   end
 
   test "9. first notification always fires (last_projected == :unset)" do
-    {:ok, pid} = ProjectionCounter.start_link(0)
+    pid = start_supervised!({ProjectionCounter, 0})
 
     assert {:ok, _} =
              Observable.subscribe(pid, :any, %Subscriber{
@@ -230,14 +230,14 @@ defmodule Filament.Observable.GenServerTest do
                fiber_id: :root,
                slot_index: 0,
                project: fn n -> n > 5 end
-             })
+            })
 
     ProjectionCounter.set(pid, 3)
     assert_receive {:filament_observable_update, :root, 0, false}
   end
 
   test "10. change triggers notification" do
-    {:ok, pid} = ProjectionCounter.start_link(0)
+    pid = start_supervised!({ProjectionCounter, 0})
 
     assert {:ok, _} =
              Observable.subscribe(pid, :any, %Subscriber{
@@ -245,7 +245,7 @@ defmodule Filament.Observable.GenServerTest do
                fiber_id: :root,
                slot_index: 0,
                project: fn n -> n > 5 end
-             })
+            })
 
     ProjectionCounter.set(pid, 3)
     assert_receive {:filament_observable_update, :root, 0, false}
@@ -255,7 +255,7 @@ defmodule Filament.Observable.GenServerTest do
   end
 
   test "11. no-change skips notification" do
-    {:ok, pid} = ProjectionCounter.start_link(0)
+    pid = start_supervised!({ProjectionCounter, 0})
 
     assert {:ok, _} =
              Observable.subscribe(pid, :any, %Subscriber{
@@ -263,7 +263,7 @@ defmodule Filament.Observable.GenServerTest do
                fiber_id: :root,
                slot_index: 0,
                project: fn n -> n > 5 end
-             })
+            })
 
     ProjectionCounter.set(pid, 1)
     assert_receive {:filament_observable_update, :root, 0, false}
@@ -274,7 +274,7 @@ defmodule Filament.Observable.GenServerTest do
   end
 
   test "12. nil projection survives" do
-    {:ok, pid} = ProjectionCounter.start_link(0)
+    pid = start_supervised!({ProjectionCounter, 0})
 
     assert {:ok, _} =
              Observable.subscribe(pid, :any, %Subscriber{
@@ -282,7 +282,7 @@ defmodule Filament.Observable.GenServerTest do
                fiber_id: :root,
                slot_index: 0,
                project: fn _ -> nil end
-             })
+            })
 
     ProjectionCounter.set(pid, 1)
     assert_receive {:filament_observable_update, :root, 0, nil}
@@ -292,7 +292,7 @@ defmodule Filament.Observable.GenServerTest do
   end
 
   test "13. multiple subscribers with different projections" do
-    {:ok, pid} = ProjectionCounter.start_link(0)
+    pid = start_supervised!({ProjectionCounter, 0})
 
     # Use a simple sleeping process as one subscriber so both are stored
     other = spawn(fn -> Process.sleep(:infinity) end)
@@ -304,7 +304,7 @@ defmodule Filament.Observable.GenServerTest do
                fiber_id: :me,
                slot_index: 0,
                project: & &1
-             })
+            })
 
     # Subscriber B: bool projection (via sleeping process)
     assert {:ok, _} =
@@ -313,7 +313,7 @@ defmodule Filament.Observable.GenServerTest do
                fiber_id: :b,
                slot_index: 0,
                project: fn n -> n > 5 end
-             })
+            })
 
     # Set to 3 — both subscribers get first update
     ProjectionCounter.set(pid, 3)

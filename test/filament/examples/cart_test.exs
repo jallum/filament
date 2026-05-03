@@ -127,7 +127,7 @@ defmodule Filament.Examples.CartTest do
 
   describe "CartView (rung-3, real Cart.Server)" do
     setup do
-      {:ok, server} = Cart.Server.start_link([])
+      server = start_supervised!({Cart.Server, []})
       {:ok, view} = mount(CartWeb.Components.CartView, %{server: server})
       %{server: server, view: view}
     end
@@ -144,7 +144,7 @@ defmodule Filament.Examples.CartTest do
         name: "Widget",
         price_cents: 999,
         quantity: 1
-      })
+     })
 
       view = Filament.Test.update(view)
       assert render_text(view) =~ "Widget"
@@ -156,7 +156,7 @@ defmodule Filament.Examples.CartTest do
         name: "Gadget",
         price_cents: 500,
         quantity: 1
-      })
+     })
 
       view = Filament.Test.update(view)
       assert render_text(view) =~ "Gadget"
@@ -180,7 +180,7 @@ defmodule Filament.Examples.CartTest do
           name: "AsyncItem",
           price_cents: 100,
           quantity: 1
-        })
+       })
       end)
 
       # Store view ref for eventually callback

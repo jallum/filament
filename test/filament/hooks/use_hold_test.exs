@@ -49,7 +49,7 @@ defmodule Filament.Hooks.UseHoldTest do
   # --- Tests ---
 
   test "1. acquire on first render" do
-    {:ok, vault} = TestVault.start_link(:ok)
+    vault = start_supervised!({TestVault, :ok})
     fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 
     {token, new_slots} =
@@ -63,7 +63,7 @@ defmodule Filament.Hooks.UseHoldTest do
   end
 
   test "2. stable re-render returns same token without re-acquiring" do
-    {:ok, vault} = TestVault.start_link(:ok)
+    vault = start_supervised!({TestVault, :ok})
 
     # First render
     fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
@@ -96,8 +96,8 @@ defmodule Filament.Hooks.UseHoldTest do
   end
 
   test "3. server change releases old and acquires new" do
-    {:ok, vault_a} = TestVault.start_link(:ok)
-    {:ok, vault_b} = TestVault.start_link(:ok)
+    vault_a = start_supervised!({TestVault, :ok }, id: make_ref())
+    vault_b = start_supervised!({TestVault, :ok }, id: make_ref())
 
     # First render: acquire from vault_a
     fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
@@ -132,7 +132,7 @@ defmodule Filament.Hooks.UseHoldTest do
   end
 
   test "4. rejection raises HoldError" do
-    {:ok, rejecting} = RejectingVault.start_link()
+    rejecting = start_supervised!(%{id: RejectingVault, start: {RejectingVault, :start_link, []}})
 
     fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 
@@ -144,7 +144,7 @@ defmodule Filament.Hooks.UseHoldTest do
   end
 
   test "5. unmount releases hold" do
-    {:ok, vault} = TestVault.start_link(:ok)
+    vault = start_supervised!({TestVault, :ok})
 
     # First render: acquire
     fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
@@ -173,7 +173,7 @@ defmodule Filament.Hooks.UseHoldTest do
   end
 
   test "6. DOWN releases on server side" do
-    {:ok, vault} = TestVault.start_link(:ok)
+    vault = start_supervised!({TestVault, :ok})
 
     # Spawn a temporary process that acquires a hold
     holder = spawn(fn -> Process.sleep(:infinity) end)
@@ -191,7 +191,7 @@ defmodule Filament.Hooks.UseHoldTest do
   end
 
   test "7. multiple holders independent" do
-    {:ok, vault} = TestVault.start_link(:ok)
+    vault = start_supervised!({TestVault, :ok})
 
     holder_a = spawn(fn -> Process.sleep(:infinity) end)
     holder_b = spawn(fn -> Process.sleep(:infinity) end)
@@ -213,7 +213,7 @@ defmodule Filament.Hooks.UseHoldTest do
   end
 
   test "8. minimal module compiles without custom callbacks" do
-    {:ok, pid} = MinimalHoldServer.start_link()
+    pid = start_supervised!(%{id: MinimalHoldServer, start: {MinimalHoldServer, :start_link, []}})
     assert Process.alive?(pid)
   end
 

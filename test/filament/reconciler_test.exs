@@ -141,7 +141,7 @@ defmodule Filament.ReconcilerTest do
     end
 
     test "removed fiber's cleanup function is called on update" do
-      {:ok, agent} = Agent.start_link(fn -> 0 end)
+      agent = start_supervised!({Agent, fn -> 0 end})
       cleanup = fn -> Agent.update(agent, &(&1 + 1)) end
 
       tree = tree_with_child(cleanup)
@@ -152,7 +152,7 @@ defmodule Filament.ReconcilerTest do
     end
 
     test "grandchild fibers are recursively cleaned up" do
-      {:ok, agent} = Agent.start_link(fn -> [] end)
+      agent = start_supervised!({Agent, fn -> [] end})
       child_cleanup = fn -> Agent.update(agent, &[:child | &1]) end
       grandchild_cleanup = fn -> Agent.update(agent, &[:grandchild | &1]) end
 
@@ -195,7 +195,7 @@ defmodule Filament.ReconcilerTest do
     end
 
     test "observable is unsubscribed when fiber is removed" do
-      {:ok, server} = StubObservable.start_link()
+      server = start_supervised!(%{id: StubObservable, start: {StubObservable, :start_link, []}})
       owner = self()
 
       {tree, _, _} = Reconciler.mount(CounterComponent, %{count: 0})

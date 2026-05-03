@@ -7,7 +7,7 @@ defmodule Filament.Examples.TodoTest do
   describe "Todo.Store" do
     setup do
       name = :"todo_store_#{System.unique_integer([:positive])}"
-      {:ok, pid} = Todo.Store.start_link(name: name)
+      pid = start_supervised!({Todo.Store, name: name})
       %{store: pid}
     end
 
@@ -16,8 +16,8 @@ defmodule Filament.Examples.TodoTest do
     end
 
     test "add/2 prepends item with auto-incremented id", %{store: store} do
-      :ok = Todo.Store.add(store, "Buy milk")
-      :ok = Todo.Store.add(store, "Write tests")
+      _ = Todo.Store.add(store, "Buy milk")
+      _ = Todo.Store.add(store, "Write tests")
       items = Todo.Store.list(store)
       assert length(items) == 2
       # Items are prepended, so most recent is first
@@ -27,7 +27,7 @@ defmodule Filament.Examples.TodoTest do
     end
 
     test "toggle/2 flips the completed flag", %{store: store} do
-      :ok = Todo.Store.add(store, "Walk dog")
+      _ = Todo.Store.add(store, "Walk dog")
       [item | _] = Todo.Store.list(store)
       refute item.completed
 
@@ -41,8 +41,8 @@ defmodule Filament.Examples.TodoTest do
     end
 
     test "remove/2 deletes an item", %{store: store} do
-      :ok = Todo.Store.add(store, "Item one")
-      :ok = Todo.Store.add(store, "Item two")
+      _ = Todo.Store.add(store, "Item one")
+      _ = Todo.Store.add(store, "Item two")
       # Items are prepended, so "Item two" is first
       items = Todo.Store.list(store)
       [first, second] = items
@@ -64,7 +64,7 @@ defmodule Filament.Examples.TodoTest do
   describe "TodoList component" do
     setup do
       name = :"todo_store_#{System.unique_integer([:positive])}"
-      {:ok, store} = Todo.Store.start_link(name: name)
+      store = start_supervised!({Todo.Store, name: name})
       {:ok, _view} = mount(TodoWeb.Components.TodoList, %{store: store})
       %{store: store}
     end
@@ -76,8 +76,8 @@ defmodule Filament.Examples.TodoTest do
     end
 
     test "renders todo items from store", %{store: store} do
-      :ok = Todo.Store.add(store, "First task")
-      :ok = Todo.Store.add(store, "Second task")
+      _ = Todo.Store.add(store, "First task")
+      _ = Todo.Store.add(store, "Second task")
 
       # Re-mount fresh so items appear
       {:ok, view} = mount(TodoWeb.Components.TodoList, %{store: store})
@@ -89,7 +89,7 @@ defmodule Filament.Examples.TodoTest do
 
     test "completed items have 'completed' class", %{store: store} do
       # Add and complete an item
-      :ok = Todo.Store.add(store, "Done task")
+      _ = Todo.Store.add(store, "Done task")
       [item | _] = Todo.Store.list(store)
       :ok = Todo.Store.toggle(store, item.id)
 
@@ -102,7 +102,7 @@ defmodule Filament.Examples.TodoTest do
     end
 
     test "filter buttons are present", %{store: store} do
-      :ok = Todo.Store.add(store, "Task")
+      _ = Todo.Store.add(store, "Task")
       {:ok, view} = mount(TodoWeb.Components.TodoList, %{store: store})
 
       html = view.rendered_html
@@ -114,7 +114,7 @@ defmodule Filament.Examples.TodoTest do
     end
 
     test "re-render preserves item content", %{store: store} do
-      :ok = Todo.Store.add(store, "Persistent task")
+      _ = Todo.Store.add(store, "Persistent task")
 
       # Mount, unmount, remount
       {:ok, view1} = mount(TodoWeb.Components.TodoList, %{store: store})

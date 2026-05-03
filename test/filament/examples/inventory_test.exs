@@ -11,7 +11,7 @@ defmodule Filament.Examples.InventoryTest do
         %Inventory.Item{id: "item-b", name: "Gadget", available: 0}
       ]
 
-      {:ok, server} = Inventory.Server.start_link(items: items)
+      server = start_supervised!({Inventory.Server, items: items})
       %{server: server}
     end
 
@@ -109,13 +109,13 @@ defmodule Filament.Examples.InventoryTest do
         %Inventory.Item{id: "oos", name: "Scarce", available: 0}
       ]
 
-      {:ok, server} = Inventory.Server.start_link(items: items)
+      server = start_supervised!({Inventory.Server, items: items})
 
       {:ok, view} =
         mount(InventoryWeb.Components.CheckoutLineItem, %{
           server: server,
           item_id: "oos"
-        })
+       })
 
       text = render_text(view)
       assert text =~ "Out of Stock"
@@ -126,13 +126,13 @@ defmodule Filament.Examples.InventoryTest do
         %Inventory.Item{id: "avail", name: "In Stock Item", available: 3}
       ]
 
-      {:ok, server} = Inventory.Server.start_link(items: items)
+      server = start_supervised!({Inventory.Server, items: items})
 
       {:ok, view} =
         mount(InventoryWeb.Components.CheckoutLineItem, %{
           server: server,
           item_id: "avail"
-        })
+       })
 
       text = render_text(view)
       refute text =~ "Out of Stock"
@@ -144,13 +144,13 @@ defmodule Filament.Examples.InventoryTest do
         %Inventory.Item{id: "last", name: "LastUnit", available: 1}
       ]
 
-      {:ok, server} = Inventory.Server.start_link(items: items)
+      server = start_supervised!({Inventory.Server, items: items})
 
       {:ok, view1} =
         mount(InventoryWeb.Components.CheckoutLineItem, %{
           server: server,
           item_id: "last"
-        })
+       })
 
       # view1 acquired the only unit
 
@@ -162,7 +162,7 @@ defmodule Filament.Examples.InventoryTest do
           mount(InventoryWeb.Components.CheckoutLineItem, %{
             server: server,
             item_id: "last"
-          })
+         })
 
         text = render_text(view2)
         result = String.contains?(text, "Out of Stock")

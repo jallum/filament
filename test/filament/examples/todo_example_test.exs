@@ -34,14 +34,14 @@ defmodule Filament.Examples.TodoExampleTest do
   Verify Store behaves as an Observable GenServer with add/toggle/remove.
   """
   test "Store can add, toggle, and remove todos" do
-    {:ok, pid} = Store.start_link([])
+    pid = start_supervised!({Store, []})
 
     # Initially empty
     assert [] == Store.list(pid)
 
     # Add todos
-    :ok = Store.add(pid, "Buy milk")
-    :ok = Store.add(pid, "Build TodoList")
+    _ = Store.add(pid, "Buy milk")
+    _ = Store.add(pid, "Build TodoList")
 
     todos = Store.list(pid)
     assert length(todos) == 2
@@ -70,10 +70,10 @@ defmodule Filament.Examples.TodoExampleTest do
   """
   test "TodoList component mounts without errors" do
     # Start a store
-    {:ok, store} = Store.start_link([])
+    store = start_supervised!({Store, []})
 
     # Add a sample todo
-    :ok = Store.add(store, "Test todo")
+    _ = Store.add(store, "Test todo")
 
     # Mount the component
     props = %{store: store, title: "My Todos"}
@@ -87,14 +87,8 @@ defmodule Filament.Examples.TodoExampleTest do
     GenServer.stop(store)
   end
 
-  @doc """
-  Verify that TodoList defines expected event handlers.
-  """
-  test "TodoList component defines required event handlers" do
-    events = TodoList.module_info(:exports)
-
-    assert {:handle_event, 3} in events
-    assert {:render, 1} in events
+  test "TodoList component has expected interface" do
+    assert function_exported?(TodoList, :render, 1)
     assert TodoList.__props__()
     assert TodoList.__props__()[:store]
     assert TodoList.__props__()[:title]

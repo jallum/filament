@@ -12,16 +12,14 @@ defmodule Filament.Examples.CollaborationTest do
 
   describe "Collaboration.DocumentServer" do
     test "lock acquired by first requester" do
-      {:ok, server} =
-        Collaboration.DocumentServer.start_link(doc_id: "test-doc-#{:erlang.unique_integer()}")
+      server = start_supervised!({Collaboration.DocumentServer, [doc_id: "test-doc-#{:erlang.unique_integer()}"]}, id: make_ref())
 
       result = Collaboration.DocumentServer.acquire_lock(server, self())
       assert result == {:ok, :lock_token}
     end
 
     test "lock rejected when already held" do
-      {:ok, server} =
-        Collaboration.DocumentServer.start_link(doc_id: "test-doc-#{:erlang.unique_integer()}")
+      server = start_supervised!({Collaboration.DocumentServer, [doc_id: "test-doc-#{:erlang.unique_integer()}"]}, id: make_ref())
 
       {:ok, _token} = Collaboration.DocumentServer.acquire_lock(server, self())
 
@@ -42,8 +40,7 @@ defmodule Filament.Examples.CollaborationTest do
     # limitation documented in flm-g5b.4.
     @tag :skip
     test "lock released on holder process death" do
-      {:ok, server} =
-        Collaboration.DocumentServer.start_link(doc_id: "test-doc-#{:erlang.unique_integer()}")
+      server = start_supervised!({Collaboration.DocumentServer, [doc_id: "test-doc-#{:erlang.unique_integer()}"]}, id: make_ref())
 
       parent = self()
 
@@ -66,8 +63,7 @@ defmodule Filament.Examples.CollaborationTest do
     end
 
     test "release_lock/2 frees the lock" do
-      {:ok, server} =
-        Collaboration.DocumentServer.start_link(doc_id: "test-doc-#{:erlang.unique_integer()}")
+      server = start_supervised!({Collaboration.DocumentServer, [doc_id: "test-doc-#{:erlang.unique_integer()}"]}, id: make_ref())
 
       {:ok, _token} = Collaboration.DocumentServer.acquire_lock(server, self())
       :ok = Collaboration.DocumentServer.release_lock(server, self())
@@ -78,8 +74,7 @@ defmodule Filament.Examples.CollaborationTest do
     end
 
     test "presence count reflects subscriber count" do
-      {:ok, server} =
-        Collaboration.DocumentServer.start_link(doc_id: "test-doc-#{:erlang.unique_integer()}")
+      server = start_supervised!({Collaboration.DocumentServer, [doc_id: "test-doc-#{:erlang.unique_integer()}"]}, id: make_ref())
 
       # Subscribe manually
       sub = %Filament.Observable.Subscriber{
@@ -101,13 +96,13 @@ defmodule Filament.Examples.CollaborationTest do
   describe "DocumentEditor component (rung-3)" do
     test "renders edit button when document is not locked" do
       doc_id = "edit-test-#{:erlang.unique_integer()}"
-      {:ok, server} = Collaboration.DocumentServer.start_link(doc_id: doc_id)
+      server = start_supervised!({Collaboration.DocumentServer, [doc_id: doc_id]}, id: make_ref())
 
       {:ok, view} =
         mount(CollaborationWeb.Components.DocumentEditor, %{
           server: server,
           doc_id: doc_id
-        })
+       })
 
       text = render_text(view)
       assert text =~ "Edit"
@@ -116,7 +111,7 @@ defmodule Filament.Examples.CollaborationTest do
 
     test "renders locked when another user holds the lock" do
       doc_id = "edit-test-#{:erlang.unique_integer()}"
-      {:ok, server} = Collaboration.DocumentServer.start_link(doc_id: doc_id)
+      server = start_supervised!({Collaboration.DocumentServer, [doc_id: doc_id]}, id: make_ref())
 
       # Acquire the lock from a different pid
       parent = self()
@@ -135,7 +130,7 @@ defmodule Filament.Examples.CollaborationTest do
         mount(CollaborationWeb.Components.DocumentEditor, %{
           server: server,
           doc_id: doc_id
-        })
+       })
 
       view = Filament.Test.update(view)
       text = render_text(view)
@@ -147,13 +142,13 @@ defmodule Filament.Examples.CollaborationTest do
 
     test "presence indicator present" do
       doc_id = "edit-test-#{:erlang.unique_integer()}"
-      {:ok, server} = Collaboration.DocumentServer.start_link(doc_id: doc_id)
+      server = start_supervised!({Collaboration.DocumentServer, [doc_id: doc_id]}, id: make_ref())
 
       {:ok, view} =
         mount(CollaborationWeb.Components.DocumentEditor, %{
           server: server,
           doc_id: doc_id
-        })
+       })
 
       text = render_text(view)
       assert text =~ "user"

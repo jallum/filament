@@ -47,7 +47,7 @@ defmodule Filament.ObservableTest do
   end
 
   test "subscribe/3 sends the correct GenServer.call message" do
-    {:ok, pid} = TestObservable.start_link(self())
+    pid = start_supervised!({TestObservable, self()})
 
     sub = %Subscriber{
       pid: self(),
@@ -65,7 +65,7 @@ defmodule Filament.ObservableTest do
   end
 
   test "unsubscribe/2 sends the correct GenServer.cast message" do
-    {:ok, pid} = TestObservable.start_link(self())
+    pid = start_supervised!({TestObservable, self()})
 
     me = self()
     :ok = Observable.unsubscribe(pid, me)

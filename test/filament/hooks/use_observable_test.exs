@@ -43,7 +43,7 @@ defmodule Filament.Hooks.UseObservableTest do
   # --- Tests ---
 
   test "1. initial subscription returns projected value" do
-    {:ok, observable} = TestObservable.start_link(42)
+    observable = start_supervised!({TestObservable, 42})
     fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 
     {value, new_slots} =
@@ -57,7 +57,7 @@ defmodule Filament.Hooks.UseObservableTest do
   end
 
   test "2. stable re-render returns stored value without re-subscribing" do
-    {:ok, observable} = TestObservable.start_link(10)
+    observable = start_supervised!({TestObservable, 10})
 
     # First render — subscribe
     fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
@@ -90,8 +90,8 @@ defmodule Filament.Hooks.UseObservableTest do
   end
 
   test "3. server change unsubscribes old and subscribes new" do
-    {:ok, obs_a} = TestObservable.start_link(1)
-    {:ok, obs_b} = TestObservable.start_link(2)
+    obs_a = start_supervised!({TestObservable, 1 }, id: make_ref())
+    obs_b = start_supervised!({TestObservable, 2 }, id: make_ref())
 
     fiber =
       Fiber.new(
@@ -113,7 +113,7 @@ defmodule Filament.Hooks.UseObservableTest do
   end
 
   test "4. observable update via hook_slots — returns existing value" do
-    {:ok, observable} = TestObservable.start_link(100)
+    observable = start_supervised!({TestObservable, 100})
 
     # Simulate that handle_info already updated the slot to 555
     fiber =
@@ -134,7 +134,7 @@ defmodule Filament.Hooks.UseObservableTest do
   end
 
   test "5. subscription rejection raises ObservableError" do
-    {:ok, rejecting} = RejectingObservable.start_link()
+    rejecting = start_supervised!(%{id: RejectingObservable, start: {RejectingObservable, :start_link, []}})
 
     fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 
@@ -146,7 +146,7 @@ defmodule Filament.Hooks.UseObservableTest do
   end
 
   test "6. unmount triggers observable unsubscription" do
-    {:ok, observable} = TestObservable.start_link(42)
+    observable = start_supervised!({TestObservable, 42})
 
     # Subscribe self first so observable has a subscriber
     %Filament.Observable.Subscriber{pid: self(), fiber_id: "root", slot_index: 0, project: & &1}
@@ -172,7 +172,7 @@ defmodule Filament.Hooks.UseObservableTest do
   end
 
   test "7. live observable update received and applied" do
-    {:ok, observable} = TestObservable.start_link(1)
+    observable = start_supervised!({TestObservable, 1})
 
     # Subscribe
     me = self()
