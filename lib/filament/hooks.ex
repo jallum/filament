@@ -172,14 +172,14 @@ defmodule Filament.Hooks do
   - `:project`      — `(state -> term())` projection applied to each update (default identity)
   - `:disconnected` — value returned before the WebSocket connects (default `:disconnected`)
 
-  ## Start form
+  ## Subscribe form
 
-      use_observable(start: fn -> ... end, opts)
+      use_observable(subscribe: fn -> ... end, opts)
 
   When the server should be started by the component itself, omit the `server` argument
-  and supply a `:start` function instead. Returns `{pid, value}` so the pid is available
+  and supply a `:subscribe` option instead. Returns `{pid, value}` so the pid is available
   for mutations. When disconnected returns `{nil, disconnected_value}`.
-  - `:start`        — zero-arity fn called once on the first WebSocket render (must return a pid or `{:ok, pid}`),
+  - `:subscribe`    — zero-arity fn called once on the first WebSocket render (must return a pid or `{:ok, pid}`),
                     or any GenServer name (pid, atom, `{:via, ...}`) used directly as the server
   - `:disconnected` — the *value* half of the `{nil, value}` tuple returned while disconnected
 
@@ -190,7 +190,7 @@ defmodule Filament.Hooks do
 
       counter = use_observable(CounterServer, project: fn s -> s.count end)
 
-      {store, todos} = use_observable(start: fn -> Todo.Store.start_link!([]) end, disconnected: [])
+      {store, todos} = use_observable(subscribe: fn -> Todo.Store.start_link!([]) end, disconnected: [])
   """
   @spec use_observable(
           server :: GenServer.server(),
@@ -198,7 +198,7 @@ defmodule Filament.Hooks do
         ) :: term()
   @spec use_observable(
           opts :: [
-            start: (-> pid()),
+            subscribe: (-> pid()),
             request: term(),
             project: (term() -> term()),
             disconnected: term()
@@ -215,8 +215,8 @@ defmodule Filament.Hooks do
   end
 
   defp do_use_observable(server, opts) do
-    raw_start = Keyword.get(opts, :start, nil)
-    # Allow start: to be a 0-arity fn (starts a process) or any GenServer name
+    raw_start = Keyword.get(opts, :subscribe, nil)
+    # Allow subscribe: to be a 0-arity fn (starts a process) or any GenServer name
     # (pid, atom, {:via, ...}) — wrap the latter so the rest of the path is uniform.
     start_fn =
       cond do
@@ -237,7 +237,7 @@ defmodule Filament.Hooks do
       commit_slot(slot_index, :uninitialized)
       if start_mode, do: {nil, disconnected}, else: disconnected
     else
-      # Resolve the server pid: explicit arg > reuse from slot > call start:
+      # Resolve the server pid: explicit arg > reuse from slot > call subscribe:
       server =
         cond do
           server != nil ->
@@ -254,7 +254,7 @@ defmodule Filament.Hooks do
             end
 
           true ->
-            raise ArgumentError, "use_observable requires a server or a start: function"
+            raise ArgumentError, "use_observable requires a server or a subscribe: value"
         end
 
       value =

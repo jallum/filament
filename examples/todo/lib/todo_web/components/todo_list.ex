@@ -12,7 +12,7 @@ defmodule TodoWeb.Components.TodoList do
     prop(:title, :string, default: "Todo List")
 
     def render(%{title: title}) do
-      {store, todos} = use_observable(start: fn -> Store.start_link([]) end, disconnected: [])
+      {store, todos} = use_observable(subscribe: fn -> Store.start_link([]) end, disconnected: [])
       {filter, set_filter} = use_state(:all)
       {clear_key, bump_clear} = use_state(0)
 

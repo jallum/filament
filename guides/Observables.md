@@ -124,22 +124,23 @@ use_observable(server, opts \\ [])
   - `:project` — a one-arity function applied to each new state before delivery.
   - `:disconnected` — value returned before the WebSocket connects (default `:disconnected`).
 
-**Start form** — when the component owns the server's lifecycle:
+**Subscribe form** — when the component owns the server's lifecycle:
 
 ```elixir
-use_observable(start: fn -> ... end, opts)
+use_observable(subscribe: fn -> ... end, opts)
 ```
 
-- `:start` — zero-arity fn called once on the first WebSocket render; returns a pid
+- `:subscribe` — zero-arity fn called once on the first WebSocket render; returns a pid
   or `{:ok, pid}`. The process is started with `start_link`, so it is linked to the
-  LiveView and terminates with it automatically.
+  LiveView and terminates with it automatically. Also accepts any GenServer name (pid,
+  atom, `{:via, Registry, ...}`) directly when subscribing to a long-lived process.
 - Same `:request`, `:project`, and `:disconnected` opts as the server form.
 
 Returns `{pid, value}` so the pid is available for mutations. While disconnected
 returns `{nil, disconnected_value}`.
 
 ```elixir
-{store, todos} = use_observable(start: fn -> Todo.Store.start_link([]) end, disconnected: [])
+{store, todos} = use_observable(subscribe: fn -> Todo.Store.start_link([]) end, disconnected: [])
 ```
 
 This eliminates the need to start the server in `mount/3` and thread it as a prop —
