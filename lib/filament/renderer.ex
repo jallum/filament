@@ -317,8 +317,12 @@ defmodule Filament.Renderer do
         [" ", attr_key, "=\"", wire_ref, "\""]
       else
         case value do
-          false -> []
-          true -> [" ", key_str]
+          false ->
+            []
+
+          true ->
+            [" ", key_str]
+
           _ ->
             escaped_value = Plug.HTML.html_escape_to_iodata(to_string(value))
             [" ", key_str, "=\"", escaped_value, "\""]

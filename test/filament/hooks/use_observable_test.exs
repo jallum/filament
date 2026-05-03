@@ -90,8 +90,8 @@ defmodule Filament.Hooks.UseObservableTest do
   end
 
   test "3. server change unsubscribes old and subscribes new" do
-    obs_a = start_supervised!({TestObservable, 1 }, id: make_ref())
-    obs_b = start_supervised!({TestObservable, 2 }, id: make_ref())
+    obs_a = start_supervised!({TestObservable, 1}, id: make_ref())
+    obs_b = start_supervised!({TestObservable, 2}, id: make_ref())
 
     fiber =
       Fiber.new(
@@ -134,7 +134,8 @@ defmodule Filament.Hooks.UseObservableTest do
   end
 
   test "5. subscription rejection raises ObservableError" do
-    rejecting = start_supervised!(%{id: RejectingObservable, start: {RejectingObservable, :start_link, []}})
+    rejecting =
+      start_supervised!(%{id: RejectingObservable, start: {RejectingObservable, :start_link, []}})
 
     fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 

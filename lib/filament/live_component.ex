@@ -111,10 +111,19 @@ defmodule Filament.LiveComponent do
         handler = Filament.FiberTree.get_event_handler(tree, fiber_id_str, handler_index)
 
         case handler do
-          nil -> {:noreply, socket}
-          fun when is_function(fun, 0) -> fun.(); {:noreply, socket}
-          fun when is_function(fun, 1) -> fun.(params); {:noreply, socket}
-          _other -> {:noreply, socket}
+          nil ->
+            {:noreply, socket}
+
+          fun when is_function(fun, 0) ->
+            fun.()
+            {:noreply, socket}
+
+          fun when is_function(fun, 1) ->
+            fun.(params)
+            {:noreply, socket}
+
+          _other ->
+            {:noreply, socket}
         end
 
       _ ->
@@ -129,7 +138,11 @@ defmodule Filament.LiveComponent do
 
   # ── Private ─────────────────────────────────────────────────────────────────
 
-  defp process_filament_msg({:filament_set_state, fiber_id, slot_index, new_value}, tree, owner_pid) do
+  defp process_filament_msg(
+         {:filament_set_state, fiber_id, slot_index, new_value},
+         tree,
+         owner_pid
+       ) do
     case Map.get(tree, fiber_id) do
       nil ->
         :ignore
@@ -139,8 +152,10 @@ defmodule Filament.LiveComponent do
         setter = elem(existing, 1)
         new_slots = Map.put(fiber.hook_slots, slot_index, {new_value, setter})
         new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
+
         {new_tree, rendered, pending_effects} =
           Reconciler.update(new_tree, fiber_id, fiber.props, owner_pid: owner_pid)
+
         {:ok, new_tree, rendered, pending_effects}
     end
   end
@@ -165,8 +180,10 @@ defmodule Filament.LiveComponent do
 
         new_slots = Map.put(fiber.hook_slots, slot_index, {:subscribed, server, new_value})
         new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
+
         {new_tree, rendered, pending_effects} =
           Reconciler.update(new_tree, fiber_id, fiber.props, owner_pid: owner_pid)
+
         {:ok, new_tree, rendered, pending_effects}
     end
   end
@@ -183,8 +200,10 @@ defmodule Filament.LiveComponent do
       fiber ->
         new_slots = Map.put(fiber.hook_slots, slot_index, :needs_resubscribe)
         new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
+
         {new_tree, rendered, pending_effects} =
           Reconciler.update(new_tree, fiber_id, fiber.props, owner_pid: owner_pid)
+
         {:ok, new_tree, rendered, pending_effects}
     end
   end

@@ -96,8 +96,8 @@ defmodule Filament.Hooks.UseHoldTest do
   end
 
   test "3. server change releases old and acquires new" do
-    vault_a = start_supervised!({TestVault, :ok }, id: make_ref())
-    vault_b = start_supervised!({TestVault, :ok }, id: make_ref())
+    vault_a = start_supervised!({TestVault, :ok}, id: make_ref())
+    vault_b = start_supervised!({TestVault, :ok}, id: make_ref())
 
     # First render: acquire from vault_a
     fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
