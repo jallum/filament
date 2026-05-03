@@ -97,7 +97,9 @@ defmodule Filament.SigilFPhase1Test do
 
     test "on_change wires to phx-change" do
       defmodule OnChangeComp do
+        @moduledoc false
         use Filament.Component
+
         defcomponent OnChange do
           def render(_assigns) do
             ~F"""
@@ -114,7 +116,9 @@ defmodule Filament.SigilFPhase1Test do
 
     test "on_blur wires to phx-blur" do
       defmodule OnBlurComp do
+        @moduledoc false
         use Filament.Component
+
         defcomponent OnBlur do
           def render(_assigns) do
             ~F"""
@@ -131,7 +135,9 @@ defmodule Filament.SigilFPhase1Test do
 
     test "on_keydown wires to phx-keydown" do
       defmodule OnKeydownComp do
+        @moduledoc false
         use Filament.Component
+
         defcomponent OnKeydown do
           def render(_assigns) do
             ~F"""
