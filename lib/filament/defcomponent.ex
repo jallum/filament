@@ -93,36 +93,15 @@ defmodule Filament.Defcomponent do
 
   defmacro __before_compile__(env) do
     module = env.module
-
-    # Check if this module has an inferred component by looking at props
-    # (inferred components have props accumulated without explicit names)
-    inferred =
-      Module.get_attribute(module, :filament_props) != [] and
-        Module.get_attribute(module, :__filament_explicit__) == []
-
-    explicit = Module.get_attribute(module, :__filament_explicit__) || []
     props = Module.get_attribute(module, :filament_props)
+    build_component_module_ast(module, props)
+  end
 
-    # Determine the component name function
-    component_name =
-      cond do
-        inferred ->
-          # Inferred: the component IS this module
-          module
-
-        explicit != [] ->
-          # Explicit names exist: component is the current module
-          module
-
-        true ->
-          # Fallback (shouldn't happen for valid components)
-          module
-      end
-
+  defp build_component_module_ast(module, props) do
     quote do
       @props unquote(Macro.escape(build_props_metadata(props)))
 
-      def __filament_component_name__, do: unquote(component_name)
+      def __filament_component_name__, do: unquote(module)
 
       def __filament_component__?, do: true
 

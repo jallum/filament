@@ -100,19 +100,7 @@ defmodule Filament.LiveView do
 
       # Converts socket assigns to props map for the root component.
       defp build_props(socket) do
-        excludes = [
-          :_filament_tree,
-          :_filament_rendered,
-          :_filament_pending_effects,
-          :flash,
-          :live_action,
-          :socket,
-          :__changed__
-        ]
-
-        socket.assigns
-        |> Map.reject(fn {k, _v} -> k in excludes end)
-        |> Map.new()
+        Filament.LiveView.extract_props(socket.assigns)
       end
 
       @doc """
@@ -139,53 +127,11 @@ defmodule Filament.LiveView do
           end
       """
       def handle_event("filament:" <> ref, params, socket) do
-        case String.split(ref, ":", parts: 2) do
-          [fiber_id_str, index_str] ->
-            handler_index = String.to_integer(index_str)
-            tree = socket.assigns._filament_tree
-            handler = Filament.FiberTree.get_event_handler(tree, fiber_id_str, handler_index)
-
-            case handler do
-              nil ->
-                # Stale ref (fiber unmounted between render and click)
-                {:noreply, socket}
-
-              fun when is_function(fun, 0) ->
-                fun.()
-                {:noreply, socket}
-
-              fun when is_function(fun, 1) ->
-                fun.(params)
-                {:noreply, socket}
-
-              _other ->
-                {:noreply, socket}
-            end
-
-          _other ->
-            {:noreply, socket}
-        end
+        Filament.LiveView.dispatch_filament_event(ref, params, socket)
       end
 
       def handle_event(event, params, socket) do
-        tree = socket.assigns._filament_tree
-        root_fiber = tree["root"]
-
-        if function_exported?(root_fiber.component, :handle_event, 3) do
-          new_props =
-            root_fiber.component.handle_event(event, params, root_fiber.props)
-
-          {new_tree, rendered, pending_effects} =
-            Reconciler.update(tree, "root", new_props, owner_pid: self())
-
-          {:noreply,
-           socket
-           |> Phoenix.Component.assign(:_filament_tree, new_tree)
-           |> Phoenix.Component.assign(:_filament_rendered, rendered)
-           |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
-        else
-          {:noreply, socket}
-        end
+        Filament.LiveView.dispatch_component_event(event, params, socket, &rerender_from_root/2)
       end
 
       @doc """
@@ -193,21 +139,7 @@ defmodule Filament.LiveView do
       """
       def handle_info({:filament_set_state, fiber_id, slot_index, new_value}, socket) do
         tree = socket.assigns._filament_tree
-
-        case Map.get(tree, fiber_id) do
-          nil ->
-            # Fiber may have been unmounted — ignore stale state update
-            {:noreply, socket}
-
-          fiber ->
-            # Preserve existing setter when updating value (stable setter pattern)
-            existing = Map.get(fiber.hook_slots, slot_index, {nil, nil})
-            setter = elem(existing, 1)
-            new_slots = Map.put(fiber.hook_slots, slot_index, {new_value, setter})
-            tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-
-            {:noreply, rerender_from_root(socket, tree)}
-        end
+        Filament.LiveView.handle_set_state(tree, fiber_id, slot_index, new_value, socket, &rerender_from_root/2)
       end
 
       @doc """
@@ -215,26 +147,7 @@ defmodule Filament.LiveView do
       """
       def handle_info({:filament_observable_update, fiber_id, slot_index, new_value}, socket) do
         tree = socket.assigns._filament_tree
-
-        case Map.get(tree, fiber_id) do
-          nil ->
-            {:noreply, socket}
-
-          fiber ->
-            # Preserve the observable server (stored in the slot) while updating the value
-            existing = Map.get(fiber.hook_slots, slot_index, :uninitialized)
-
-            server =
-              case existing do
-                {:subscribed, s, _v} -> s
-                _ -> nil
-              end
-
-            new_slots = Map.put(fiber.hook_slots, slot_index, {:subscribed, server, new_value})
-            tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-
-            {:noreply, rerender_from_root(socket, tree)}
-        end
+        Filament.LiveView.handle_observable_update(tree, fiber_id, slot_index, new_value, socket, &rerender_from_root/2)
       end
 
       @doc """
@@ -243,17 +156,7 @@ defmodule Filament.LiveView do
       """
       def handle_info({:filament_observable_resubscribe, fiber_id, slot_index}, socket) do
         tree = socket.assigns._filament_tree
-
-        case Map.get(tree, fiber_id) do
-          nil ->
-            {:noreply, socket}
-
-          fiber ->
-            new_slots = Map.put(fiber.hook_slots, slot_index, :needs_resubscribe)
-            tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-
-            {:noreply, rerender_from_root(socket, tree)}
-        end
+        Filament.LiveView.handle_observable_resubscribe(tree, fiber_id, slot_index, socket, &rerender_from_root/2)
       end
 
       # Re-render from the root fiber so _filament_rendered always contains the full
@@ -272,6 +175,117 @@ defmodule Filament.LiveView do
 
       # Ensure render/1 is defined
       defoverridable mount: 3, render: 1, handle_event: 3, handle_info: 2
+    end
+  end
+
+  @doc false
+  def extract_props(assigns) do
+    excludes = [
+      :_filament_tree,
+      :_filament_rendered,
+      :_filament_pending_effects,
+      :flash,
+      :live_action,
+      :socket,
+      :__changed__
+    ]
+
+    assigns
+    |> Map.reject(fn {k, _v} -> k in excludes end)
+    |> Map.new()
+  end
+
+  @doc false
+  def dispatch_filament_event(ref, params, socket) do
+    case String.split(ref, ":", parts: 2) do
+      [fiber_id_str, index_str] ->
+        handler_index = String.to_integer(index_str)
+        tree = socket.assigns._filament_tree
+        handler = Filament.FiberTree.get_event_handler(tree, fiber_id_str, handler_index)
+        invoke_event_handler(handler, params, socket)
+
+      _other ->
+        {:noreply, socket}
+    end
+  end
+
+  defp invoke_event_handler(nil, _params, socket), do: {:noreply, socket}
+  defp invoke_event_handler(other, _params, socket) when not is_function(other), do: {:noreply, socket}
+
+  defp invoke_event_handler(fun, _params, socket) when is_function(fun, 0) do
+    fun.()
+    {:noreply, socket}
+  end
+
+  defp invoke_event_handler(fun, params, socket) when is_function(fun, 1) do
+    fun.(params)
+    {:noreply, socket}
+  end
+
+  @doc false
+  def dispatch_component_event(event, params, socket, _rerender_fn) do
+    tree = socket.assigns._filament_tree
+    root_fiber = tree["root"]
+
+    if function_exported?(root_fiber.component, :handle_event, 3) do
+      new_props = root_fiber.component.handle_event(event, params, root_fiber.props)
+
+      {new_tree, rendered, pending_effects} =
+        Reconciler.update(tree, "root", new_props, owner_pid: self())
+
+      {:noreply,
+       socket
+       |> Phoenix.Component.assign(:_filament_tree, new_tree)
+       |> Phoenix.Component.assign(:_filament_rendered, rendered)
+       |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @doc false
+  def handle_set_state(tree, fiber_id, slot_index, new_value, socket, rerender_fn) do
+    case Map.get(tree, fiber_id) do
+      nil ->
+        {:noreply, socket}
+
+      fiber ->
+        existing = Map.get(fiber.hook_slots, slot_index, {nil, nil})
+        setter = elem(existing, 1)
+        new_slots = Map.put(fiber.hook_slots, slot_index, {new_value, setter})
+        tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
+        {:noreply, rerender_fn.(socket, tree)}
+    end
+  end
+
+  @doc false
+  def handle_observable_update(tree, fiber_id, slot_index, new_value, socket, rerender_fn) do
+    case Map.get(tree, fiber_id) do
+      nil ->
+        {:noreply, socket}
+
+      fiber ->
+        existing = Map.get(fiber.hook_slots, slot_index, :uninitialized)
+        server = extract_observable_server(existing)
+        new_slots = Map.put(fiber.hook_slots, slot_index, {:subscribed, server, new_value})
+        tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
+        {:noreply, rerender_fn.(socket, tree)}
+    end
+  end
+
+  defp extract_observable_server({:subscribed, s, _v}), do: s
+  defp extract_observable_server(_), do: nil
+
+  @doc false
+  def handle_observable_resubscribe(tree, fiber_id, slot_index, socket, rerender_fn) do
+    case Map.get(tree, fiber_id) do
+      nil ->
+        {:noreply, socket}
+
+      fiber ->
+        new_slots = Map.put(fiber.hook_slots, slot_index, :needs_resubscribe)
+        tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
+        {:noreply, rerender_fn.(socket, tree)}
     end
   end
 end

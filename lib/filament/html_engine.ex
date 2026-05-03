@@ -27,20 +27,21 @@ defmodule Filament.HTMLEngine do
     ast = transform_event_attrs(ast)
 
     if is_list(ast) and literal_keys?(ast) do
-      attrs =
-        Enum.map(ast, fn {key, value} ->
-          name = to_string(key)
-
-          case handle_attr_escape(name, value, meta) do
-            :error -> handle_attrs_escape([{safe_unless_special(name), value}], meta)
-            parts -> {name, parts}
-          end
-        end)
-
-      {:attributes, attrs}
+      {:attributes, build_literal_attrs(ast, meta)}
     else
       {:quoted, handle_attrs_escape(ast, meta)}
     end
+  end
+
+  defp build_literal_attrs(ast, meta) do
+    Enum.map(ast, fn {key, value} ->
+      name = to_string(key)
+
+      case handle_attr_escape(name, value, meta) do
+        :error -> handle_attrs_escape([{safe_unless_special(name), value}], meta)
+        parts -> {name, parts}
+      end
+    end)
   end
 
   defp transform_event_attrs(list) when is_list(list) do

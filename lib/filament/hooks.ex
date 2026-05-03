@@ -122,41 +122,38 @@ defmodule Filament.Hooks do
   """
   @spec use_effect((-> (-> term()) | nil), deps :: [term()] | :always) :: :ok
   def use_effect(effect_fn, deps) when is_function(effect_fn, 0) do
-    {index, previous, ctx} = use_slot(:__unset__)
+    {index, previous, _ctx} = use_slot(:__unset__)
 
-    deps_changed? =
-      case previous do
-        :__unset__ -> true
-        {_prev_deps, _} when deps == :always -> true
-        {prev_deps, _} -> prev_deps != deps
-        _ -> true
-      end
-
-    if deps_changed? do
-      old_cleanup =
-        case previous do
-          {_prev_deps, cleanup} when is_function(cleanup, 0) -> cleanup
-          _ -> nil
-        end
-
-      effect_entry = {index, ctx.fiber_id, effect_fn, deps, old_cleanup}
-      ctx = Process.get(:filament_render_context)
-
-      Process.put(
-        :filament_render_context,
-        %{ctx | pending_effects: [effect_entry | ctx.pending_effects]}
-      )
+    if effect_deps_changed?(previous, deps) do
+      enqueue_effect(index, effect_fn, deps, previous)
     end
 
-    current_cleanup =
-      case previous do
-        {_prev_deps, cleanup} -> cleanup
-        _ -> nil
-      end
-
+    current_cleanup = extract_cleanup(previous)
     commit_slot(index, {deps, current_cleanup})
     :ok
   end
+
+  defp effect_deps_changed?(:__unset__, _deps), do: true
+  defp effect_deps_changed?({_prev_deps, _}, :always), do: true
+  defp effect_deps_changed?({prev_deps, _}, deps), do: prev_deps != deps
+  defp effect_deps_changed?(_, _), do: true
+
+  defp enqueue_effect(index, effect_fn, deps, previous) do
+    old_cleanup = extract_fn_cleanup(previous)
+    ctx = Process.get(:filament_render_context)
+    effect_entry = {index, ctx.fiber_id, effect_fn, deps, old_cleanup}
+
+    Process.put(
+      :filament_render_context,
+      %{ctx | pending_effects: [effect_entry | ctx.pending_effects]}
+    )
+  end
+
+  defp extract_fn_cleanup({_prev_deps, cleanup}) when is_function(cleanup, 0), do: cleanup
+  defp extract_fn_cleanup(_), do: nil
+
+  defp extract_cleanup({_prev_deps, cleanup}), do: cleanup
+  defp extract_cleanup(_), do: nil
 
   @doc """
   Subscribe this fiber to `server`, returning the current projected value.
@@ -216,12 +213,7 @@ defmodule Filament.Hooks do
     raw_start = Keyword.get(opts, :subscribe, nil)
     # Allow subscribe: to be a 0-arity fn (starts a process) or any GenServer name
     # (pid, atom, {:via, ...}) — wrap the latter so the rest of the path is uniform.
-    start_fn =
-      cond do
-        is_function(raw_start, 0) -> raw_start
-        raw_start != nil -> fn -> raw_start end
-        true -> nil
-      end
+    start_fn = build_start_fn(raw_start)
 
     start_mode = server == nil and start_fn != nil
     request = Keyword.get(opts, :request, nil)
@@ -233,61 +225,76 @@ defmodule Filament.Hooks do
     # in the HTTP render creates zombie subscribers that inflate presence counts
     # and race with the real WebSocket connection.
     if ctx.subscribe_enabled do
-      # Resolve the server pid: explicit arg > reuse from slot > call subscribe:
-      server =
-        cond do
-          server != nil ->
-            Map.get(ctx.observable_stubs, server, server)
-
-          match?({:subscribed, _pid, _}, previous) ->
-            {:subscribed, pid, _} = previous
-            pid
-
-          start_mode ->
-            case start_fn.() do
-              {:ok, pid} -> pid
-              pid -> pid
-            end
-
-          true ->
-            raise ArgumentError, "use_observable requires a server or a subscribe: value"
-        end
-
-      value =
-        case previous do
-          :uninitialized ->
-            do_subscribe(server, request, project, ctx, slot_index)
-
-          {:subscribed, ^server, _current} ->
-            # Same server — value comes from handle_info updates, just read it.
-            # The current value was stored by handle_info during the last update.
-            ctx.new_hook_slots
-            |> Map.get(slot_index, previous)
-            |> case do
-              {:subscribed, ^server, current} -> current
-              value -> value
-            end
-
-          {:subscribed, old_server, _current} ->
-            # Server changed — unsubscribe from old, subscribe to new
-            if is_map_key(ctx.fiber_tree, ctx.fiber_id) do
-              Filament.Observable.unsubscribe(
-                old_server,
-                {ctx.owner_pid, ctx.fiber_id, slot_index}
-              )
-            end
-
-            do_subscribe(server, request, project, ctx, slot_index)
-
-          :needs_resubscribe ->
-            do_subscribe(server, request, project, ctx, slot_index)
-        end
-
-      commit_slot(slot_index, {:subscribed, server, value})
-      if start_mode, do: {server, value}, else: value
+      subscribe_enabled_path(server, start_fn, start_mode, request, project, slot_index, previous, ctx)
     else
       commit_slot(slot_index, :uninitialized)
       if start_mode, do: {nil, disconnected}, else: disconnected
+    end
+  end
+
+  defp build_start_fn(raw_start) do
+    cond do
+      is_function(raw_start, 0) -> raw_start
+      raw_start != nil -> fn -> raw_start end
+      true -> nil
+    end
+  end
+
+  defp subscribe_enabled_path(server, start_fn, start_mode, request, project, slot_index, previous, ctx) do
+    server = resolve_server(server, start_fn, start_mode, previous, ctx)
+    value = resolve_value(server, request, project, slot_index, previous, ctx)
+    commit_slot(slot_index, {:subscribed, server, value})
+    if start_mode, do: {server, value}, else: value
+  end
+
+  defp resolve_server(server, _start_fn, _start_mode, _previous, ctx) when server != nil do
+    Map.get(ctx.observable_stubs, server, server)
+  end
+
+  defp resolve_server(_server, _start_fn, _start_mode, {:subscribed, pid, _}, _ctx) do
+    pid
+  end
+
+  defp resolve_server(_server, start_fn, true, _previous, _ctx) do
+    case start_fn.() do
+      {:ok, pid} -> pid
+      pid -> pid
+    end
+  end
+
+  defp resolve_server(_server, _start_fn, _start_mode, _previous, _ctx) do
+    raise ArgumentError, "use_observable requires a server or a subscribe: value"
+  end
+
+  defp resolve_value(server, request, project, slot_index, previous, ctx) do
+    case previous do
+      :uninitialized ->
+        do_subscribe(server, request, project, ctx, slot_index)
+
+      {:subscribed, ^server, _current} ->
+        # Same server — value comes from handle_info updates, just read it.
+        read_current_value(ctx, slot_index, server, previous)
+
+      {:subscribed, old_server, _current} ->
+        # Server changed — unsubscribe from old, subscribe to new
+        maybe_unsubscribe(ctx, old_server, slot_index)
+        do_subscribe(server, request, project, ctx, slot_index)
+
+      :needs_resubscribe ->
+        do_subscribe(server, request, project, ctx, slot_index)
+    end
+  end
+
+  defp maybe_unsubscribe(ctx, old_server, slot_index) do
+    if is_map_key(ctx.fiber_tree, ctx.fiber_id) do
+      Filament.Observable.unsubscribe(old_server, {ctx.owner_pid, ctx.fiber_id, slot_index})
+    end
+  end
+
+  defp read_current_value(ctx, slot_index, server, previous) do
+    case Map.get(ctx.new_hook_slots, slot_index, previous) do
+      {:subscribed, ^server, current} -> current
+      value -> value
     end
   end
 
@@ -343,17 +350,22 @@ defmodule Filament.Hooks do
 
         _ ->
           # Cache miss or first render: run factory, record which handler indices it used.
-          e_start = ctx.event_handler_index
-          value = factory.()
-          after_ctx = Process.get(:filament_render_context)
-          e_end = after_ctx.event_handler_index
-          stored_deps = if deps == :no_deps, do: :no_deps, else: deps
-          slot_entry = {:memo, stored_deps, value, {e_start, e_end}}
-          updated = Map.put(after_ctx.new_hook_slots, slot, slot_entry)
-          Process.put(:filament_render_context, %{after_ctx | new_hook_slots: updated})
-          value
+          run_memo_factory(slot, deps, factory)
       end
     end
+  end
+
+  defp run_memo_factory(slot, deps, factory) do
+    ctx = Process.get(:filament_render_context)
+    e_start = ctx.event_handler_index
+    value = factory.()
+    after_ctx = Process.get(:filament_render_context)
+    e_end = after_ctx.event_handler_index
+    stored_deps = if deps == :no_deps, do: :no_deps, else: deps
+    slot_entry = {:memo, stored_deps, value, {e_start, e_end}}
+    updated = Map.put(after_ctx.new_hook_slots, slot, slot_entry)
+    Process.put(:filament_render_context, %{after_ctx | new_hook_slots: updated})
+    value
   end
 
   defp read_slot_at(ctx, slot) do

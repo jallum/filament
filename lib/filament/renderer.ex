@@ -27,18 +27,7 @@ defmodule Filament.Renderer do
     # their first function call — which happens later (component_module.render/1).
     Code.ensure_loaded(component_module)
 
-    props =
-      if function_exported?(component_module, :__props__, 0) do
-        Enum.reduce(component_module.__props__(), props, fn {name, meta}, acc ->
-          if Map.has_key?(acc, name) or meta.default == :__NO_DEFAULT__ do
-            acc
-          else
-            Map.put(acc, name, meta.default)
-          end
-        end)
-      else
-        props
-      end
+    props = apply_prop_defaults(component_module, props)
 
     # Validate props
     if function_exported?(component_module, :__validate_props__!, 1) do
@@ -267,29 +256,47 @@ defmodule Filament.Renderer do
 
     if removed_children != [] do
       ctx = Process.get(:filament_render_context)
-
-      updated_fiber_tree =
-        Enum.reduce(removed_children, ctx.new_fibers, fn child_id, acc ->
-          case Map.get(acc, child_id) do
-            nil ->
-              case Map.get(context.fiber_tree, child_id) do
-                nil -> acc
-                existing -> Map.put(acc, child_id, %{existing | status: :unmounting})
-              end
-
-            fiber ->
-              Map.put(acc, child_id, %{fiber | status: :unmounting})
-          end
-        end)
-
+      updated_fiber_tree = mark_children_unmounting(removed_children, ctx.new_fibers, context.fiber_tree)
       Process.put(:filament_render_context, %{ctx | new_fibers: updated_fiber_tree})
     end
 
     rendered_items
   end
 
+  defp mark_children_unmounting(child_ids, new_fibers, fiber_tree) do
+    Enum.reduce(child_ids, new_fibers, fn child_id, acc ->
+      case Map.get(acc, child_id) do
+        nil -> mark_from_existing(acc, child_id, fiber_tree)
+        fiber -> Map.put(acc, child_id, %{fiber | status: :unmounting})
+      end
+    end)
+  end
+
+  defp mark_from_existing(acc, child_id, fiber_tree) do
+    case Map.get(fiber_tree, child_id) do
+      nil -> acc
+      existing -> Map.put(acc, child_id, %{existing | status: :unmounting})
+    end
+  end
+
   def render_vnode(invalid, _context) do
     raise ArgumentError, "invalid vnode: #{inspect(invalid)}"
+  end
+
+  defp apply_prop_defaults(component_module, props) do
+    if function_exported?(component_module, :__props__, 0) do
+      Enum.reduce(component_module.__props__(), props, &apply_single_default(&1, &2))
+    else
+      props
+    end
+  end
+
+  defp apply_single_default({name, meta}, acc) do
+    if Map.has_key?(acc, name) or meta.default == :__NO_DEFAULT__ do
+      acc
+    else
+      Map.put(acc, name, meta.default)
+    end
   end
 
   defp void_element?("br"), do: true
@@ -311,27 +318,25 @@ defmodule Filament.Renderer do
   defp render_attrs([]), do: ""
 
   defp render_attrs(attrs) do
-    Enum.map(attrs, fn {key, value} ->
-      key_str = to_string(key)
+    Enum.map(attrs, fn {key, value} -> render_attr(to_string(key), value) end)
+  end
 
-      if String.starts_with?(key_str, "on_") do
-        attr_key = "phx-" <> String.slice(key_str, 3..-1//1)
-        wire_ref = Filament.Hooks.register_event_handler(value)
-        [" ", attr_key, "=\"", wire_ref, "\""]
-      else
-        case value do
-          false ->
-            []
+  defp render_attr(key_str, value) do
+    if String.starts_with?(key_str, "on_") do
+      attr_key = "phx-" <> String.slice(key_str, 3..-1//1)
+      wire_ref = Filament.Hooks.register_event_handler(value)
+      [" ", attr_key, "=\"", wire_ref, "\""]
+    else
+      render_attr_value(key_str, value)
+    end
+  end
 
-          true ->
-            [" ", key_str]
+  defp render_attr_value(_key_str, false), do: []
+  defp render_attr_value(key_str, true), do: [" ", key_str]
 
-          _ ->
-            escaped_value = Plug.HTML.html_escape_to_iodata(to_string(value))
-            [" ", key_str, "=\"", escaped_value, "\""]
-        end
-      end
-    end)
+  defp render_attr_value(key_str, value) do
+    escaped_value = Plug.HTML.html_escape_to_iodata(to_string(value))
+    [" ", key_str, "=\"", escaped_value, "\""]
   end
 
   @doc """

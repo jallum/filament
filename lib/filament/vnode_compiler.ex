@@ -81,23 +81,26 @@ defmodule Filament.VNodeCompiler do
   defp hoist_comprehension_handlers(ast) do
     Macro.postwalk(ast, fn
       {:{}, tuple_meta, [nil, map_expr, {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body]}]}] = entry_parts} ->
-        {fn_body1, reg_hoisted} = extract_reg_handlers(fn_body)
-        {fn_body2, comp_hoisted} = extract_component_calls(fn_body1)
-
-        all_hoisted = reg_hoisted ++ comp_hoisted
-
-        if all_hoisted == [] do
-          {:{}, tuple_meta, entry_parts}
-        else
-          new_fn = {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body2]}]}
-          new_tuple = {:{}, tuple_meta, [nil, map_expr, new_fn]}
-          assigns = Enum.map(all_hoisted, fn {var, expr} -> {:=, [], [var, expr]} end)
-          {:__block__, [], assigns ++ [new_tuple]}
-        end
+        hoist_entry_tuple(tuple_meta, map_expr, fn_meta, arrow_meta, fn_args, fn_body, entry_parts)
 
       other ->
         other
     end)
+  end
+
+  defp hoist_entry_tuple(tuple_meta, map_expr, fn_meta, arrow_meta, fn_args, fn_body, entry_parts) do
+    {fn_body1, reg_hoisted} = extract_reg_handlers(fn_body)
+    {fn_body2, comp_hoisted} = extract_component_calls(fn_body1)
+    all_hoisted = reg_hoisted ++ comp_hoisted
+
+    if all_hoisted == [] do
+      {:{}, tuple_meta, entry_parts}
+    else
+      new_fn = {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body2]}]}
+      new_tuple = {:{}, tuple_meta, [nil, map_expr, new_fn]}
+      assigns = Enum.map(all_hoisted, fn {var, expr} -> {:=, [], [var, expr]} end)
+      {:__block__, [], assigns ++ [new_tuple]}
+    end
   end
 
   # Replace register_event_handler(fn_expr) calls in fn_body with fresh variable refs.
@@ -230,27 +233,32 @@ defmodule Filament.VNodeCompiler do
   defp extract_fn_slots({:fn, _, [{:->, _, [_args, body]}]}) do
     case body do
       {:__block__, _, exprs} when is_list(exprs) and length(exprs) >= 2 ->
-        return_list = List.last(exprs)
-
-        if is_list(return_list) do
-          slot_assigns =
-            case Enum.at(exprs, -2) do
-              {:__block__, _, assigns} ->
-                Enum.map(assigns, fn {:=, m, [var, expr]} ->
-                  {:=, m, [var, simplify_slot_expr(expr)]}
-                end)
-
-              _ ->
-                []
-            end
-
-          {slot_assigns, return_list}
-        else
-          {[], []}
-        end
+        extract_fn_slots_from_block(exprs)
 
       _ ->
         {[], []}
+    end
+  end
+
+  defp extract_fn_slots_from_block(exprs) do
+    return_list = List.last(exprs)
+
+    if is_list(return_list) do
+      {extract_slot_assigns(exprs), return_list}
+    else
+      {[], []}
+    end
+  end
+
+  defp extract_slot_assigns(exprs) do
+    case Enum.at(exprs, -2) do
+      {:__block__, _, assigns} ->
+        Enum.map(assigns, fn {:=, m, [var, expr]} ->
+          {:=, m, [var, simplify_slot_expr(expr)]}
+        end)
+
+      _ ->
+        []
     end
   end
 

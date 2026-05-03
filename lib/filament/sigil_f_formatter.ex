@@ -39,65 +39,73 @@ defmodule Filament.SigilFFormatter do
     if opts[:sigil] === :F and opts[:modifiers] === ~c"noformat" do
       source
     else
-      line_length = opts[:f_line_length] || opts[:line_length] || @default_line_length
-      newlines = :binary.matches(source, ["\r\n", "\n"])
-      inline_matcher = opts[:inline_matcher] || ["link", "button"]
-
-      opts =
-        opts
-        |> Keyword.put(:migrate_eex_to_curly_interpolation, true)
-        |> Keyword.update(:attribute_formatters, %{}, fn formatters ->
-          Enum.reduce(formatters, %{}, fn {attr, formatter}, acc ->
-            if Code.ensure_loaded?(formatter) do
-              Map.put(acc, to_string(attr), formatter)
-            else
-              Logger.error("module #{inspect(formatter)} is not loaded and could not be found")
-              acc
-            end
-          end)
-        end)
-
-      result =
-        try do
-          source
-          |> tokenize()
-          |> to_tree([], [], %{
-            source: {source, newlines},
-            inline_elements: @inline_tags,
-            inline_matcher: inline_matcher
-          })
-          |> case do
-            {:ok, nodes} ->
-              nodes
-              |> HTMLAlgebra.build(opts)
-              |> Inspect.Algebra.format(line_length)
-
-            {:error, line, column, message} ->
-              file = Keyword.get(opts, :file, "nofile")
-              raise ParseError, line: line, column: column, file: file, description: message
-          end
-        rescue
-          # ~F allows {expr} block syntax (e.g. {for ... do}/{end}) that HTMLAlgebra
-          # cannot format since it was designed for ~H's <%= %> block style.
-          # Return source unchanged rather than corrupting it.
-          _ -> :unformattable
-        catch
-          _, _ -> :unformattable
-        end
-
-      case result do
-        :unformattable ->
-          source
-
-        formatted ->
-          newline =
-            if match?(<<_>>, opts[:opening_delimiter]) or formatted == [] or formatted == "",
-              do: [],
-              else: ?\n
-
-          IO.iodata_to_binary([formatted, newline])
-      end
+      do_format(source, opts)
     end
+  end
+
+  defp do_format(source, opts) do
+    line_length = opts[:f_line_length] || opts[:line_length] || @default_line_length
+    newlines = :binary.matches(source, ["\r\n", "\n"])
+    inline_matcher = opts[:inline_matcher] || ["link", "button"]
+    opts = normalize_format_opts(opts)
+
+    result = try_format(source, newlines, inline_matcher, opts, line_length)
+    emit_format_result(result, source, opts)
+  end
+
+  defp normalize_format_opts(opts) do
+    opts
+    |> Keyword.put(:migrate_eex_to_curly_interpolation, true)
+    |> Keyword.update(:attribute_formatters, %{}, &load_attribute_formatters/1)
+  end
+
+  defp load_attribute_formatters(formatters) do
+    Enum.reduce(formatters, %{}, fn {attr, formatter}, acc ->
+      if Code.ensure_loaded?(formatter) do
+        Map.put(acc, to_string(attr), formatter)
+      else
+        Logger.error("module #{inspect(formatter)} is not loaded and could not be found")
+        acc
+      end
+    end)
+  end
+
+  defp try_format(source, newlines, inline_matcher, opts, line_length) do
+    source
+    |> tokenize()
+    |> to_tree([], [], %{
+      source: {source, newlines},
+      inline_elements: @inline_tags,
+      inline_matcher: inline_matcher
+    })
+    |> build_formatted(opts, line_length)
+  rescue
+    # ~F allows {expr} block syntax (e.g. {for ... do}/{end}) that HTMLAlgebra
+    # cannot format since it was designed for ~H's <%= %> block style.
+    # Return source unchanged rather than corrupting it.
+    _ -> :unformattable
+  catch
+    _, _ -> :unformattable
+  end
+
+  defp build_formatted({:ok, nodes}, opts, line_length) do
+    nodes |> HTMLAlgebra.build(opts) |> Inspect.Algebra.format(line_length)
+  end
+
+  defp build_formatted({:error, line, column, message}, opts, _line_length) do
+    file = Keyword.get(opts, :file, "nofile")
+    raise ParseError, line: line, column: column, file: file, description: message
+  end
+
+  defp emit_format_result(:unformattable, source, _opts), do: source
+
+  defp emit_format_result(formatted, _source, opts) do
+    newline = format_trailing_newline(opts[:opening_delimiter], formatted)
+    IO.iodata_to_binary([formatted, newline])
+  end
+
+  defp format_trailing_newline(delimiter, formatted) do
+    if match?(<<_>>, delimiter) or formatted == [] or formatted == "", do: [], else: ?\n
   end
 
   @eex_expr [:start_expr, :expr, :end_expr, :middle_expr]

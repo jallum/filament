@@ -130,41 +130,38 @@ defmodule Filament.TagEngine do
 
   """
   def component(func, assigns, caller) when (is_function(func, 1) and is_list(assigns)) or is_map(assigns) do
-    assigns =
-      case assigns do
-        %{__changed__: _} -> assigns
-        _ -> assigns |> Map.new() |> Map.put_new(:__changed__, nil)
-      end
+    assigns = normalize_assigns(assigns)
+    rendered = invoke_component(func, assigns)
+    wrap_rendered(rendered, func, caller)
+  end
 
-    rendered =
-      case {Process.get(:filament_render_context), Function.info(func, :module)} do
-        {ctx, {:module, mod}} when not is_nil(ctx) ->
-          # Inside a Filament render pass — render child component with its own fiber.
-          Filament.Renderer.render_component_child(ctx, mod, assigns)
+  defp normalize_assigns(%{__changed__: _} = assigns), do: assigns
+  defp normalize_assigns(assigns), do: assigns |> Map.new() |> Map.put_new(:__changed__, nil)
 
-        _ ->
-          func.(assigns)
-      end
+  defp invoke_component(func, assigns) do
+    case {Process.get(:filament_render_context), Function.info(func, :module)} do
+      {ctx, {:module, mod}} when not is_nil(ctx) ->
+        Filament.Renderer.render_component_child(ctx, mod, assigns)
 
-    case rendered do
-      %Phoenix.LiveView.Rendered{} = r ->
-        %{r | caller: caller}
-
-      %Phoenix.LiveView.Component{} = component ->
-        component
-
-      other ->
-        raise RuntimeError, """
-        expected #{inspect(func)} to return a %Phoenix.LiveView.Rendered{} struct
-
-        Ensure your render function uses ~F to define its template.
-
-        Got:
-
-            #{inspect(other)}
-
-        """
+      _ ->
+        func.(assigns)
     end
+  end
+
+  defp wrap_rendered(%Phoenix.LiveView.Rendered{} = r, _func, caller), do: %{r | caller: caller}
+  defp wrap_rendered(%Phoenix.LiveView.Component{} = component, _func, _caller), do: component
+
+  defp wrap_rendered(other, func, _caller) do
+    raise RuntimeError, """
+    expected #{inspect(func)} to return a %Phoenix.LiveView.Rendered{} struct
+
+    Ensure your render function uses ~F to define its template.
+
+    Got:
+
+        #{inspect(other)}
+
+    """
   end
 
   @doc """
@@ -259,10 +256,12 @@ defmodule Filament.TagEngine do
     opts = [root: token_state.root || false]
 
     opts =
-      if annotation = caller && has_tags?(tokens) && state.tag_handler.annotate_body(caller) do
-        [meta: [template_annotation: annotation]] ++ opts
-      else
-        opts
+      case caller && has_tags?(tokens) && state.tag_handler.annotate_body(caller) do
+        annotation when annotation not in [false, nil] ->
+          [meta: [template_annotation: annotation]] ++ opts
+
+        _ ->
+          opts
       end
 
     ast = invoke_subengine(token_state, :handle_body, [opts])
@@ -1131,29 +1130,25 @@ defmodule Filament.TagEngine do
     case state.tag_handler.handle_attributes(ast, meta) do
       {:attributes, attrs} ->
         Enum.reduce(attrs, state, fn
-          {name, value}, state ->
-            state = update_subengine(state, :handle_text, [meta, ~s( #{name}=")])
-
-            state =
-              value
-              |> List.wrap()
-              |> Enum.reduce(state, fn
-                binary, state when is_binary(binary) ->
-                  update_subengine(state, :handle_text, [meta, binary])
-
-                expr, state ->
-                  update_subengine(state, :handle_expr, ["=", expr])
-              end)
-
-            update_subengine(state, :handle_text, [meta, ~s(")])
-
-          quoted, state ->
-            update_subengine(state, :handle_expr, ["=", quoted])
+          {name, value}, state -> render_tag_attr(state, meta, name, value)
+          quoted, state -> update_subengine(state, :handle_expr, ["=", quoted])
         end)
 
       {:quoted, quoted} ->
         update_subengine(state, :handle_expr, ["=", quoted])
     end
+  end
+
+  defp render_tag_attr(state, meta, name, value) do
+    state = update_subengine(state, :handle_text, [meta, ~s( #{name}=")])
+
+    state =
+      Enum.reduce(List.wrap(value), state, fn
+        binary, state when is_binary(binary) -> update_subengine(state, :handle_text, [meta, binary])
+        expr, state -> update_subengine(state, :handle_expr, ["=", expr])
+      end)
+
+    update_subengine(state, :handle_text, [meta, ~s(")])
   end
 
   defp parse_expr!({:expr, value, %{line: line, column: col}}, file) do
@@ -1166,42 +1161,44 @@ defmodule Filament.TagEngine do
   defp literal_keys?(_other), do: false
 
   defp handle_special_expr(state, tag_meta) do
-    ast =
-      case tag_meta do
-        %{for: _for_expr, if: if_expr} ->
-          for_expr = maybe_keyed(tag_meta)
+    case build_special_expr_ast(state, tag_meta) do
+      nil ->
+        state
 
-          quote do
-            for unquote(for_expr), unquote(if_expr), do: unquote(invoke_subengine(state, :handle_end, []))
-          end
-
-        %{for: _for_expr} ->
-          for_expr = maybe_keyed(tag_meta)
-
-          quote do
-            for unquote(for_expr), do: unquote(invoke_subengine(state, :handle_end, []))
-          end
-
-        %{if: if_expr} ->
-          quote do
-            if unquote(if_expr), do: unquote(invoke_subengine(state, :handle_end, []))
-          end
-
-        %{key: _} ->
-          raise_syntax_error!("cannot use :key without :for", tag_meta, state)
-
-        %{} ->
-          nil
-      end
-
-    if ast do
-      state
-      |> pop_substate_from_stack()
-      |> update_subengine(:handle_expr, ["=", ast])
-    else
-      state
+      ast ->
+        state
+        |> pop_substate_from_stack()
+        |> update_subengine(:handle_expr, ["=", ast])
     end
   end
+
+  defp build_special_expr_ast(state, %{for: _for_expr, if: if_expr} = tag_meta) do
+    for_expr = maybe_keyed(tag_meta)
+
+    quote do
+      for unquote(for_expr), unquote(if_expr), do: unquote(invoke_subengine(state, :handle_end, []))
+    end
+  end
+
+  defp build_special_expr_ast(state, %{for: _for_expr} = tag_meta) do
+    for_expr = maybe_keyed(tag_meta)
+
+    quote do
+      for unquote(for_expr), do: unquote(invoke_subengine(state, :handle_end, []))
+    end
+  end
+
+  defp build_special_expr_ast(state, %{if: if_expr}) do
+    quote do
+      if unquote(if_expr), do: unquote(invoke_subengine(state, :handle_end, []))
+    end
+  end
+
+  defp build_special_expr_ast(state, %{key: _} = tag_meta) do
+    raise_syntax_error!("cannot use :key without :for", tag_meta, state)
+  end
+
+  defp build_special_expr_ast(_state, %{}), do: nil
 
   defp maybe_keyed(%{key: key_expr, for: for_expr}) do
     # we already validated that the for expression has the correct shape in
@@ -1393,12 +1390,10 @@ defmodule Filament.TagEngine do
 
   defp build_component_clauses(let, name, tag_meta, tag_close_meta, %{caller: caller} = state) do
     opts =
-      if annotation =
-           caller && Map.get(tag_meta, :has_tags?, false) &&
+      case caller && Map.get(tag_meta, :has_tags?, false) &&
              state.tag_handler.annotate_slot(name, tag_meta, tag_close_meta, caller) do
-        [meta: [template_annotation: annotation]]
-      else
-        []
+        annotation when annotation not in [false, nil] -> [meta: [template_annotation: annotation]]
+        _ -> []
       end
 
     ast = invoke_subengine(state, :handle_end, [opts])
@@ -1433,37 +1428,43 @@ defmodule Filament.TagEngine do
     module = caller.module
 
     if module && Module.open?(module) do
-      pruned_slots =
-        for {slot_name, slot_values} <- slot_info, into: %{} do
-          values =
-            for {tag_meta, {root?, attrs, locs}} <- slot_values do
-              %{line: tag_meta.line, root: root?, attrs: attrs_for_call(attrs, locs)}
-            end
+      do_store_component_call(module, component, attr_info, slot_info, line, state)
+    end
+  end
 
-          {slot_name, values}
+  defp do_store_component_call(module, component, attr_info, slot_info, line, state) do
+    pruned_slots = prune_slot_info(slot_info)
+    {root?, attrs, locs} = attr_info
+    pruned_attrs = attrs_for_call(attrs, locs)
+
+    call = %{
+      component: component,
+      slots: pruned_slots,
+      attrs: pruned_attrs,
+      file: state.file,
+      line: line,
+      root: root?
+    }
+
+    # This may still fail under a very specific scenario where
+    # we are defining a template dynamically inside a function
+    # (most likely a test) that starts running while the module
+    # is still open.
+    try do
+      Module.put_attribute(module, :__components_calls__, call)
+    rescue
+      _ -> :ok
+    end
+  end
+
+  defp prune_slot_info(slot_info) do
+    for {slot_name, slot_values} <- slot_info, into: %{} do
+      values =
+        for {tag_meta, {root?, attrs, locs}} <- slot_values do
+          %{line: tag_meta.line, root: root?, attrs: attrs_for_call(attrs, locs)}
         end
 
-      {root?, attrs, locs} = attr_info
-      pruned_attrs = attrs_for_call(attrs, locs)
-
-      call = %{
-        component: component,
-        slots: pruned_slots,
-        attrs: pruned_attrs,
-        file: state.file,
-        line: line,
-        root: root?
-      }
-
-      # This may still fail under a very specific scenario where
-      # we are defining a template dynamically inside a function
-      # (most likely a test) that starts running while the module
-      # is still open.
-      try do
-        Module.put_attribute(module, :__components_calls__, call)
-      rescue
-        _ -> :ok
-      end
+      {slot_name, values}
     end
   end
 
