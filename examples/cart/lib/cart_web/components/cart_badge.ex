@@ -9,7 +9,7 @@ defmodule CartWeb.Components.CartBadge do
 
     def render(%{server: server}) do
       count_projection = fn state -> Cart.State.item_count(state) end
-      count = use_observable(server, nil, project: count_projection)
+      count = use_observable(server, project: count_projection)
 
       ~F"""
       <span class="cart-badge" data-count={count}>

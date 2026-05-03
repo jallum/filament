@@ -7,7 +7,7 @@ defmodule Filament.Hooks do
   Call these at the top level of `render/1`:
 
     - `use_state/1` — local mutable state; returns `{value, setter}`
-    - `use_observable/3` — subscribe to an `Observable.GenServer`
+    - `use_observable/2` — subscribe to an `Observable.GenServer`
     - `use_hold/3` — acquire a resource hold from a `Hold.GenServer`
     - `use_effect/2` — side-effect with optional cleanup
     - `memo_at/3` and `event_at/2` — invoked by compiler-generated code from `~F` templates
@@ -173,14 +173,14 @@ defmodule Filament.Hooks do
 
   ## Examples
 
-      counter = use_observable(CounterServer, nil, project: fn s -> s.count end)
+      counter = use_observable(CounterServer, project: fn s -> s.count end)
   """
   @spec use_observable(
           server :: GenServer.server(),
-          request :: term(),
-          opts :: [project: (term() -> term())]
+          opts :: [request: term(), project: (term() -> term())]
         ) :: term()
-  def use_observable(server, request \\ nil, opts \\ []) do
+  def use_observable(server, opts \\ []) do
+    request = Keyword.get(opts, :request, nil)
     project = Keyword.get(opts, :project, &Function.identity/1)
     {slot_index, previous, ctx} = use_slot(:uninitialized)
     server = Map.get(ctx.observable_stubs, server, server)

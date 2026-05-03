@@ -48,7 +48,7 @@ defmodule Filament.Hooks.UseObservableTest do
 
     {value, new_slots} =
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->
-        v = Hooks.use_observable(observable, nil, project: & &1)
+        v = Hooks.use_observable(observable, project: & &1)
         {v, Hooks.current_context().new_hook_slots}
       end)
 
@@ -63,7 +63,7 @@ defmodule Filament.Hooks.UseObservableTest do
     fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 
     with_render_ctx("root", %{"root" => fiber1}, self(), fn ->
-      Hooks.use_observable(observable, nil, project: & &1)
+      Hooks.use_observable(observable, project: & &1)
     end)
 
     # Second render — slot already has {:subscribed, server, val}
@@ -77,7 +77,7 @@ defmodule Filament.Hooks.UseObservableTest do
 
     {value2, new_slots} =
       with_render_ctx("root", %{"root" => fiber2}, self(), fn ->
-        v = Hooks.use_observable(observable, nil, project: & &1)
+        v = Hooks.use_observable(observable, project: & &1)
         {v, Hooks.current_context().new_hook_slots}
       end)
 
@@ -103,7 +103,7 @@ defmodule Filament.Hooks.UseObservableTest do
 
     value =
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->
-        Hooks.use_observable(obs_b, nil, project: & &1)
+        Hooks.use_observable(obs_b, project: & &1)
       end)
 
     assert value == 2
@@ -126,7 +126,7 @@ defmodule Filament.Hooks.UseObservableTest do
 
     value =
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->
-        Hooks.use_observable(observable, nil, project: & &1)
+        Hooks.use_observable(observable, project: & &1)
       end)
 
     # Returns 555 (not 100 — the hook reads the slot, doesn't re-subscribe)
@@ -140,7 +140,7 @@ defmodule Filament.Hooks.UseObservableTest do
 
     assert_raise Filament.ObservableError, ~r/subscription rejected/, fn ->
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->
-        Hooks.use_observable(rejecting, :reject_me, project: & &1)
+        Hooks.use_observable(rejecting, request: :reject_me, project: & &1)
       end)
     end
   end
@@ -180,7 +180,7 @@ defmodule Filament.Hooks.UseObservableTest do
     fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 
     with_render_ctx("root", %{"root" => fiber}, me, fn ->
-      Hooks.use_observable(observable, nil, project: & &1)
+      Hooks.use_observable(observable, project: & &1)
     end)
 
     # Simulate the observable sending an update

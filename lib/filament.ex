@@ -24,7 +24,7 @@ defmodule Filament do
   and external services:
 
     - `use_state/2` — local component state (re-renders on change)
-    - `use_observable/3` — subscribe to an `Observable.GenServer` with an optional
+    - `use_observable/2` — subscribe to an `Observable.GenServer` with an optional
       projection (only re-renders when the projected value changes)
     - `use_hold/3` — acquire a resource hold from a `Hold.GenServer`; released
       automatically if the LiveView process terminates

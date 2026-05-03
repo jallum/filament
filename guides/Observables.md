@@ -11,7 +11,7 @@ component last saw, the update is suppressed — no re-render. This is the
 *change-or-bust* optimization that keeps large UIs fast.
 
 This guide uses the Cart & Checkout example from `examples/cart`. By the end you will
-understand `Observable.GenServer`, `use_observable/3` with projections, the
+understand `Observable.GenServer`, `use_observable/2` with projections, the
 change-or-bust mechanism, and how to test observable components.
 
 ## The Observable.GenServer macro
@@ -66,7 +66,7 @@ The default `handle_subscribe/3` returns `{:ok, state, state}` (the current stat
 as the initial value). Override it to reject subscriptions or return a different
 initial value.
 
-## Subscribing from a component: use_observable/3
+## Subscribing from a component: use_observable/2
 
 The `CartBadge` component subscribes with a count projection:
 
@@ -79,7 +79,7 @@ defmodule CartWeb.Components.CartBadge do
 
     def render(%{server: server}) do
       count_projection = fn state -> Cart.State.item_count(state) end
-      count = use_observable(server, nil, project: count_projection)
+      count = use_observable(server, project: count_projection)
 
       ~F"""
       <span class="cart-badge" data-count={count}>
@@ -109,24 +109,24 @@ def render(%{server: server}) do
 end
 ```
 
-`use_observable/3` signature:
+`use_observable/2` signature:
 
 ```elixir
-use_observable(server, request \\ nil, opts \\ [])
+use_observable(server, opts \\ [])
 ```
 
 - `server` — PID or registered name of the observable GenServer.
-- `request` — passed to `handle_subscribe/3` on the server; use it to filter or
-  scope the subscription (default `nil`).
-- `opts` — accepts `:project` option: a one-arity function applied to each new
-  state before delivery.
+- `opts` — keyword options:
+  - `:request` — passed to `handle_subscribe/3` on the server; use it to filter or
+    scope the subscription (default `nil`).
+  - `:project` — a one-arity function applied to each new state before delivery.
 
 On the **first render** (HTTP pre-connect), `use_observable` returns `:uninitialized`
 because subscribing to the real server during an HTTP render would create zombie
 subscribers. Always guard against it:
 
 ```elixir
-count = use_observable(server, nil, project: &Cart.State.item_count/1)
+count = use_observable(server, project: &Cart.State.item_count/1)
 display = if count == :uninitialized, do: 0, else: count
 ```
 
@@ -279,4 +279,4 @@ See `Filament.Observable` for the full `@callback` specifications including the
 - **Resource Holds guide** — learn `Hold.GenServer`, the `:DOWN` auto-release
   lifecycle, and how to model reservations and out-of-stock UX.
 - **API reference** — see `Filament.Observable`, `Filament.Observable.GenServer`,
-  and `Filament.Hooks` (`use_observable/3`) for full signatures.
+  and `Filament.Hooks` (`use_observable/2`) for full signatures.

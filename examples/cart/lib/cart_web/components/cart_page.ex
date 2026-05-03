@@ -22,7 +22,7 @@ defmodule CartWeb.Components.CartPage do
     end
 
     def render(%{server: server}) do
-      count = Hooks.use_observable(server, nil, project: &Cart.State.item_count/1)
+      count = Hooks.use_observable(server, project: &Cart.State.item_count/1)
       cart = Hooks.use_observable(server)
 
       items = case cart do
