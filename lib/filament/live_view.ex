@@ -124,8 +124,18 @@ defmodule Filament.LiveView do
 
       @doc """
       Phoenix LiveView event handler.
-      Routes filament: events to registered fiber handlers; forwards all other
-      events to the root component if it defines handle_event/3.
+
+      Routes `filament:` wire events to registered fiber handlers (event closures
+      registered by `event_at/2`). All other events are forwarded to the root
+      component if it defines `handle_event/3`.
+
+      The component-level `handle_event/3` callback receives
+      `(event, params, props)` and must return the (possibly updated) props map.
+      Filament then re-renders the root fiber with the returned props.
+
+          def handle_event("increment", _params, props) do
+            Map.update!(props, :count, &(&1 + 1))
+          end
       """
       def handle_event("filament:" <> ref, params, socket) do
         case String.split(ref, ":", parts: 2) do
@@ -162,7 +172,7 @@ defmodule Filament.LiveView do
 
         case function_exported?(root_fiber.component, :handle_event, 3) do
           true ->
-            {new_props, _} =
+            new_props =
               root_fiber.component.handle_event(event, params, root_fiber.props)
 
             {new_tree, rendered, pending_effects} =
