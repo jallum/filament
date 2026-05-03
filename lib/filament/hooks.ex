@@ -388,42 +388,27 @@ defmodule Filament.Hooks do
   @doc false
   @spec event_at(slot :: non_neg_integer(), handler :: function()) :: wire_ref :: String.t()
   def event_at(slot, handler) when is_function(handler) do
-    case Process.get(:filament_render_context) do
-      nil ->
-        # Called outside a render pass (PLV diff engine re-evaluating comprehension entry fns).
-        # Handlers were already committed during the render pass; return a stable ref.
-        {fiber_id, _} = Process.get(:filament_diff_eval_state, {"unknown", 0})
-        "#{fiber_id}:#{slot}"
-
-      ctx ->
-        fiber_id_str = to_string(ctx.fiber_id)
-        new_handlers = Map.put(ctx.new_event_handlers, slot, handler)
-        Process.put(:filament_render_context, %{ctx | new_event_handlers: new_handlers})
-        "#{fiber_id_str}:#{slot}"
-    end
+    ctx = Process.get(:filament_render_context)
+    fiber_id_str = to_string(ctx.fiber_id)
+    new_handlers = Map.put(ctx.new_event_handlers, slot, handler)
+    Process.put(:filament_render_context, %{ctx | new_event_handlers: new_handlers})
+    "#{fiber_id_str}:#{slot}"
   end
 
   @doc false
   @spec register_event_handler(handler :: function()) :: wire_ref :: String.t()
   def register_event_handler(handler) when is_function(handler) do
-    case Process.get(:filament_render_context) do
-      nil ->
-        {fiber_id, idx} = Process.get(:filament_diff_eval_state, {"unknown", 0})
-        Process.put(:filament_diff_eval_state, {fiber_id, idx + 1})
-        "#{fiber_id}:#{idx}"
+    ctx = Process.get(:filament_render_context)
+    idx = ctx.event_handler_index
+    fiber_id_str = to_string(ctx.fiber_id)
 
-      ctx ->
-        idx = ctx.event_handler_index
-        fiber_id_str = to_string(ctx.fiber_id)
+    new_ctx = %{
+      ctx
+      | event_handler_index: idx + 1,
+        new_event_handlers: Map.put(ctx.new_event_handlers, idx, handler)
+    }
 
-        new_ctx = %{
-          ctx
-          | event_handler_index: idx + 1,
-            new_event_handlers: Map.put(ctx.new_event_handlers, idx, handler)
-        }
-
-        Process.put(:filament_render_context, new_ctx)
-        "#{fiber_id_str}:#{idx}"
-    end
+    Process.put(:filament_render_context, new_ctx)
+    "#{fiber_id_str}:#{idx}"
   end
 end

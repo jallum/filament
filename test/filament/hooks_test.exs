@@ -220,11 +220,34 @@ defmodule Filament.HooksTest do
     end
   end
 
+  describe "register_event_handler/1" do
+    test "raises when called outside render pass" do
+      assert_raise BadMapError, fn -> Hooks.register_event_handler(fn -> :action end) end
+    end
+
+    test "stores handler and returns sequential wire ref" do
+      fiber = Fiber.new(id: "root", component: nil, status: :stable)
+      h0 = fn -> :a end
+      h1 = fn -> :b end
+
+      {ref0, ref1, handlers, idx} =
+        with_render_ctx("root", %{"root" => fiber}, nil, fn ->
+          r0 = Hooks.register_event_handler(h0)
+          r1 = Hooks.register_event_handler(h1)
+          {r0, r1, Hooks.current_context().new_event_handlers, Hooks.current_context().event_handler_index}
+        end)
+
+      assert ref0 == "root:0"
+      assert ref1 == "root:1"
+      assert handlers[0] === h0
+      assert handlers[1] === h1
+      assert idx == 2
+    end
+  end
+
   describe "event_at/2" do
-    test "returns dummy wire ref when called outside render pass" do
-      ref = Hooks.event_at(0, fn -> :action end)
-      assert is_binary(ref)
-      assert String.contains?(ref, ":0")
+    test "raises when called outside render pass" do
+      assert_raise BadMapError, fn -> Hooks.event_at(0, fn -> :action end) end
     end
 
     test "stores handler and returns wire ref" do

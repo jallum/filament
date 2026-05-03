@@ -58,18 +58,11 @@ defmodule Filament.HTMLEngine do
 
   defp transform_event_attrs(other), do: other
 
-  defp transform_event_pair({k, v}) do
-    case k do
-      "on_click" ->
-        {"phx-click", quote(do: "filament:" <> Filament.Hooks.register_event_handler(unquote(v)))}
-
-      "on_submit" ->
-        {"phx-submit", quote(do: "filament:" <> Filament.Hooks.register_event_handler(unquote(v)))}
-
-      _other ->
-        {k, v}
-    end
+  defp transform_event_pair({"on_" <> event, v}) do
+    {"phx-" <> event, quote(do: "filament:" <> Filament.Hooks.register_event_handler(unquote(v)))}
   end
+
+  defp transform_event_pair(pair), do: pair
 
   defp literal_keys?([{key, _value} | rest]) when is_atom(key) or is_binary(key), do: literal_keys?(rest)
 

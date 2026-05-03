@@ -74,11 +74,6 @@ defmodule Filament.Renderer do
       # Harvest context fields
       final_ctx = Process.get(:filament_render_context)
 
-      # Seed the diff-eval state so that if Phoenix's diff engine re-evaluates
-      # the rendered struct's dynamic closure outside our render context, any
-      # register_event_handler calls return stable (non-crashing) wire refs.
-      Process.put(:filament_diff_eval_state, {to_string(context.fiber_id), 0})
-
       {rendered, final_ctx.new_hook_slots, final_ctx.pending_effects, final_ctx.new_fibers,
        final_ctx.new_event_handlers}
     after

@@ -95,6 +95,57 @@ defmodule Filament.SigilFPhase1Test do
       assert Filament.FiberTree.get_event_handler(tree, "root", 0)
     end
 
+    test "on_change wires to phx-change" do
+      defmodule OnChangeComp do
+        use Filament.Component
+        defcomponent OnChange do
+          def render(_assigns) do
+            ~F"""
+            <input on_change={fn _val -> :changed end} />
+            """
+          end
+        end
+      end
+
+      {tree, rendered, _} = Filament.Reconciler.mount(OnChangeComp.OnChange, %{}, owner_pid: self())
+      assert Enum.any?(rendered.static, &String.contains?(&1, "phx-change"))
+      assert Filament.FiberTree.get_event_handler(tree, "root", 0)
+    end
+
+    test "on_blur wires to phx-blur" do
+      defmodule OnBlurComp do
+        use Filament.Component
+        defcomponent OnBlur do
+          def render(_assigns) do
+            ~F"""
+            <input on_blur={fn -> :blurred end} />
+            """
+          end
+        end
+      end
+
+      {tree, rendered, _} = Filament.Reconciler.mount(OnBlurComp.OnBlur, %{}, owner_pid: self())
+      assert Enum.any?(rendered.static, &String.contains?(&1, "phx-blur"))
+      assert Filament.FiberTree.get_event_handler(tree, "root", 0)
+    end
+
+    test "on_keydown wires to phx-keydown" do
+      defmodule OnKeydownComp do
+        use Filament.Component
+        defcomponent OnKeydown do
+          def render(_assigns) do
+            ~F"""
+            <input on_keydown={fn _key -> :key end} />
+            """
+          end
+        end
+      end
+
+      {tree, rendered, _} = Filament.Reconciler.mount(OnKeydownComp.OnKeydown, %{}, owner_pid: self())
+      assert Enum.any?(rendered.static, &String.contains?(&1, "phx-keydown"))
+      assert Filament.FiberTree.get_event_handler(tree, "root", 0)
+    end
+
     test "wire output matches ~H for static HTML" do
       assigns = %{}
 
