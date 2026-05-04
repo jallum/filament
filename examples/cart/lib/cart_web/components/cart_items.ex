@@ -3,16 +3,14 @@ defmodule CartWeb.Components.CartItems do
   use Filament.Component
 
   defcomponent do
-    prop(:session_id, :string, default: nil)
     prop(:server, :any, default: nil)
 
     defp format_price(cents) do
       "$#{div(cents, 100)}.#{String.pad_leading(Integer.to_string(rem(cents, 100)), 2, "0")}"
     end
 
-    def render(%{session_id: session_id, server: server}) do
-      server = server || Cart.Server.ensure_started(session_id)
-      {_server, cart} = use_observable(server, disconnected: nil)
+    def render(%{server: server}) do
+      cart = use_projection(server, & &1, disconnected: nil)
 
       ~F"""
       <section class="cart-section">

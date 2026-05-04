@@ -21,11 +21,13 @@ defmodule CartWeb.Components.Cart do
     end
 
     def render(%{session_id: session_id}) do
+      server = use_observable(fn -> Cart.Server.ensure_started(session_id) end)
+
       ~F"""
       <div class="page">
         <header class="page-header">
           <h1>Shopping Demo</h1>
-          <CartBadge session_id={session_id} />
+          <CartBadge server={server} />
         </header>
 
         <section class="products">
@@ -34,16 +36,18 @@ defmodule CartWeb.Components.Cart do
               <div class="product-name">{p.name}</div>
               <div class="product-price">{format_price(p.price_cents)}</div>
               <button class="btn-add" on_click={fn ->
-                Cart.Server.add_item(
-                  Cart.Server.via_registry(session_id),
-                  %Cart.Item{id: p.id, name: p.name, price_cents: p.price_cents}
-                )
+                if server do
+                  Cart.Server.add_item(
+                    server,
+                    %Cart.Item{id: p.id, name: p.name, price_cents: p.price_cents}
+                  )
+                end
               end}>Add to Cart</button>
             </div>
           {end}
         </section>
 
-        <CartItems session_id={session_id} />
+        <CartItems server={server} />
       </div>
       """
     end

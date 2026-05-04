@@ -8,7 +8,8 @@ defmodule CollaborationWeb.Components.DocumentEditor do
     prop(:doc_id, :string, required: true)
 
     def render(%{doc_id: doc_id}) do
-      {server, doc_view} = use_observable(DocumentServer.via_registry(doc_id), [])
+      server = use_observable(DocumentServer.via_registry(doc_id))
+      doc_view = use_projection(server, & &1)
 
       if doc_view == :disconnected do
         ~F"""
