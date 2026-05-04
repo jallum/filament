@@ -1,12 +1,3 @@
-if not Code.ensure_loaded?(Floki) do
-  raise CompileError,
-    description: """
-    Filament.Test requires :floki. Add to your mix.exs:
-
-        {:floki, "~> 0.38", only: :test}
-    """
-end
-
 defmodule Filament.Test do
   @moduledoc """
   Rung 2 test API for Filament components.
@@ -26,6 +17,8 @@ defmodule Filament.Test do
       {:ok, view} = click(view, "button")
       assert render_text(view) =~ "Count: 1"
   """
+
+  @compile {:no_warn_undefined, [Floki]}
 
   alias Filament.Test.Stub
   alias Phoenix.HTML.Engine, as: HTMLEngine
@@ -50,6 +43,17 @@ defmodule Filament.Test do
           owner_pid: pid(),
           stubs: %{term() => pid()}
         }
+
+  # ── Floki availability check ──────────────────────────────────────────────
+
+  defp require_floki! do
+    Code.ensure_loaded?(Floki) ||
+      raise """
+      Filament.Test requires :floki. Add to your mix.exs:
+
+          {:floki, "~> 0.38", only: :test}
+      """
+  end
 
   # ── Public API ────────────────────────────────────────────────────────────
 
@@ -94,6 +98,8 @@ defmodule Filament.Test do
   @doc "Return the rendered HTML as a plain string (with HTML tags stripped)."
   @spec render_text(t()) :: String.t()
   def render_text(%__MODULE__{rendered_html: html}) do
+    require_floki!()
+
     html
     |> Floki.parse_fragment!()
     |> Floki.text()
@@ -106,6 +112,8 @@ defmodule Filament.Test do
   """
   @spec has_class?(t(), selector :: String.t(), class_name :: String.t()) :: boolean()
   def has_class?(%__MODULE__{rendered_html: html}, selector, class_name) do
+    require_floki!()
+
     html
     |> Floki.parse_fragment!()
     |> Floki.find(selector)
@@ -128,6 +136,8 @@ defmodule Filament.Test do
   """
   @spec click(t(), selector :: String.t()) :: {:ok, t()} | {:error, term()}
   def click(%__MODULE__{} = view, selector) do
+    require_floki!()
+
     case find_event_ref(view.rendered_html, selector, "phx-click") do
       {:ok, ref} -> dispatch_event(view, ref, %{})
       {:error, _} = err -> err
@@ -142,6 +152,8 @@ defmodule Filament.Test do
   @spec submit(t(), selector :: String.t(), params :: map()) ::
           {:ok, t()} | {:error, term()}
   def submit(%__MODULE__{} = view, selector, params \\ %{}) do
+    require_floki!()
+
     case find_event_ref(view.rendered_html, selector, "phx-submit") do
       {:ok, ref} -> dispatch_event(view, ref, params)
       {:error, _} = err -> err

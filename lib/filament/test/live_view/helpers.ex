@@ -1,12 +1,3 @@
-if not Code.ensure_loaded?(Floki) do
-  raise CompileError,
-    description: """
-    Filament.Test.LiveView.Helpers requires :floki. Add to your mix.exs:
-
-        {:floki, "~> 0.38", only: :test}
-    """
-end
-
 defmodule Filament.Test.LiveView.Helpers do
   @moduledoc """
   Helper functions for Rung 4 integration tests.
@@ -15,7 +6,18 @@ defmodule Filament.Test.LiveView.Helpers do
   Import via `use Filament.Test.LiveView`.
   """
 
+  @compile {:no_warn_undefined, [Floki]}
+
   import Phoenix.LiveViewTest
+
+  defp require_floki! do
+    Code.ensure_loaded?(Floki) ||
+      raise """
+      Filament.Test.LiveView.Helpers requires :floki. Add to your mix.exs:
+
+          {:floki, "~> 0.38", only: :test}
+      """
+  end
 
   @doc """
   Click the element matching `selector` in a live view.
@@ -42,6 +44,8 @@ defmodule Filament.Test.LiveView.Helpers do
   """
   @spec filament_text(view :: term()) :: String.t()
   def filament_text(view) do
+    require_floki!()
+
     view
     |> render()
     |> Floki.parse_fragment!()
@@ -55,6 +59,8 @@ defmodule Filament.Test.LiveView.Helpers do
   """
   @spec assert_has_class(view :: term(), selector :: String.t(), class_name :: String.t()) :: :ok
   def assert_has_class(view, selector, class_name) do
+    require_floki!()
+
     html = render(view)
     elements = html |> Floki.parse_fragment!() |> Floki.find(selector)
 
