@@ -18,6 +18,7 @@ defmodule Filament.Hooks do
   3. Hook identity is determined by call order (slot index). Conditional hooks corrupt state.
   """
 
+  alias Filament.Observable.Subscriber
   alias Filament.RenderContext
 
   @doc false
@@ -301,7 +302,7 @@ defmodule Filament.Hooks do
   end
 
   defp do_subscribe(server, request, project, ctx, slot_index) do
-    subscriber = %Filament.Observable.Subscriber{
+    subscriber = %Subscriber{
       pid: ctx.owner_pid,
       request: request,
       projections: %{{ctx.fiber_id, slot_index} => {project, :unset}}
@@ -316,6 +317,90 @@ defmodule Filament.Hooks do
       {:error, reason} ->
         raise Filament.ObservableError,
           message: "use_observable subscription rejected: #{inspect(reason)}",
+          observable: server,
+          reason: reason
+    end
+  end
+
+  @doc """
+  Project a value from an observable server into this fiber's hook slot.
+
+  `server` is typically the pid returned by `use_observable/1`. When `server`
+  is `nil` (disconnected or unresolved), returns the `:disconnected` option value.
+
+  On first render, subscribes this projection to the server. On subsequent renders,
+  reads the value from the slot (updated by batched `notify_observers` messages).
+  On unmount, removes the projection from the server.
+
+  Options:
+  - `:request`      — passed to `handle_subscribe/3` (default `nil`)
+  - `:disconnected` — returned when server is `nil` (default `:disconnected`)
+
+  Must be called at the top level of `render/1` in consistent order (like all hooks).
+
+  ## Example
+
+      server = use_observable(CounterServer)
+      count  = use_projection(server, fn s -> s.count end)
+  """
+  @spec use_projection(
+          server :: pid() | GenServer.server() | nil,
+          project :: (term() -> term()),
+          opts :: [request: term(), disconnected: term()]
+        ) :: term()
+  def use_projection(server, project, opts \\ []) when is_function(project, 1) do
+    request = Keyword.get(opts, :request, nil)
+    disconnected = Keyword.get(opts, :disconnected, :disconnected)
+    {slot_index, previous, ctx} = use_slot(:uninitialized)
+
+    if is_nil(server) do
+      commit_slot(slot_index, :uninitialized)
+      disconnected
+    else
+      value = resolve_projection(server, request, project, slot_index, previous, ctx)
+      commit_slot(slot_index, {:projected, server, request, value})
+      value
+    end
+  end
+
+  defp resolve_projection(server, request, project, slot_index, previous, ctx) do
+    case previous do
+      :uninitialized ->
+        do_project_subscribe(server, request, project, ctx, slot_index)
+
+      {:projected, ^server, _request, _current} ->
+        read_projected_value(ctx, slot_index, previous)
+
+      {:projected, old_server, old_request, _current} ->
+        maybe_remove_projection(ctx, old_server, old_request, slot_index)
+        do_project_subscribe(server, request, project, ctx, slot_index)
+
+      :needs_resubscribe ->
+        do_project_subscribe(server, request, project, ctx, slot_index)
+    end
+  end
+
+  defp read_projected_value(ctx, slot_index, previous) do
+    case Map.get(ctx.new_hook_slots, slot_index, previous) do
+      {:projected, _server, _request, current} -> current
+      _ -> nil
+    end
+  end
+
+  defp do_project_subscribe(server, request, project, ctx, slot_index) do
+    subscriber = %Subscriber{
+      pid: ctx.owner_pid,
+      request: request,
+      projections: %{{ctx.fiber_id, slot_index} => {project, :unset}}
+    }
+
+    case Filament.Observable.subscribe(server, request, subscriber) do
+      {:ok, initial_value} ->
+        project.(initial_value)
+
+      {:error, reason} ->
+        raise Filament.ObservableError,
+          message: "use_projection subscription rejected: #{inspect(reason)}",
           observable: server,
           reason: reason
     end
