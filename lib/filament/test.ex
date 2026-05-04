@@ -18,11 +18,11 @@ defmodule Filament.Test do
       assert render_text(view) =~ "Count: 1"
   """
 
-  @compile {:no_warn_undefined, [Floki]}
-
   alias Filament.Test.Stub
   alias Phoenix.HTML.Engine, as: HTMLEngine
   alias Phoenix.LiveView.Rendered
+
+  @compile {:no_warn_undefined, [Floki]}
 
   defstruct [
     :component,

@@ -6,9 +6,9 @@ defmodule Filament.Test.LiveView.Helpers do
   Import via `use Filament.Test.LiveView`.
   """
 
-  @compile {:no_warn_undefined, [Floki]}
-
   import Phoenix.LiveViewTest
+
+  @compile {:no_warn_undefined, [Floki]}
 
   defp require_floki! do
     Code.ensure_loaded?(Floki) ||

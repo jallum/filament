@@ -1,7 +1,5 @@
 import Config
 
-config :phoenix, :json_library, JSON
-
 config :collaboration, CollaborationWeb.Endpoint,
   url: [host: "localhost"],
   http: [port: 4000],
@@ -17,3 +15,5 @@ config :collaboration, CollaborationWeb.Endpoint,
   reloadable_apps: [:collaboration, :filament]
 
 config :collaboration, :dev_routes, true
+
+config :phoenix, :json_library, JSON

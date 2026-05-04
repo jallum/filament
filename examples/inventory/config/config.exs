@@ -1,7 +1,5 @@
 import Config
 
-config :phoenix, :json_library, JSON
-
 config :inventory, InventoryWeb.Endpoint,
   url: [host: "localhost"],
   http: [port: 4000],
@@ -17,3 +15,5 @@ config :inventory, InventoryWeb.Endpoint,
   reloadable_apps: [:inventory, :filament]
 
 config :inventory, :dev_routes, true
+
+config :phoenix, :json_library, JSON

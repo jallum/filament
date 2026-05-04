@@ -1,7 +1,5 @@
 import Config
 
-config :phoenix, :json_library, JSON
-
 config :cart, CartWeb.Endpoint,
   url: [host: "localhost"],
   http: [port: 4000],
@@ -17,3 +15,5 @@ config :cart, CartWeb.Endpoint,
   reloadable_apps: [:cart, :filament]
 
 config :cart, :dev_routes, true
+
+config :phoenix, :json_library, JSON
