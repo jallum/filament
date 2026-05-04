@@ -16,8 +16,7 @@ defmodule Filament.MixProject do
     ]
   end
 
-  # Include test/support for all Mix environments to avoid ExUnit pattern warnings
-  # Include examples for compile verification in test env
+  # Include test/support (fixtures) and examples for compile verification in test env
   defp elixirc_paths(:test),
     do: [
       "lib",
@@ -57,8 +56,8 @@ defmodule Filament.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.36", only: [:dev, :docs], runtime: false},
       {:styler, "~> 1.4", only: [:dev, :test], runtime: false},
-      # HTML parsing for test assertions
-      {:floki, "~> 0.38", only: :test},
+      # HTML parsing — used by Filament.Test in lib/; consumers add {:floki, only: :test}
+      {:floki, "~> 0.38"},
       # Phoenix LiveView dependencies for runtime and testing
       {:phoenix, "~> 1.7"},
       {:phoenix_live_view, "~> 1.0"},
