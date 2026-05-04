@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "flm-nbn.2"
+  ],
   "blocks": [],
   "created": "2026-05-04T18:00:19Z",
   "description": "todo: use_observable returns pid, use_projection for todos list. cart: parent component calls use_observable and passes pid as prop; CartBadge and CartItems use use_projection instead of use_observable. collaboration: use_observable + use_projection for doc_view. inventory: update use_hold custom hook in InventoryWeb.Hooks to use use_observable + use_projection internally.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Update examples for new hook API",
   "type": "task",
-  "updated_at": "2026-05-04T18:00:19Z"
+  "updated_at": "2026-05-04T18:00:28Z"
 }
