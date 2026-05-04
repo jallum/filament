@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-04T18:00:01Z",
+  "description": "Remove project and last_projected from Subscriber struct. Change subscriber key from {owner_pid, fiber_id, slot_index} to {owner_pid, request}. Add projections field: %{{fiber_id, slot_index} =\u003e {fn, last_projected}}. Add add_projection/remove_projection operations. Update notify_observers to iterate per owner_pid, run all projections, collect only changed values, send one batched {:filament_observable_updates, [{fiber_id, slot_index, value}]} message per subscriber. One Process.monitor per server per LiveView instead of per fiber. handle_subscribe returns raw state as initial_value.",
+  "id": "flm-nbn.1",
+  "labels": [],
+  "parent": "flm-nbn",
+  "priority": 1,
+  "status": "open",
+  "title": "Refactor Subscriber struct and Observable.GenServer fan-out",
+  "type": "task",
+  "updated_at": "2026-05-04T18:00:01Z"
+}
