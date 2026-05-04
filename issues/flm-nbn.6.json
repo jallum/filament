@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-04T18:00:19Z",
+  "description": "use_observable_test: assert returns pid when connected, nil when disconnected, factory fn reuse. New use_projection_test: initial value from raw state, dedup (no re-render if projected value unchanged), disconnected fallback, unmount removes projection. stub_test: update Subscriber construction (no project field), assert batched {:filament_observable_updates, ...} message shape. test_test: update ObservableComp to use use_projection.",
+  "id": "flm-nbn.6",
+  "labels": [],
+  "parent": "flm-nbn",
+  "priority": 1,
+  "status": "open",
+  "title": "Update tests for use_observable / use_projection split",
+  "type": "task",
+  "updated_at": "2026-05-04T18:00:19Z"
+}
