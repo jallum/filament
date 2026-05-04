@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "flm-nbn.9"
+  ],
   "blocks": [],
   "created": "2026-05-04T18:00:20Z",
   "description": "Start each example app (todo, cart, collaboration, inventory) and verify in Chrome: initial render correct, live updates work (push state change, component re-renders), disconnected state shows fallback, no console errors. Verify cart badge and cart items share one server subscription (confirm single subscriber entry in server process dict). Confirm inventory hold/release still functions.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Smoke-test all examples in Chrome",
   "type": "task",
-  "updated_at": "2026-05-04T18:00:20Z"
+  "updated_at": "2026-05-04T18:00:28Z"
 }

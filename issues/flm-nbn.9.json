@@ -5,7 +5,9 @@
     "flm-nbn.7",
     "flm-nbn.8"
   ],
-  "blocks": [],
+  "blocks": [
+    "flm-nbn.10"
+  ],
   "created": "2026-05-04T18:00:20Z",
   "description": "Run mix credo --strict, mix format --check-formatted, mix dialyzer across lib/, test/, and examples/. Fix all reported issues. Confirm Subscriber typespec updated (no project/last_projected), use_observable @spec returns pid | nil, use_projection @spec correct.",
   "id": "flm-nbn.9",
