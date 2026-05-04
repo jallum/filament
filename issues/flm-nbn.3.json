@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "flm-nbn.1"
+  ],
   "blocks": [],
   "created": "2026-05-04T18:00:01Z",
   "description": "use_projection(server_pid | nil, fn, opts) -\u003e projected_value. When server is nil, return Keyword.get(opts, :disconnected, :disconnected). On first render for this slot: call add_projection on the server (async cast), apply fn to raw initial state from use_observable slot for initial value. On re-render: read from hook slot (value written by batched update handler). On unmount: remove_projection cast to server; last projection removed triggers unsubscribe. Hook slot stores {server_pid, last_projected}.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Implement use_projection/3",
   "type": "task",
-  "updated_at": "2026-05-04T18:00:01Z"
+  "updated_at": "2026-05-04T18:00:27Z"
 }
