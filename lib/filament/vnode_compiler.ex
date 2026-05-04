@@ -561,7 +561,7 @@ defmodule Filament.VNodeCompiler do
       case cond if unless with for try receive quote unquote
       super import require use alias defmodule def defp defmacro defmacrop
       __MODULE__ __DIR__ __ENV__ __STACKTRACE__ __CALLER__
-      true false nil
+      true false nil _
     ]a
   end
 end
