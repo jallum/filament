@@ -1,17 +1,19 @@
 import Config
 
+config :phoenix, :json_library, JSON
+
 config :collaboration, CollaborationWeb.Endpoint,
   url: [host: "localhost"],
-  http: [port: 4003],
+  http: [port: 4000],
   adapter: Bandit.PhoenixAdapter,
+  render_errors: [
+    formats: [html: CollaborationWeb.ErrorHTML],
+    layout: false
+  ],
   pubsub_server: Collaboration.PubSub,
   live_view: [signing_salt: "collaborationexamplesalt"],
   secret_key_base: "collaboration_example_secret_key_base_min_64_chars_xxxxxxxxxxxxxxxxxx",
-  render_errors: [formats: [html: CollaborationWeb.ErrorHTML], layout: false],
   code_reloader: true,
-  reloadable_apps: [:collaboration, :filament],
-  watchers: []
+  reloadable_apps: [:collaboration, :filament]
 
-config :logger, level: :warning
-
-config :phoenix, :json_library, JSON
+config :collaboration, :dev_routes, true

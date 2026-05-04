@@ -1,18 +1,19 @@
 import Config
 
+config :phoenix, :json_library, JSON
+
 config :cart, CartWeb.Endpoint,
   url: [host: "localhost"],
-  http: [port: 4001],
+  http: [port: 4000],
   adapter: Bandit.PhoenixAdapter,
+  render_errors: [
+    formats: [html: CartWeb.ErrorHTML],
+    layout: false
+  ],
   pubsub_server: Cart.PubSub,
   live_view: [signing_salt: "cartexamplesalt"],
   secret_key_base: "cart_example_secret_key_base_min_64_chars_xxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  render_errors: [formats: [html: CartWeb.ErrorHTML], layout: false],
   code_reloader: true,
-  reloadable_apps: [:cart, :filament],
-  watchers: []
+  reloadable_apps: [:cart, :filament]
 
-# Enable dev debug output
-config :logger, level: :warning
-
-config :phoenix, :json_library, JSON
+config :cart, :dev_routes, true

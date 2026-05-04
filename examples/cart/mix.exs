@@ -5,26 +5,23 @@ defmodule Cart.MixProject do
     [
       app: :cart,
       version: "0.1.0",
-      elixir: "~> 1.19",
+      elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
+      listeners: [Phoenix.CodeReloader],
       deps: deps()
     ]
   end
 
   def application do
     [
-      mod: {Cart.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      extra_applications: [:logger],
+      mod: {Cart.Application, []}
     ]
   end
 
   defp deps do
     [
       {:filament, path: "../.."},
-      {:phoenix, "~> 1.7"},
-      {:phoenix_live_view, "~> 1.0"},
-      {:phoenix_html, "~> 4.0"},
-      {:jason, "~> 1.2"},
       {:bandit, "~> 1.0"}
     ]
   end
