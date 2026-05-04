@@ -7,14 +7,15 @@
   "blocks": [
     "flm-nbn.9"
   ],
+  "closed_at": "2026-05-04T20:58:57Z",
   "created": "2026-05-04T18:00:19Z",
   "description": "Update Filament.Hooks moduledoc: new use_observable/1 and use_projection/3 specs, examples, rules-of-hooks note. Update guides/migration-guide.md with before/after patterns. Update any README or guide referencing the old use_observable :project/:disconnected opts. Document that server-as-prop is now the idiomatic pattern for sharing a server across sibling components.",
   "id": "flm-nbn.8",
   "labels": [],
   "parent": "flm-nbn",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Update docs and migration guide",
   "type": "task",
-  "updated_at": "2026-05-04T20:53:52Z"
+  "updated_at": "2026-05-04T20:58:57Z"
 }
