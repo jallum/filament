@@ -130,9 +130,18 @@ defmodule CollaborationWeb.Layouts do
             color: #bbb;
             cursor: not-allowed;
           }
+
+          .tip {
+            max-width: 600px;
+            margin: 0 auto 1rem;
+            font-size: 0.8rem;
+            color: #888;
+            text-align: center;
+          }
         </style>
       </head>
       <body>
+        <p class="tip">Try opening this page in another tab — only one tab can hold the edit lock at a time, and changes appear live in the other.</p>
         <%= @inner_content %>
         <script src="/phoenix/phoenix.min.js"></script>
         <script src="/phoenix_live_view/phoenix_live_view.min.js"></script>

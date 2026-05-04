@@ -99,9 +99,18 @@ defmodule InventoryWeb.Layouts do
             background: #f0f0f0;
             border-color: #aaa;
           }
+
+          .tip {
+            max-width: 480px;
+            margin: 0 auto 1rem;
+            font-size: 0.8rem;
+            color: #888;
+            text-align: center;
+          }
         </style>
       </head>
       <body>
+        <p class="tip">Try opening this page in another tab — inventory adjustments in one tab update live in all others. Closing a tab should automatically release the inventory that it had reserved.</p>
         <%= @inner_content %>
         <script src="/phoenix/phoenix.min.js"></script>
         <script src="/phoenix_live_view/phoenix_live_view.min.js"></script>

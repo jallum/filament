@@ -162,9 +162,18 @@ defmodule TodoWeb.Layouts do
             color: #222;
             font-weight: 600;
           }
+
+          .tip {
+            max-width: 520px;
+            margin: 0 auto 1rem;
+            font-size: 0.8rem;
+            color: #888;
+            text-align: center;
+          }
         </style>
       </head>
       <body>
+        <p class="tip">Try opening this page in another tab — the todo list is shared, so changes appear live in every tab.</p>
         <%= @inner_content %>
         <script src="/phoenix/phoenix.min.js"></script>
         <script src="/phoenix_live_view/phoenix_live_view.min.js"></script>

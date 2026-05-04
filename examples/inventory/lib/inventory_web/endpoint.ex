@@ -22,6 +22,10 @@ defmodule InventoryWeb.Endpoint do
     gzip: false
   )
 
+  if code_reloading? do
+    plug(Phoenix.CodeReloader)
+  end
+
   plug(Plug.Session, @session_options)
   plug(InventoryWeb.Router)
 end

@@ -156,9 +156,18 @@ defmodule CartWeb.Layouts do
             text-align: right;
             border-top: 1px solid #f0f0f0;
           }
+
+          .tip {
+            max-width: 640px;
+            margin: 0 auto 1rem;
+            font-size: 0.8rem;
+            color: #888;
+            text-align: center;
+          }
         </style>
       </head>
       <body>
+        <p class="tip">Try opening this page in another tab — each tab gets its own independent cart, since cart state is isolated per session.</p>
         <%= @inner_content %>
         <script src="/phoenix/phoenix.min.js"></script>
         <script src="/phoenix_live_view/phoenix_live_view.min.js"></script>
