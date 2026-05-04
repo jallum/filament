@@ -7,9 +7,34 @@ defmodule Filament.Hooks do
   Call these at the top level of `render/1`:
 
     - `use_state/1` — local mutable state; returns `{value, setter}`
-    - `use_observable/2` — subscribe to an `Observable.GenServer`
+    - `use_observable/1` — resolves a server reference to a pid (or nil when disconnected)
+    - `use_projection/3` — registers a projection on an observable server and returns the projected value
+    - `use_observable/2` — legacy combined form; returns `{server, value}` (still supported)
     - `use_effect/2` — side-effect with optional cleanup
     - `memo_at/3` and `event_at/2` — invoked by compiler-generated code from `~F` templates
+
+  ## Preferred pattern: use_observable/1 + use_projection/3
+
+  Separating server resolution from value projection makes it easy to pass the server
+  pid to child components and to apply multiple projections from the same server:
+
+      def render(%{session_id: session_id}) do
+        server = use_observable(fn -> MyServer.start_link(session_id) end)
+        count  = use_projection(server, fn s -> s.count end, disconnected: 0)
+        label  = use_projection(server, fn s -> s.label end)
+        ...
+      end
+
+  Passing the server as a prop lets child components project their own values without
+  creating redundant subscriptions:
+
+      <ChildComponent server={server} />
+
+      # In the child:
+      def render(%{server: server}) do
+        value = use_projection(server, fn s -> s.some_field end)
+        ...
+      end
 
   ## Rules of hooks
 

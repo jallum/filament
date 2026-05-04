@@ -114,9 +114,9 @@ defmodule MyApp.CartComponent do
     prop(:server, :any, default: MyApp.CartServer)
 
     def render(%{server: server}) do
-      {_server, cart} = use_observable(server)
-      items = if cart == :disconnected, do: [], else: cart.items
-      total = if cart == :disconnected, do: 0, else: cart.total
+      cart = use_projection(server, & &1, disconnected: nil)
+      items = if cart == nil, do: [], else: cart.items
+      total = if cart == nil, do: 0, else: cart.total
 
       ~F"""
       <div>
@@ -135,11 +135,38 @@ end
 
 Key differences from the LiveView template:
 
-- `use_observable(server)` replaces reading from `socket.assigns`; it always returns `{server, value}` — destructure with `{_server, cart}` when you don't need the pid.
+- `use_projection(server, & &1)` subscribes this component to the server and returns
+  the current projected value. During disconnected (HTTP) renders it returns the
+  `:disconnected` option value (here `nil`).
 - `~F"""` templates use `{expression}` interpolation and `{for ... do}` / `{end}`
   loops instead of `<%= %>` and `<% %>`.
 - The component re-renders automatically when `notify_observers/1` is called on
   the server — you do not need `handle_event` to update the view.
+
+### Server-as-prop: sharing one server across sibling components
+
+When a parent renders multiple children that all project from the same server, resolve
+the server once in the parent and pass the pid as a prop. This keeps subscriptions
+efficient — each `{parent_pid, request}` pair shares a single subscriber entry on the
+server regardless of how many projections it has:
+
+```elixir
+# Parent: resolve once with use_observable/1
+def render(%{session_id: session_id}) do
+  server = use_observable(fn -> MyApp.CartServer.start_link(session_id) end)
+
+  ~F"""
+  <CartBadge server={server} />
+  <CartItems server={server} />
+  """
+end
+
+# Child: project with use_projection/3 — no redundant subscription
+def render(%{server: server}) do
+  count = use_projection(server, &Cart.State.item_count/1, disconnected: 0)
+  ...
+end
+```
 
 ## Phase 5: Embed in the existing LiveView (incremental adoption)
 
@@ -160,8 +187,8 @@ update messages must be forwarded from the parent's `handle_info/2`:
 
 ```elixir
 # In MyApp.CartLive:
-def handle_info({type, _fid, _slot, _val} = msg, socket)
-    when type in [:filament_set_state, :filament_observable_update,
+def handle_info({type, _} = msg, socket)
+    when type in [:filament_set_state, :filament_observable_updates,
                   :filament_observable_resubscribe] do
   Phoenix.LiveView.send_update(Filament.LiveComponent, id: "cart", filament_msg: msg)
   {:noreply, socket}

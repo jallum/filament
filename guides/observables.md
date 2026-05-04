@@ -11,7 +11,7 @@ component last saw, the update is suppressed — no re-render. This is the
 *change-or-bust* optimization that keeps large UIs fast.
 
 This guide uses the Cart & Checkout example from `examples/cart`. By the end you will
-understand `Observable.GenServer`, `use_observable/2` with projections, the
+understand `Observable.GenServer`, `use_observable/1` + `use_projection/3`, the
 change-or-bust mechanism, and how to test observable components.
 
 ## The Observable.GenServer macro
@@ -66,20 +66,20 @@ The default `handle_subscribe/3` returns `{:ok, state, state}` (the current stat
 as the initial value). Override it to reject subscriptions or return a different
 initial value.
 
-## Subscribing from a component: use_observable/2
+## Subscribing from a component: use_observable/1 + use_projection/3
 
-The `CartBadge` component subscribes with a count projection:
+The preferred pattern separates server resolution from value projection. The
+`CartBadge` component receives the server as a prop and projects the item count:
 
 ```elixir
 defmodule CartWeb.Components.CartBadge do
   use Filament.Component
 
   defcomponent do
-    prop(:server, :any, default: Cart.Server)
+    prop(:server, :any, default: nil)
 
     def render(%{server: server}) do
-      count_projection = fn state -> Cart.State.item_count(state) end
-      {_server, count} = use_observable(server, project: count_projection)
+      count = use_projection(server, &Cart.State.item_count/1, disconnected: 0)
 
       ~F"""
       <span class="cart-badge" data-count={count}>
@@ -91,49 +91,28 @@ defmodule CartWeb.Components.CartBadge do
 end
 ```
 
-The `CartView` component subscribes without a projection, receiving the full state:
+The parent component resolves the server once and passes it as a prop:
 
 ```elixir
-def render(%{server: server}) do
-  {_server, cart} = use_observable(server)
+def render(%{session_id: session_id}) do
+  server = use_observable(fn -> Cart.Server.ensure_started(session_id) end)
 
-  items_html =
-    if cart == :disconnected do
-      []
-    else
-      Enum.map(cart.items, fn item ->
-        # ... build HTML for each item
-      end)
-    end
-  # ...
+  ~F"""
+  <CartBadge server={server} />
+  <CartItems server={server} />
+  """
 end
 ```
 
-`use_observable` always returns `{server, value}`.
+`use_observable/1` returns the resolved pid (or `nil` during disconnected renders).
+`use_projection/3` subscribes this fiber and returns the projected value, returning
+the `:disconnected` option (default `:disconnected`) when `server` is `nil`.
+
+When the component owns the server's lifecycle, pass a factory function:
 
 ```elixir
-{server, value} = use_observable(server_or_fn, opts \\ [])
-```
-
-The first argument can be:
-
-- a pid, atom, `{:via, Registry, key}`, or `{node, name}` — used directly as
-  the server reference.
-- a zero-arity function — called on the first WebSocket render (and again if
-  the process dies) to obtain a pid or `{:ok, pid}`; useful when the component
-  owns the server's lifecycle.
-
-Options:
-- `:request` — passed to `handle_subscribe/3` on the server (default `nil`).
-- `:project` — a one-arity function applied to each new state before delivery.
-- `:disconnected` — the value half of the returned tuple before the WebSocket
-  connects (default `:disconnected`).
-
-When the component owns the server's lifecycle, pass a factory function and keep
-the pid for mutations:
-
-```elixir
-{store, todos} = use_observable(fn -> Todo.Store.start_link([]) end, disconnected: [])
+store = use_observable(fn -> Todo.Store.start_link([]) end)
+todos = use_projection(store, & &1, disconnected: [])
 ```
 
 This eliminates the need to start the server in `mount/3` and thread it as a prop —
@@ -146,18 +125,18 @@ defmodule TodoWeb.TodoLive do
 end
 ```
 
-On the **first render** (HTTP pre-connect), `use_observable` returns `{nil, disconnected}`
-because subscribing during an HTTP render would create zombie subscribers. Supply a
-sensible default with `:disconnected`:
+On the **first render** (HTTP pre-connect), `use_observable/1` returns `nil`
+because subscribing during an HTTP render would create zombie subscribers.
+`use_projection/3` returns the `:disconnected` value when server is `nil`:
 
 ```elixir
-{_server, count} = use_observable(server, project: &Cart.State.item_count/1, disconnected: 0)
+count = use_projection(server, &Cart.State.item_count/1, disconnected: 0)
 ```
 
 Or check the sentinel when you need branching logic:
 
 ```elixir
-{_server, cart} = use_observable(server)
+cart = use_projection(server, & &1)
 if cart == :disconnected, do: render_loading(), else: render_cart(cart)
 ```
 
@@ -303,4 +282,4 @@ See `Filament.Observable` for the full `@callback` specifications including the
   `use_hold` (see `examples/inventory/lib/inventory_web/hooks.ex` for a
   worked example of resource holds built on top of `use_observable`).
 - **API reference** — see `Filament.Observable`, `Filament.Observable.GenServer`,
-  and `Filament.Hooks` (`use_observable/2`) for full signatures.
+  and `Filament.Hooks` (`use_observable/1`, `use_projection/3`) for full signatures.

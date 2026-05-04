@@ -78,7 +78,8 @@ Key points:
 
 ```elixir
 def render(%{title: title}) do
-  {store, todos} = use_observable(fn -> Todo.Store.start_link([]) end, disconnected: [])
+  store = use_observable(fn -> Todo.Store.start_link([]) end)
+  todos = use_projection(store, & &1, disconnected: [])
 
   {filter, set_filter} = use_state(:all)
   filtered = apply_filter(todos, filter)
