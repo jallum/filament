@@ -22,6 +22,7 @@ defmodule Collaboration.MixProject do
   defp deps do
     [
       {:filament, path: "../.."},
+      {:floki, "~> 0.38", only: :test},
       {:bandit, "~> 1.0"}
     ]
   end
