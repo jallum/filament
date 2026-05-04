@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-04T17:59:46Z",
+  "description": "Refactor the observable subscription model: use_observable/1 resolves a server and returns a pid (nil when disconnected); use_projection/3 registers a named projection against that pid, handles disconnected fallback, and returns the projected value. Server-side fan-out is keyed by owner_pid — one subscription per LiveView per server, stacked projections delivered in one batched message per notify_observers call. Projection dedup (last_projected) moves from per-subscriber to per-projection within the stacked map.",
+  "id": "flm-nbn",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "Split use_observable into use_observable (pid) + use_projection",
+  "type": "task",
+  "updated_at": "2026-05-04T17:59:46Z"
+}
