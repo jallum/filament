@@ -6,7 +6,9 @@
     "flm-nbn.4",
     "flm-nbn.5"
   ],
-  "blocks": [],
+  "blocks": [
+    "flm-nbn.9"
+  ],
   "created": "2026-05-04T18:00:19Z",
   "description": "use_observable_test: assert returns pid when connected, nil when disconnected, factory fn reuse. New use_projection_test: initial value from raw state, dedup (no re-render if projected value unchanged), disconnected fallback, unmount removes projection. stub_test: update Subscriber construction (no project field), assert batched {:filament_observable_updates, ...} message shape. test_test: update ObservableComp to use use_projection.",
   "id": "flm-nbn.6",

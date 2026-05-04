@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "flm-nbn.6"
+  ],
   "blocks": [],
   "created": "2026-05-04T18:00:20Z",
   "description": "Run mix credo --strict, mix format --check-formatted, mix dialyzer across lib/, test/, and examples/. Fix all reported issues. Confirm Subscriber typespec updated (no project/last_projected), use_observable @spec returns pid | nil, use_projection @spec correct.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Credo, formatting, and Dialyzer",
   "type": "task",
-  "updated_at": "2026-05-04T18:00:20Z"
+  "updated_at": "2026-05-04T18:00:28Z"
 }
