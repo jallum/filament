@@ -3,7 +3,9 @@
   "blocked_by": [
     "flm-nbn.1"
   ],
-  "blocks": [],
+  "blocks": [
+    "flm-nbn.6"
+  ],
   "created": "2026-05-04T18:00:19Z",
   "description": "StubObservable.handle_subscribe returns raw state as initial_value (no projection applied). Stub.push still calls notify_observers — batched fan-out is handled by the injected GenServer machinery automatically. Stub.start/build API unchanged. Update or remove direct Subscriber struct construction in test helpers since project/last_projected are no longer fields.",
   "id": "flm-nbn.5",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Update Stub and StubObservable for new subscriber model",
   "type": "task",
-  "updated_at": "2026-05-04T18:00:27Z"
+  "updated_at": "2026-05-04T18:00:28Z"
 }

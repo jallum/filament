@@ -3,7 +3,8 @@
   "blocked_by": [
     "flm-nbn.2",
     "flm-nbn.3",
-    "flm-nbn.4"
+    "flm-nbn.4",
+    "flm-nbn.5"
   ],
   "blocks": [],
   "created": "2026-05-04T18:00:19Z",
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "Update tests for use_observable / use_projection split",
   "type": "task",
-  "updated_at": "2026-05-04T18:00:27Z"
+  "updated_at": "2026-05-04T18:00:28Z"
 }
