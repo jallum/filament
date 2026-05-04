@@ -144,10 +144,12 @@ defmodule Filament.LiveView do
 
       @doc """
       Phoenix LiveView info handler for observable updates.
+      Receives a batched list of `{fiber_id, slot_index, value}` tuples from a single
+      `notify_observers/1` call and applies them all before re-rendering.
       """
-      def handle_info({:filament_observable_update, fiber_id, slot_index, new_value}, socket) do
+      def handle_info({:filament_observable_updates, updates}, socket) do
         tree = socket.assigns._filament_tree
-        Filament.LiveView.handle_observable_update(tree, fiber_id, slot_index, new_value, socket, &rerender_from_root/2)
+        Filament.LiveView.handle_observable_updates(tree, updates, socket, &rerender_from_root/2)
       end
 
       @doc """
@@ -258,22 +260,36 @@ defmodule Filament.LiveView do
   end
 
   @doc false
-  def handle_observable_update(tree, fiber_id, slot_index, new_value, socket, rerender_fn) do
-    case Map.get(tree, fiber_id) do
-      nil ->
-        {:noreply, socket}
+  def handle_observable_updates(tree, updates, socket, rerender_fn) do
+    new_tree = apply_observable_updates(tree, updates)
 
-      fiber ->
-        existing = Map.get(fiber.hook_slots, slot_index, :uninitialized)
-        server = extract_observable_server(existing)
-        new_slots = Map.put(fiber.hook_slots, slot_index, {:subscribed, server, new_value})
-        tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-        {:noreply, rerender_fn.(socket, tree)}
+    if Enum.any?(updates, fn {fid, _, _} -> Map.has_key?(tree, fid) end) do
+      {:noreply, rerender_fn.(socket, new_tree)}
+    else
+      {:noreply, socket}
     end
   end
 
-  defp extract_observable_server({:subscribed, s, _v}), do: s
-  defp extract_observable_server(_), do: nil
+  @doc false
+  def apply_observable_updates(tree, updates) do
+    Enum.reduce(updates, tree, fn {fiber_id, slot_index, new_value}, acc ->
+      case Map.get(acc, fiber_id) do
+        nil -> acc
+        fiber -> apply_slot_update(acc, fiber_id, fiber, slot_index, new_value)
+      end
+    end)
+  end
+
+  defp apply_slot_update(tree, fiber_id, fiber, slot_index, new_value) do
+    {server, request} =
+      case Map.get(fiber.hook_slots, slot_index, :uninitialized) do
+        {:subscribed, s, r, _} -> {s, r}
+        _ -> {nil, nil}
+      end
+
+    new_slots = Map.put(fiber.hook_slots, slot_index, {:subscribed, server, request, new_value})
+    Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
+  end
 
   @doc false
   def handle_observable_resubscribe(tree, fiber_id, slot_index, socket, rerender_fn) do

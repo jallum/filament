@@ -312,9 +312,9 @@ defmodule Filament.Test do
         view = apply_hook_slot_update(view, fiber_id, slot_index, new_value)
         flush_messages(view)
 
-      {:filament_observable_update, fiber_id, slot_index, new_value} ->
-        view = apply_observable_update(view, fiber_id, slot_index, new_value)
-        flush_messages(view)
+      {:filament_observable_updates, updates} ->
+        tree = Filament.LiveView.apply_observable_updates(view.fiber_tree, updates)
+        flush_messages(%{view | fiber_tree: tree})
 
       {:filament_observable_resubscribe, fiber_id, slot_index} ->
         view = apply_hook_slot_update(view, fiber_id, slot_index, :needs_resubscribe)
@@ -322,26 +322,6 @@ defmodule Filament.Test do
     after
       0 -> rerender(view)
     end
-  end
-
-  defp apply_observable_update(view, fiber_id, slot_index, new_value) do
-    tree =
-      Filament.FiberTree.update_hook_slot(
-        view.fiber_tree,
-        fiber_id,
-        slot_index,
-        fn existing ->
-          server =
-            case existing do
-              {:subscribed, s, _v} -> s
-              _ -> nil
-            end
-
-          {:subscribed, server, new_value}
-        end
-      )
-
-    %{view | fiber_tree: tree}
   end
 
   defp apply_hook_slot_update(view, fiber_id, slot_index, new_value) do

@@ -46,9 +46,8 @@ defmodule Inventory.Test do
         spawn(fn ->
           sub = %Subscriber{
             pid: self(),
-            fiber_id: :holder_fiber,
-            slot_index: 0,
-            project: &Function.identity/1
+            request: "item-a",
+            projections: %{{:holder_fiber, 0} => {&Function.identity/1, :unset}}
           }
 
           {:ok, _} = Filament.Observable.subscribe(server, "item-a", sub)
@@ -73,9 +72,8 @@ defmodule Inventory.Test do
         spawn(fn ->
           sub = %Subscriber{
             pid: self(),
-            fiber_id: :"holder_#{i}",
-            slot_index: 0,
-            project: &Function.identity/1
+            request: "item-a",
+            projections: %{{:"holder_#{i}", 0} => {&Function.identity/1, :unset}}
           }
 
           {:ok, _} = Filament.Observable.subscribe(server, "item-a", sub)
@@ -131,9 +129,8 @@ defmodule Inventory.Test do
         spawn(fn ->
           sub = %Subscriber{
             pid: self(),
-            fiber_id: :holder,
-            slot_index: 0,
-            project: &Function.identity/1
+            request: "last",
+            projections: %{{:holder, 0} => {&Function.identity/1, :unset}}
           }
 
           {:ok, _} = Filament.Observable.subscribe(server, "last", sub)

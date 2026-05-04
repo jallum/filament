@@ -11,7 +11,7 @@ defmodule Filament.Observable do
   Called when a new subscriber requests a subscription.
 
   Return `{:ok, initial_value, new_state}` to accept.
-  `initial_value` is sent back to the subscriber as the starting projected value.
+  `initial_value` is the raw server state sent back to the subscriber.
 
   Return `{:error, reason, new_state}` to reject.
   """
@@ -45,11 +45,16 @@ defmodule Filament.Observable do
   end
 
   @doc false
-  @spec unsubscribe(
+  @spec remove_projection(
           observable :: GenServer.server(),
-          sub_key :: {pid :: pid(), fiber_id :: term(), slot_index :: non_neg_integer()}
+          owner_pid :: pid(),
+          request :: term(),
+          fiber_id :: term(),
+          slot_index :: non_neg_integer()
         ) :: :ok
-  def unsubscribe(observable, sub_key) do
-    GenServer.cast(observable, {:filament_unsubscribe, sub_key})
+  def remove_projection(observable, owner_pid, request, fiber_id, slot_index) do
+    sub_key = {owner_pid, request}
+    proj_key = {fiber_id, slot_index}
+    GenServer.cast(observable, {:filament_remove_projection, sub_key, proj_key})
   end
 end

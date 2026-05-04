@@ -64,9 +64,8 @@ defmodule Collaboration.Test do
 
       sub = %Filament.Observable.Subscriber{
         pid: self(),
-        fiber_id: :presence_test,
-        slot_index: 0,
-        project: &Function.identity/1
+        request: nil,
+        projections: %{{"presence_test", 0} => {&Function.identity/1, :unset}}
       }
 
       {:ok, view1} = Filament.Observable.subscribe(server, nil, sub)

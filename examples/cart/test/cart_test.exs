@@ -91,9 +91,8 @@ defmodule Cart.Test do
 
       sub = %Filament.Observable.Subscriber{
         pid: self(),
-        fiber_id: :badge_test_fiber,
-        slot_index: 0,
-        project: fn state -> Cart.State.item_count(state) end
+        request: nil,
+        projections: %{{:badge_test_fiber, 0} => {fn state -> Cart.State.item_count(state) end, :unset}}
       }
 
       {:ok, _initial} = Filament.Observable.subscribe(stub, nil, sub)
@@ -105,10 +104,10 @@ defmodule Cart.Test do
         )
 
       Stub.push(stub, state1)
-      assert_receive {:filament_observable_update, :badge_test_fiber, 0, 1}, 500
+      assert_receive {:filament_observable_updates, [{:badge_test_fiber, 0, 1}]}, 500
 
       Stub.push(stub, state1)
-      refute_receive {:filament_observable_update, :badge_test_fiber, 0, _}, 100
+      refute_receive {:filament_observable_updates, _}, 100
     end
   end
 

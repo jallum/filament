@@ -9,52 +9,49 @@ defmodule Filament.Test.StubTest do
 
     sub = %Subscriber{
       pid: self(),
-      fiber_id: :test,
-      slot_index: 0,
-      project: &Function.identity/1
+      request: nil,
+      projections: %{{"root", 0} => {&Function.identity/1, :unset}}
     }
 
     assert {:ok, 42} = Filament.Observable.subscribe(stub, nil, sub)
   end
 
-  test "push delivers update to subscriber" do
+  test "push delivers batched update to subscriber" do
     {:ok, stub} = Stub.start(fn _req -> 0 end)
 
     sub = %Subscriber{
       pid: self(),
-      fiber_id: :fiber_a,
-      slot_index: 1,
-      project: &Function.identity/1
+      request: nil,
+      projections: %{{"fiber_a", 1} => {&Function.identity/1, :unset}}
     }
 
     {:ok, _} = Filament.Observable.subscribe(stub, nil, sub)
     Stub.push(stub, 99)
-    assert_receive {:filament_observable_update, :fiber_a, 1, 99}
+    assert_receive {:filament_observable_updates, [{"fiber_a", 1, 99}]}
   end
 
-  test "push with projection — change-or-bust applies" do
+  test "push with projection — dedup applies per projection" do
     {:ok, stub} = Stub.start(fn _req -> 0 end)
 
     sub = %Subscriber{
       pid: self(),
-      fiber_id: :fiber_b,
-      slot_index: 0,
-      project: fn n -> n > 5 end
+      request: nil,
+      projections: %{{"fiber_b", 0} => {fn n -> n > 5 end, :unset}}
     }
 
     {:ok, 0} = Filament.Observable.subscribe(stub, nil, sub)
 
-    # First push always notifies because last_projected starts as :unset
+    # First push always notifies (last_projected starts as :unset)
     Stub.push(stub, 3)
-    assert_receive {:filament_observable_update, :fiber_b, 0, false}
+    assert_receive {:filament_observable_updates, [{"fiber_b", 0, false}]}
 
-    # Push a value that doesn't change the projection
+    # Projected value unchanged — no message
     Stub.push(stub, 4)
-    refute_receive {:filament_observable_update, _, _, _}, 50
+    refute_receive {:filament_observable_updates, _}, 50
 
-    # Push a value that changes the projection
+    # Projected value changes
     Stub.push(stub, 10)
-    assert_receive {:filament_observable_update, :fiber_b, 0, true}
+    assert_receive {:filament_observable_updates, [{"fiber_b", 0, true}]}
   end
 
   test "Stub.build/1 creates stubs for multiple servers" do
@@ -71,7 +68,6 @@ defmodule Filament.Test.StubTest do
   end
 
   test "use_observable resolves stub via observable_stubs in RenderContext" do
-    # Set up a RenderContext with a stub registered for :my_server
     {:ok, stub} = Stub.start(fn _req -> :stub_value end)
 
     _fiber = %Filament.Fiber{

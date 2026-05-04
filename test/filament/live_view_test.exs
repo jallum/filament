@@ -153,7 +153,7 @@ defmodule Filament.LiveViewTest do
   end
 
   describe "handle_info/2" do
-    test "handles filament_observable_update messages" do
+    test "handles filament_observable_updates messages" do
       socket = %Socket{
         assigns: %{
           count: 0,
@@ -165,7 +165,7 @@ defmodule Filament.LiveViewTest do
       }
 
       assert {:noreply, _socket} =
-               CounterLiveView.handle_info({:filament_observable_update, "root", 0, 42}, socket)
+               CounterLiveView.handle_info({:filament_observable_updates, [{"root", 0, 42}]}, socket)
     end
   end
 end

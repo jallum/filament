@@ -199,7 +199,7 @@ defmodule Filament.Hooks do
     if ctx.subscribe_enabled do
       server = resolve_server(server_or_fn, previous, ctx)
       value = resolve_value(server, request, project, slot_index, previous, ctx)
-      commit_slot(slot_index, {:subscribed, server, value})
+      commit_slot(slot_index, {:subscribed, server, request, value})
       {server, value}
     else
       commit_slot(slot_index, :uninitialized)
@@ -209,7 +209,7 @@ defmodule Filament.Hooks do
 
   defp resolve_server(factory_fn, previous, _ctx) when is_function(factory_fn, 0) do
     case previous do
-      {:subscribed, pid, _} when is_pid(pid) ->
+      {:subscribed, pid, _request, _} when is_pid(pid) ->
         if Process.alive?(pid), do: pid, else: call_factory(factory_fn)
 
       _ ->
@@ -233,13 +233,13 @@ defmodule Filament.Hooks do
       :uninitialized ->
         do_subscribe(server, request, project, ctx, slot_index)
 
-      {:subscribed, ^server, _current} ->
-        # Same server — value comes from handle_info updates, just read it.
-        read_current_value(ctx, slot_index, server, previous)
+      {:subscribed, ^server, _request, _current} ->
+        # Same server — value comes from batched updates, just read it.
+        read_current_value(ctx, slot_index, previous)
 
-      {:subscribed, old_server, _current} ->
-        # Server changed — unsubscribe from old, subscribe to new
-        maybe_unsubscribe(ctx, old_server, slot_index)
+      {:subscribed, old_server, old_request, _current} ->
+        # Server changed — remove our projection from old server, subscribe to new.
+        maybe_remove_projection(ctx, old_server, old_request, slot_index)
         do_subscribe(server, request, project, ctx, slot_index)
 
       :needs_resubscribe ->
@@ -247,25 +247,30 @@ defmodule Filament.Hooks do
     end
   end
 
-  defp maybe_unsubscribe(ctx, old_server, slot_index) do
+  defp maybe_remove_projection(ctx, old_server, old_request, slot_index) do
     if is_map_key(ctx.fiber_tree, ctx.fiber_id) do
-      Filament.Observable.unsubscribe(old_server, {ctx.owner_pid, ctx.fiber_id, slot_index})
+      Filament.Observable.remove_projection(
+        old_server,
+        ctx.owner_pid,
+        old_request,
+        ctx.fiber_id,
+        slot_index
+      )
     end
   end
 
-  defp read_current_value(ctx, slot_index, server, previous) do
+  defp read_current_value(ctx, slot_index, previous) do
     case Map.get(ctx.new_hook_slots, slot_index, previous) do
-      {:subscribed, ^server, current} -> current
-      value -> value
+      {:subscribed, _server, _request, current} -> current
+      _ -> nil
     end
   end
 
   defp do_subscribe(server, request, project, ctx, slot_index) do
     subscriber = %Filament.Observable.Subscriber{
       pid: ctx.owner_pid,
-      fiber_id: ctx.fiber_id,
-      slot_index: slot_index,
-      project: project
+      request: request,
+      projections: %{{ctx.fiber_id, slot_index} => {project, :unset}}
     }
 
     case Filament.Observable.subscribe(server, request, subscriber) do

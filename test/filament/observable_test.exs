@@ -8,10 +8,7 @@ defmodule Filament.ObservableTest do
     @moduledoc false
     use GenServer
 
-    def start_link(test_pid) do
-      GenServer.start_link(__MODULE__, test_pid)
-    end
-
+    def start_link(test_pid), do: GenServer.start_link(__MODULE__, test_pid)
     def init(test_pid), do: {:ok, test_pid}
 
     def handle_call({:filament_subscribe, request, subscriber}, _from, test_pid) do
@@ -19,32 +16,29 @@ defmodule Filament.ObservableTest do
       {:reply, {:ok, :initial}, test_pid}
     end
 
-    def handle_cast({:filament_unsubscribe, pid}, test_pid) do
-      send(test_pid, {:got_unsubscribe, pid})
+    def handle_cast({:filament_remove_projection, sub_key, proj_key}, test_pid) do
+      send(test_pid, {:got_remove_projection, sub_key, proj_key})
       {:noreply, test_pid}
     end
   end
 
   # --- Tests ---
 
-  test "Subscriber struct enforces keys and defaults :last_projected to :unset" do
+  test "Subscriber struct enforces :pid and :request, has projections map" do
     assert_raise ArgumentError, fn ->
-      struct!(Subscriber, fiber_id: "root", slot_index: 0, project: & &1)
+      struct!(Subscriber, pid: self())
     end
 
     sub = %Subscriber{
       pid: self(),
-      fiber_id: :root,
-      slot_index: 0,
-      project: & &1
+      request: :my_request,
+      projections: %{{"root", 0} => {& &1, :unset}}
     }
 
     assert sub.pid == self()
-    assert sub.fiber_id == :root
-    assert sub.slot_index == 0
-    assert sub.project.(42) == 42
+    assert sub.request == :my_request
+    assert map_size(sub.projections) == 1
     assert is_nil(sub.ref)
-    assert sub.last_projected == :unset
   end
 
   test "subscribe/3 sends the correct GenServer.call message" do
@@ -52,25 +46,23 @@ defmodule Filament.ObservableTest do
 
     sub = %Subscriber{
       pid: self(),
-      fiber_id: :root,
-      slot_index: 0,
-      project: & &1
+      request: nil,
+      projections: %{{"root", 0} => {& &1, :unset}}
     }
 
     assert {:ok, :initial} = Observable.subscribe(pid, :my_request, sub)
 
     assert_receive {:got_subscribe, :my_request, received_sub}
-    assert received_sub.fiber_id == :root
-    assert received_sub.slot_index == 0
     assert received_sub.pid == self()
+    assert received_sub.request == nil
   end
 
-  test "unsubscribe/2 sends the correct GenServer.cast message" do
+  test "remove_projection/5 sends the correct GenServer.cast message" do
     pid = start_supervised!({TestObservable, self()})
 
-    me = self()
-    :ok = Observable.unsubscribe(pid, me)
+    :ok = Observable.remove_projection(pid, self(), :req, "fiber_a", 2)
 
-    assert_receive {:got_unsubscribe, ^me}
+    assert_receive {:got_remove_projection, {self_pid, :req}, {"fiber_a", 2}}
+    assert self_pid == self()
   end
 end
