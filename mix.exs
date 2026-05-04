@@ -56,8 +56,8 @@ defmodule Filament.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.36", only: [:dev, :docs], runtime: false},
       {:styler, "~> 1.4", only: [:dev, :test], runtime: false},
-      # HTML parsing — used by Filament.Test in lib/; consumers add {:floki, only: :test}
-      {:floki, "~> 0.38"},
+      # HTML parsing — used by Filament.Test; consumers must add {:floki, ">= 0.0.0", only: :test}
+      {:floki, ">= 0.0.0", optional: true},
       # Phoenix LiveView dependencies for runtime and testing
       {:phoenix, "~> 1.7"},
       {:phoenix_live_view, "~> 1.0"},

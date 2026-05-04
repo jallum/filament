@@ -26,7 +26,7 @@ defmodule Filament.Test.Rung3Test do
       prop(:server, :term, required: true)
 
       def render(%{server: server}) do
-        count = use_observable(server)
+        {_server, count} = use_observable(server)
 
         ~F"""
         <span id="count">Count: {count}</span>

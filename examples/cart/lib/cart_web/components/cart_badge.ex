@@ -8,7 +8,7 @@ defmodule CartWeb.Components.CartBadge do
 
     def render(%{session_id: session_id, server: server}) do
       server = server || Cart.Server.ensure_started(session_id)
-      count = use_observable(server, project: &Cart.State.item_count/1, disconnected: 0)
+      {_server, count} = use_observable(server, project: &Cart.State.item_count/1, disconnected: 0)
 
       ~F"""
       <span class="cart-badge" data-count={count}>

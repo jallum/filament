@@ -50,12 +50,13 @@ defmodule Filament.Hooks.UseObservableTest do
     observable = start_supervised!({TestObservable, 42})
     fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 
-    {value, new_slots} =
+    {{server, value}, new_slots} =
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->
         v = Hooks.use_observable(observable, project: & &1)
         {v, Hooks.current_context().new_hook_slots}
       end)
 
+    assert server == observable
     assert value == 42
     assert new_slots[0] == {:subscribed, observable, 42}
   end
@@ -79,7 +80,7 @@ defmodule Filament.Hooks.UseObservableTest do
         status: :stable
       )
 
-    {value2, new_slots} =
+    {{_server, value2}, new_slots} =
       with_render_ctx("root", %{"root" => fiber2}, self(), fn ->
         v = Hooks.use_observable(observable, project: & &1)
         {v, Hooks.current_context().new_hook_slots}
@@ -105,7 +106,7 @@ defmodule Filament.Hooks.UseObservableTest do
         status: :stable
       )
 
-    value =
+    {_server, value} =
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->
         Hooks.use_observable(obs_b, project: & &1)
       end)
@@ -128,7 +129,7 @@ defmodule Filament.Hooks.UseObservableTest do
         status: :stable
       )
 
-    value =
+    {_server, value} =
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->
         Hooks.use_observable(observable, project: & &1)
       end)

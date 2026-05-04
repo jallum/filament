@@ -12,7 +12,7 @@ defmodule CartWeb.Components.CartItems do
 
     def render(%{session_id: session_id, server: server}) do
       server = server || Cart.Server.ensure_started(session_id)
-      cart = use_observable(server, disconnected: nil)
+      {_server, cart} = use_observable(server, disconnected: nil)
 
       ~F"""
       <section class="cart-section">

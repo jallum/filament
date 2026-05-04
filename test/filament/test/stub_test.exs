@@ -100,7 +100,7 @@ defmodule Filament.Test.StubTest do
     Process.put(:filament_render_context, ctx)
 
     try do
-      value = Filament.Hooks.use_observable(:my_server, project: &Function.identity/1)
+      {_server, value} = Filament.Hooks.use_observable(:my_server, project: &Function.identity/1)
       assert value == :stub_value
     after
       Process.delete(:filament_render_context)

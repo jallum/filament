@@ -156,58 +156,38 @@ defmodule Filament.Hooks do
   defp extract_cleanup(_), do: nil
 
   @doc """
-  Subscribe this fiber to `server`, returning the current projected value.
+  Subscribe this fiber to an observable server, returning `{server, value}`.
 
-  ## Server form
+  The first argument can be any of:
+  - a pid, atom, `{:via, ...}`, or `{node, name}` — used directly as the server
+  - a zero-arity function — called on first connect (and again if the process dies) to
+    obtain a pid or `{:ok, pid}`; useful when the component owns the server's lifecycle
 
-      use_observable(server, opts \\ [])
+  Always returns `{server, value}`. Before the WebSocket connects, returns `{nil, disconnected}`.
 
-  Returns the current projected value. Options:
+  Options:
   - `:request`      — passed to `handle_subscribe/3` (default `nil`)
-  - `:project`      — `(state -> term())` projection applied to each update (default identity)
-  - `:disconnected` — value returned before the WebSocket connects (default `:disconnected`)
+  - `:project`      — `(state -> term())` applied to each update (default identity)
+  - `:disconnected` — the value half while disconnected (default `:disconnected`)
 
-  ## Subscribe form
-
-      use_observable(subscribe: fn -> ... end, opts)
-
-  When the server should be started by the component itself, omit the `server` argument
-  and supply a `:subscribe` option instead. Returns `{pid, value}` so the pid is available
-  for mutations. When disconnected returns `{nil, disconnected_value}`.
-  - `:subscribe`    — zero-arity fn called once on the first WebSocket render (must return a pid or `{:ok, pid}`),
-                    or any GenServer name (pid, atom, `{:via, ...}`) used directly as the server
-  - `:disconnected` — the *value* half of the `{nil, value}` tuple returned while disconnected
-
-  Must be called at the top level of a component's `render/1`, in consistent order
-  across renders (like all hooks). Do not call inside conditionals or loops.
+  Must be called at the top level of `render/1` in consistent order (like all hooks).
+  Do not call inside conditionals or loops.
 
   ## Examples
 
-      counter = use_observable(CounterServer, project: fn s -> s.count end)
+      {_server, count} = use_observable(CounterServer, project: fn s -> s.count end)
 
-      {store, todos} = use_observable(subscribe: fn -> Todo.Store.start_link!([]) end, disconnected: [])
+      {store, todos} = use_observable(fn -> Store.start_link!([]) end, disconnected: [])
+
+      {server, doc} = use_observable(DocumentServer.via_registry(doc_id))
   """
   @spec use_observable(
-          server :: GenServer.server(),
+          server_or_fn ::
+            GenServer.server()
+            | (-> pid() | {:ok, pid()} | GenServer.server()),
           opts :: [request: term(), project: (term() -> term()), disconnected: term()]
-        ) :: term()
-  def use_observable(server_or_opts, opts \\ [])
-
-  def use_observable(opts, []) when is_list(opts) do
-    do_use_observable(nil, opts)
-  end
-
-  def use_observable(server, opts) do
-    do_use_observable(server, opts)
-  end
-
-  defp do_use_observable(server, opts) do
-    raw_start = Keyword.get(opts, :subscribe, nil)
-    # Allow subscribe: to be a 0-arity fn (starts a process) or any GenServer name
-    # (pid, atom, {:via, ...}) — wrap the latter so the rest of the path is uniform.
-    start_fn = build_start_fn(raw_start)
-
-    start_mode = server == nil and start_fn != nil
+        ) :: {server :: pid() | GenServer.server() | nil, value :: term()}
+  def use_observable(server_or_fn, opts \\ []) do
     request = Keyword.get(opts, :request, nil)
     project = Keyword.get(opts, :project, &Function.identity/1)
     disconnected = Keyword.get(opts, :disconnected, :disconnected)
@@ -217,45 +197,35 @@ defmodule Filament.Hooks do
     # in the HTTP render creates zombie subscribers that inflate presence counts
     # and race with the real WebSocket connection.
     if ctx.subscribe_enabled do
-      subscribe_enabled_path(server, start_fn, start_mode, request, project, slot_index, previous, ctx)
+      server = resolve_server(server_or_fn, previous, ctx)
+      value = resolve_value(server, request, project, slot_index, previous, ctx)
+      commit_slot(slot_index, {:subscribed, server, value})
+      {server, value}
     else
       commit_slot(slot_index, :uninitialized)
-      if start_mode, do: {nil, disconnected}, else: disconnected
+      {nil, disconnected}
     end
   end
 
-  defp build_start_fn(raw_start) do
-    cond do
-      is_function(raw_start, 0) -> raw_start
-      raw_start != nil -> fn -> raw_start end
-      true -> nil
+  defp resolve_server(factory_fn, previous, _ctx) when is_function(factory_fn, 0) do
+    case previous do
+      {:subscribed, pid, _} when is_pid(pid) ->
+        if Process.alive?(pid), do: pid, else: call_factory(factory_fn)
+
+      _ ->
+        call_factory(factory_fn)
     end
   end
 
-  defp subscribe_enabled_path(server, start_fn, start_mode, request, project, slot_index, previous, ctx) do
-    server = resolve_server(server, start_fn, start_mode, previous, ctx)
-    value = resolve_value(server, request, project, slot_index, previous, ctx)
-    commit_slot(slot_index, {:subscribed, server, value})
-    if start_mode, do: {server, value}, else: value
-  end
-
-  defp resolve_server(server, _start_fn, _start_mode, _previous, ctx) when server != nil do
+  defp resolve_server(server, _previous, ctx) do
     Map.get(ctx.observable_stubs, server, server)
   end
 
-  defp resolve_server(_server, _start_fn, _start_mode, {:subscribed, pid, _}, _ctx) do
-    pid
-  end
-
-  defp resolve_server(_server, start_fn, true, _previous, _ctx) do
-    case start_fn.() do
+  defp call_factory(factory_fn) do
+    case factory_fn.() do
       {:ok, pid} -> pid
       pid -> pid
     end
-  end
-
-  defp resolve_server(_server, _start_fn, _start_mode, _previous, _ctx) do
-    raise ArgumentError, "use_observable requires a server or a subscribe: value"
   end
 
   defp resolve_value(server, request, project, slot_index, previous, ctx) do

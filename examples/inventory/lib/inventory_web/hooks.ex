@@ -25,7 +25,7 @@ defmodule InventoryWeb.Hooks do
     disconnected_val = Keyword.get(opts, :disconnected, :disconnected)
     sentinel = :__hold_disconnected__
 
-    item = use_observable(server, project: &Map.get(&1, item_id), disconnected: sentinel)
+    {_server, item} = use_observable(server, project: &Map.get(&1, item_id), disconnected: sentinel)
     {held_qty, set_held_qty} = use_state(0)
 
     if item == sentinel do
