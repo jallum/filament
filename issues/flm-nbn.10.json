@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-nbn.9"
   ],
@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "flm-nbn",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Smoke-test all examples in Chrome",
   "type": "task",
-  "updated_at": "2026-05-04T18:00:28Z"
+  "updated_at": "2026-05-04T20:59:25Z"
 }
