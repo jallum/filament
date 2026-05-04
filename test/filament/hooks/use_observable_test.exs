@@ -183,13 +183,73 @@ defmodule Filament.Hooks.UseObservableTest do
     assert_receive {:filament_observable_updates, [{"root", 0, 99}]}, 100
   end
 
+  test "8. use_observable/1 returns pid when connected" do
+    observable = start_supervised!({TestObservable, 42})
+    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+
+    {server, new_slots} =
+      with_render_ctx("root", %{"root" => fiber}, self(), fn ->
+        s = Hooks.use_observable(observable)
+        {s, Hooks.current_context().new_hook_slots}
+      end)
+
+    assert server == observable
+    assert new_slots[0] == {:resolved, observable}
+  end
+
+  test "9. use_observable/1 returns nil when disconnected" do
+    observable = start_supervised!({TestObservable, 42})
+    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+
+    server =
+      with_render_ctx(
+        "root",
+        %{"root" => fiber},
+        self(),
+        fn ->
+          Hooks.use_observable(observable)
+        end,
+        subscribe_enabled: false
+      )
+
+    assert server == nil
+  end
+
+  test "10. use_observable/1 with factory fn reuses pid if alive on re-render" do
+    observable = start_supervised!({TestObservable, 0})
+    fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+
+    pid1 =
+      with_render_ctx("root", %{"root" => fiber1}, self(), fn ->
+        Hooks.use_observable(fn -> observable end)
+      end)
+
+    assert pid1 == observable
+
+    fiber2 =
+      Fiber.new(
+        id: "root",
+        component: nil,
+        hook_slots: %{0 => {:resolved, pid1}},
+        status: :stable
+      )
+
+    pid2 =
+      with_render_ctx("root", %{"root" => fiber2}, self(), fn ->
+        Hooks.use_observable(fn -> observable end)
+      end)
+
+    assert pid2 == pid1
+  end
+
   # --- Helpers ---
 
-  defp with_render_ctx(fiber_id, fiber_tree, owner_pid, fun) do
+  defp with_render_ctx(fiber_id, fiber_tree, owner_pid, fun, extra_opts \\ []) do
     ctx = %RenderContext{
       fiber_id: fiber_id,
       fiber_tree: fiber_tree,
-      owner_pid: owner_pid
+      owner_pid: owner_pid,
+      subscribe_enabled: Keyword.get(extra_opts, :subscribe_enabled, true)
     }
 
     Process.put(:filament_render_context, ctx)

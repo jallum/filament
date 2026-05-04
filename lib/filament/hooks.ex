@@ -156,6 +156,37 @@ defmodule Filament.Hooks do
   defp extract_cleanup(_), do: nil
 
   @doc """
+  Resolves an observable server reference to a pid, without subscribing.
+
+  The first argument follows the same resolution rules as `use_observable/2`.
+
+  Returns `nil` during disconnected (HTTP static) mounts. On subsequent renders,
+  reuses an existing pid if still alive; restarts a factory fn otherwise.
+
+  Use this hook when you want to pass the server identity to child components or
+  control subscription separately via `use_projection/3`.
+
+  Must be called at the top level of `render/1` in consistent order (like all hooks).
+  """
+  @spec use_observable(
+          server_or_fn ::
+            GenServer.server()
+            | (-> pid() | {:ok, pid()} | GenServer.server())
+        ) :: pid() | GenServer.server() | nil
+  def use_observable(server_or_fn) do
+    {slot_index, previous, ctx} = use_slot(:uninitialized)
+
+    if ctx.subscribe_enabled do
+      server = resolve_server(server_or_fn, previous, ctx)
+      commit_slot(slot_index, {:resolved, server})
+      server
+    else
+      commit_slot(slot_index, :uninitialized)
+      nil
+    end
+  end
+
+  @doc """
   Subscribe this fiber to an observable server, returning `{server, value}`.
 
   The first argument can be any of:
@@ -179,7 +210,7 @@ defmodule Filament.Hooks do
 
       {store, todos} = use_observable(fn -> Store.start_link!([]) end, disconnected: [])
 
-      {server, doc} = use_observable(DocumentServer.via_registry(doc_id))
+      {server, doc} = use_observable(DocumentServer.via_registry(doc_id), [])
   """
   @spec use_observable(
           server_or_fn ::
@@ -187,7 +218,7 @@ defmodule Filament.Hooks do
             | (-> pid() | {:ok, pid()} | GenServer.server()),
           opts :: [request: term(), project: (term() -> term()), disconnected: term()]
         ) :: {server :: pid() | GenServer.server() | nil, value :: term()}
-  def use_observable(server_or_fn, opts \\ []) do
+  def use_observable(server_or_fn, opts) do
     request = Keyword.get(opts, :request, nil)
     project = Keyword.get(opts, :project, &Function.identity/1)
     disconnected = Keyword.get(opts, :disconnected, :disconnected)
@@ -210,6 +241,9 @@ defmodule Filament.Hooks do
   defp resolve_server(factory_fn, previous, _ctx) when is_function(factory_fn, 0) do
     case previous do
       {:subscribed, pid, _request, _} when is_pid(pid) ->
+        if Process.alive?(pid), do: pid, else: call_factory(factory_fn)
+
+      {:resolved, pid} when is_pid(pid) ->
         if Process.alive?(pid), do: pid, else: call_factory(factory_fn)
 
       _ ->

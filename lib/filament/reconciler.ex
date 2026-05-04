@@ -125,6 +125,9 @@ defmodule Filament.Reconciler do
         {index, {:subscribed, server, request, _value}} ->
           Filament.Observable.remove_projection(server, owner_pid, request, fiber.id, index)
 
+        {_index, {:resolved, _server}} ->
+          :ok
+
         _ ->
           :ok
       end)
@@ -172,6 +175,9 @@ defmodule Filament.Reconciler do
 
           {index, {:subscribed, server, request, _value}} ->
             Filament.Observable.remove_projection(server, owner_pid, request, fiber.id, index)
+
+          {_index, {:resolved, _server}} ->
+            :ok
 
           _ ->
             :ok

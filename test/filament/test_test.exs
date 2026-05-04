@@ -51,7 +51,7 @@ defmodule Filament.TestTest do
       prop(:server, :term, required: true)
 
       def render(%{server: server}) do
-        {_server, value} = use_observable(server)
+        {_server, value} = use_observable(server, [])
 
         ~F"""
         <div id="value">{value}</div>
