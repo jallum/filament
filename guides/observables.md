@@ -79,7 +79,7 @@ defmodule CartWeb.Components.CartBadge do
 
     def render(%{server: server}) do
       count_projection = fn state -> Cart.State.item_count(state) end
-      count = use_observable(server, project: count_projection)
+      {_server, count} = use_observable(server, project: count_projection)
 
       ~F"""
       <span class="cart-badge" data-count={count}>
@@ -95,7 +95,7 @@ The `CartView` component subscribes without a projection, receiving the full sta
 
 ```elixir
 def render(%{server: server}) do
-  cart = use_observable(server)
+  {_server, cart} = use_observable(server)
 
   items_html =
     if cart == :disconnected do
@@ -109,38 +109,31 @@ def render(%{server: server}) do
 end
 ```
 
-`use_observable` has two calling forms.
-
-**Server form** — when the server is already running (e.g. a singleton or passed as a prop):
+`use_observable` always returns `{server, value}`.
 
 ```elixir
-use_observable(server, opts \\ [])
+{server, value} = use_observable(server_or_fn, opts \\ [])
 ```
 
-- `server` — PID or registered name of the observable GenServer.
-- `opts` — keyword options:
-  - `:request` — passed to `handle_subscribe/3` on the server; use it to filter or
-    scope the subscription (default `nil`).
-  - `:project` — a one-arity function applied to each new state before delivery.
-  - `:disconnected` — value returned before the WebSocket connects (default `:disconnected`).
+The first argument can be:
 
-**Subscribe form** — when the component owns the server's lifecycle:
+- a pid, atom, `{:via, Registry, key}`, or `{node, name}` — used directly as
+  the server reference.
+- a zero-arity function — called on the first WebSocket render (and again if
+  the process dies) to obtain a pid or `{:ok, pid}`; useful when the component
+  owns the server's lifecycle.
 
-```elixir
-use_observable(subscribe: fn -> ... end, opts)
-```
+Options:
+- `:request` — passed to `handle_subscribe/3` on the server (default `nil`).
+- `:project` — a one-arity function applied to each new state before delivery.
+- `:disconnected` — the value half of the returned tuple before the WebSocket
+  connects (default `:disconnected`).
 
-- `:subscribe` — zero-arity fn called once on the first WebSocket render; returns a pid
-  or `{:ok, pid}`. The process is started with `start_link`, so it is linked to the
-  LiveView and terminates with it automatically. Also accepts any GenServer name (pid,
-  atom, `{:via, Registry, ...}`) directly when subscribing to a long-lived process.
-- Same `:request`, `:project`, and `:disconnected` opts as the server form.
-
-Returns `{pid, value}` so the pid is available for mutations. While disconnected
-returns `{nil, disconnected_value}`.
+When the component owns the server's lifecycle, pass a factory function and keep
+the pid for mutations:
 
 ```elixir
-{store, todos} = use_observable(subscribe: fn -> Todo.Store.start_link([]) end, disconnected: [])
+{store, todos} = use_observable(fn -> Todo.Store.start_link([]) end, disconnected: [])
 ```
 
 This eliminates the need to start the server in `mount/3` and thread it as a prop —
@@ -153,18 +146,18 @@ defmodule TodoWeb.TodoLive do
 end
 ```
 
-On the **first render** (HTTP pre-connect), `use_observable` returns `:disconnected`
-(or your `disconnected:` override) because subscribing during an HTTP render would
-create zombie subscribers. Use the opt to supply a sensible default directly:
+On the **first render** (HTTP pre-connect), `use_observable` returns `{nil, disconnected}`
+because subscribing during an HTTP render would create zombie subscribers. Supply a
+sensible default with `:disconnected`:
 
 ```elixir
-count = use_observable(server, project: &Cart.State.item_count/1, disconnected: 0)
+{_server, count} = use_observable(server, project: &Cart.State.item_count/1, disconnected: 0)
 ```
 
 Or check the sentinel when you need branching logic:
 
 ```elixir
-cart = use_observable(server)
+{_server, cart} = use_observable(server)
 if cart == :disconnected, do: render_loading(), else: render_cart(cart)
 ```
 

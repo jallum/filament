@@ -13,7 +13,7 @@ defmodule CartWeb.Components.CartView do
     prop(:cart_id, :string, required: true)
 
     def render(%{cart_id: cart_id}) do
-      cart = use_observable({:via, Registry, {Cart.Registry, cart_id}},
+      {_server, cart} = use_observable({:via, Registry, {Cart.Registry, cart_id}},
         disconnected: nil
       )
 
@@ -45,7 +45,7 @@ defmodule CartWeb.Components.CartBadge do
     prop(:cart_id, :string, required: true)
 
     def render(%{cart_id: cart_id}) do
-      count = use_observable({:via, Registry, {Cart.Registry, cart_id}},
+      {_server, count} = use_observable({:via, Registry, {Cart.Registry, cart_id}},
         project: &Cart.State.item_count/1,
         disconnected: 0
       )
@@ -93,7 +93,7 @@ logic.
 ```elixir
 # CartBadge only re-renders when the item count changes,
 # not on every cart mutation.
-count = use_observable({:via, Registry, {Cart.Registry, cart_id}},
+{_server, count} = use_observable({:via, Registry, {Cart.Registry, cart_id}},
   project: &Cart.State.item_count/1
 )
 ```
@@ -140,7 +140,7 @@ assert render_text(view) =~ "Buy milk"
 
 | Example | What it demonstrates |
 |---------|----------------------|
-| `examples/todo` | `defcomponent`, `use_state`, `use_observable` with subscribe form, rung-2 tests |
+| `examples/todo` | `defcomponent`, `use_state`, `use_observable` with factory fn, rung-2 tests |
 | `examples/cart` | Observable.GenServer, projections, change-or-bust, rung-3 integration tests |
 | `examples/inventory` | Custom `use_hold` hook, `handle_unsubscribe` auto-release, per-item projections |
 | `examples/collaboration` | Multiple concurrent subscribers, real-time presence UI |

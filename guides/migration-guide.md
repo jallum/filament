@@ -114,7 +114,7 @@ defmodule MyApp.CartComponent do
     prop(:server, :any, default: MyApp.CartServer)
 
     def render(%{server: server}) do
-      cart = use_observable(server)
+      {_server, cart} = use_observable(server)
       items = if cart == :disconnected, do: [], else: cart.items
       total = if cart == :disconnected, do: 0, else: cart.total
 
@@ -135,7 +135,7 @@ end
 
 Key differences from the LiveView template:
 
-- `use_observable(server)` replaces reading from `socket.assigns`.
+- `use_observable(server)` replaces reading from `socket.assigns`; it always returns `{server, value}` — destructure with `{_server, cart}` when you don't need the pid.
 - `~F"""` templates use `{expression}` interpolation and `{for ... do}` / `{end}`
   loops instead of `<%= %>` and `<% %>`.
 - The component re-renders automatically when `notify_observers/1` is called on

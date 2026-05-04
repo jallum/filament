@@ -52,45 +52,41 @@ renders so you can compare them with `==` if needed.
 
 ## use_observable
 
-`use_observable` has two calling forms depending on whether the server already
-exists or the component owns its lifecycle.
-
-**Server form** — connect to a running server:
-
 ```elixir
-value = use_observable(server, opts \\ [])
+{server, value} = use_observable(server_or_fn, opts \\ [])
 ```
 
-Returns the projected state, or `:disconnected` (the default) during the HTTP
-pre-connect render. Options:
+Always returns `{server, value}`. Before the WebSocket connects returns
+`{nil, disconnected}` (`:disconnected` by default).
+
+The first argument can be any of:
+
+- a pid, atom, `{:via, Registry, key}`, or `{node, name}` — used directly as
+  the server reference.
+- a zero-arity function — called on the first WebSocket render (and again if
+  the process dies) to obtain a pid or `{:ok, pid}`; useful when the component
+  owns the server's lifecycle.
+
+Options:
 
 - `:project` — `(state -> term())` applied to each update; if the projected
   value equals the previous projection the update is suppressed (change-or-bust).
 - `:request` — passed to `handle_subscribe/3` on the server (default `nil`).
-- `:disconnected` — value returned before the WebSocket connects.
+- `:disconnected` — the value half of the returned tuple before the WebSocket
+  connects (default `:disconnected`).
 
 ```elixir
-count = use_observable(Cart.Server,
+# Connect to a running singleton server — discard the server ref
+{_server, count} = use_observable(Cart.Server,
   project: &Cart.State.item_count/1,
   disconnected: 0
 )
-```
 
-**Subscribe form** — start the server alongside the component:
+# Component owns the server's lifecycle — keep the pid for mutations
+{store, todos} = use_observable(fn -> Todo.Store.start_link([]) end, disconnected: [])
 
-```elixir
-{pid, value} = use_observable(subscribe: fn -> ... end, opts)
-```
-
-The `:subscribe` function is called once on the first WebSocket render; its
-return value must be a pid or `{:ok, pid}`. The pid is available for
-mutations. While disconnected returns `{nil, disconnected_value}`.
-
-```elixir
-{store, todos} = use_observable(
-  subscribe: fn -> Todo.Store.start_link([]) end,
-  disconnected: []
-)
+# Subscribe to a registry-named process
+{server, doc} = use_observable(DocumentServer.via_registry(doc_id))
 ```
 
 See the [Observables guide](observables.html) for the change-or-bust mechanism
@@ -145,7 +141,7 @@ defmodule InventoryWeb.Hooks do
     disconnected_val = Keyword.get(opts, :disconnected, :disconnected)
     sentinel = :__hold_disconnected__
 
-    item = use_observable(server, project: &Map.get(&1, item_id), disconnected: sentinel)
+    {_server, item} = use_observable(server, project: &Map.get(&1, item_id), disconnected: sentinel)
     {held_qty, set_held_qty} = use_state(0)
 
     if item == sentinel do

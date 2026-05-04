@@ -1,12 +1,3 @@
-if not Code.ensure_loaded?(Floki) do
-  raise CompileError,
-    description: """
-    Filament.Test.LiveView.Helpers requires :floki. Add to your mix.exs:
-
-        {:floki, "~> 0.38", only: :test}
-    """
-end
-
 defmodule Filament.Test.LiveView.Helpers do
   @moduledoc """
   Helper functions for Rung 4 integration tests.
