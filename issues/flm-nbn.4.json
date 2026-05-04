@@ -4,7 +4,8 @@
     "flm-nbn.1"
   ],
   "blocks": [
-    "flm-nbn.6"
+    "flm-nbn.6",
+    "flm-nbn.7"
   ],
   "created": "2026-05-04T18:00:01Z",
   "description": "Replace handling of {:filament_observable_update, fiber_id, slot_index, value} (one per projection) with {:filament_observable_updates, [{fiber_id, slot_index, value}]} (one per server per notify_observers). Apply all slot updates in one pass before triggering re-render. Update unmount path to remove projections (remove_projection cast) rather than unsubscribing per fiber; unsubscribe only when all projections for an owner_pid are removed.",
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "Update reconciler and LiveComponent for batched observable updates",
   "type": "task",
-  "updated_at": "2026-05-04T18:00:27Z"
+  "updated_at": "2026-05-04T18:00:28Z"
 }
