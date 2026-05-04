@@ -6,7 +6,8 @@
   ],
   "blocks": [
     "flm-nbn.6",
-    "flm-nbn.7"
+    "flm-nbn.7",
+    "flm-nbn.8"
   ],
   "created": "2026-05-04T18:00:01Z",
   "description": "use_projection(server_pid | nil, fn, opts) -\u003e projected_value. When server is nil, return Keyword.get(opts, :disconnected, :disconnected). On first render for this slot: call add_projection on the server (async cast), apply fn to raw initial state from use_observable slot for initial value. On re-render: read from hook slot (value written by batched update handler). On unmount: remove_projection cast to server; last projection removed triggers unsubscribe. Hook slot stores {server_pid, last_projected}.",
