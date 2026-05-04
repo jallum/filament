@@ -1,12 +1,3 @@
-if not Code.ensure_loaded?(Floki) do
-  raise CompileError,
-    description: """
-    Filament.Test requires :floki. Add to your mix.exs:
-
-        {:floki, "~> 0.38", only: :test}
-    """
-end
-
 defmodule Filament.Test do
   @moduledoc """
   Rung 2 test API for Filament components.

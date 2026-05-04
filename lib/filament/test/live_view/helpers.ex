@@ -13,8 +13,7 @@ defmodule Filament.Test.LiveView.Helpers do
   Wraps Phoenix.LiveViewTest.element/2 + render_click/1.
   Returns the updated rendered HTML string.
   """
-  @spec filament_click(view :: %Phoenix.LiveViewTest.View{}, selector :: String.t()) ::
-          String.t()
+  @spec filament_click(view :: term(), selector :: String.t()) :: String.t()
   def filament_click(view, selector) do
     view |> element(selector) |> render_click()
   end
@@ -24,11 +23,7 @@ defmodule Filament.Test.LiveView.Helpers do
   Wraps Phoenix.LiveViewTest.element/2 + render_submit/2.
   Returns the updated rendered HTML string.
   """
-  @spec filament_submit(
-          view :: %Phoenix.LiveViewTest.View{},
-          selector :: String.t(),
-          params :: map()
-        ) :: String.t()
+  @spec filament_submit(view :: term(), selector :: String.t(), params :: map()) :: String.t()
   def filament_submit(view, selector, params \\ %{}) do
     view |> element(selector) |> render_submit(params)
   end
@@ -36,7 +31,7 @@ defmodule Filament.Test.LiveView.Helpers do
   @doc """
   Return the current rendered text content (tags stripped) for the live view.
   """
-  @spec filament_text(view :: %Phoenix.LiveViewTest.View{}) :: String.t()
+  @spec filament_text(view :: term()) :: String.t()
   def filament_text(view) do
     view
     |> render()
@@ -49,11 +44,7 @@ defmodule Filament.Test.LiveView.Helpers do
   Assert that `selector` element has CSS class `class_name` in the current render.
   Raises RuntimeError with a descriptive message on failure.
   """
-  @spec assert_has_class(
-          view :: %Phoenix.LiveViewTest.View{},
-          selector :: String.t(),
-          class_name :: String.t()
-        ) :: :ok
+  @spec assert_has_class(view :: term(), selector :: String.t(), class_name :: String.t()) :: :ok
   def assert_has_class(view, selector, class_name) do
     html = render(view)
     elements = html |> Floki.parse_fragment!() |> Floki.find(selector)
