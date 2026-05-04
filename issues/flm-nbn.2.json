@@ -6,7 +6,8 @@
   "blocks": [
     "flm-nbn.3",
     "flm-nbn.6",
-    "flm-nbn.7"
+    "flm-nbn.7",
+    "flm-nbn.8"
   ],
   "created": "2026-05-04T18:00:01Z",
   "description": "use_observable/1 resolves the server argument (atom, pid, {:via,...}, factory fn) to a pid and returns it. Returns nil when subscribe_enabled is false (disconnected HTTP render). Factory fn lifecycle stays here — pid is reused while alive, restarted on death. Subscription is created only if this is the first use_projection for {owner_pid, server_pid, request} in this LiveView. Drop :project and :disconnected opts — those move to use_projection. Hook slot stores {:subscribed, server_pid} or :uninitialized.",
