@@ -313,17 +313,20 @@ defmodule Filament.Renderer do
   defp render_attrs([]), do: ""
 
   defp render_attrs(attrs) do
-    Enum.map(attrs, fn {key, value} -> render_attr(to_string(key), value) end)
-  end
+    {parts, _} =
+      Enum.map_reduce(attrs, 0, fn {key, value}, on_idx ->
+        key_str = to_string(key)
 
-  defp render_attr(key_str, value) do
-    if String.starts_with?(key_str, "on_") do
-      attr_key = "phx-" <> String.slice(key_str, 3..-1//1)
-      wire_ref = Filament.Hooks.register_event_handler(value)
-      [" ", attr_key, "=\"", wire_ref, "\""]
-    else
-      render_attr_value(key_str, value)
-    end
+        if String.starts_with?(key_str, "on_") do
+          attr_key = "phx-" <> String.slice(key_str, 3..-1//1)
+          wire_ref = Filament.Hooks.event_at(on_idx, value)
+          {[" ", attr_key, "=\"", wire_ref, "\""], on_idx + 1}
+        else
+          {render_attr_value(key_str, value), on_idx}
+        end
+      end)
+
+    parts
   end
 
   defp render_attr_value(_key_str, false), do: []

@@ -76,8 +76,8 @@ defmodule Filament.VNodeCompiler do
   # The fn closes over those vars.
   #
   # This prevents PLV's diff engine from re-calling component renders or event
-  # registrations outside the Filament render context (which would produce wrong
-  # wire refs using the stale diff_eval_state fallback).
+  # registrations outside the Filament render context, which raises because there
+  # is no active render pass.
   defp hoist_comprehension_handlers(ast) do
     Macro.postwalk(ast, fn
       {:{}, tuple_meta, [nil, map_expr, {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body]}]}] = entry_parts} ->
