@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T08:48:45Z",
+  "description": "",
+  "id": "flm-huc",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "flm-bug1: Observable.GenServer merge branch returns raw state instead of handle_subscribe initial_value — Banana/Cherry render blank",
+  "type": "task",
+  "updated_at": "2026-05-05T08:48:45Z"
+}
