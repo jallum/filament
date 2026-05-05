@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-05T08:12:00Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "flm-nc3",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "flm-nc3.6: Tests — rewrite use_observable_test, delete use_projection_test, update reconciler/rung3 tests",
   "type": "task",
-  "updated_at": "2026-05-05T08:12:00Z"
+  "updated_at": "2026-05-05T08:15:40Z"
 }
