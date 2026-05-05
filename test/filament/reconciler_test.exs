@@ -252,4 +252,111 @@ defmodule Filament.ReconcilerTest do
       assert new_tree["root"].children == []
     end
   end
+
+  # ── keyed_list proj_key cleanup (Fix 1) ──────────────────────────────────────
+
+  # Observable that lets tests inspect proj_keys via a synchronous call, which
+  # conveniently flushes any preceding remove_projection casts from the same queue.
+  defmodule KeyedTrackingObservable do
+    @moduledoc false
+    use Filament.Observable.GenServer
+
+    def start_link(_opts \\ []), do: GenServer.start_link(__MODULE__, :state)
+    def init(s), do: {:ok, s}
+
+    def proj_key_count(srv), do: GenServer.call(srv, :proj_key_count)
+    def subscriber_count(srv), do: GenServer.call(srv, :subscriber_count)
+
+    @impl Filament.Observable
+    def handle_subscribe(_sub, state), do: {:ok, state, state}
+
+    @impl GenServer
+    def handle_call(:proj_key_count, _from, state) do
+      total =
+        Process.get(:__filament_subscribers__, %{})
+        |> Map.values()
+        |> Enum.reduce(0, fn s, acc -> acc + map_size(s.proj_keys) end)
+
+      {:reply, total, state}
+    end
+
+    @impl GenServer
+    def handle_call(:subscriber_count, _from, state) do
+      {:reply, map_size(Process.get(:__filament_subscribers__, %{})), state}
+    end
+  end
+
+  # Minimal child component that subscribes to a server via use_observable.
+  defmodule ObservingChild do
+    @moduledoc false
+    import Filament.Hooks
+
+    def render(%{server: server}) do
+      use_observable(server, fn
+        :disconnected -> nil
+        state -> state
+      end)
+
+      {:element, :span, [], [{:text, "child"}]}
+    end
+  end
+
+  # Root component that renders a keyed_list of ObservingChild items.
+  defmodule KeyedParent do
+    @moduledoc false
+
+    def render(%{server: server, items: items}) do
+      keyed =
+        Enum.map(items, fn key ->
+          child = {:component, Filament.ReconcilerTest.ObservingChild, %{server: server}, key}
+          {key, child}
+        end)
+
+      {:keyed_list, keyed}
+    end
+  end
+
+  describe "keyed_list fiber unmount removes observable proj_keys" do
+    setup do
+      %{server: start_supervised!(KeyedTrackingObservable)}
+    end
+
+    test "all proj_keys removed when list empties (3 → 0)", %{server: server} do
+      # Mount with empty list so the root fiber exists in the tree before children render.
+      {tree, _, _} = Reconciler.mount(KeyedParent, %{server: server, items: []}, owner_pid: self())
+
+      # Add 3 subscribed children via update (root fiber is now in the tree).
+      {tree, _, _} =
+        Reconciler.update(tree, "root", %{server: server, items: ["a", "b", "c"]},
+          owner_pid: self()
+        )
+
+      assert KeyedTrackingObservable.proj_key_count(server) == 3
+
+      # Remove all — reconcile_children must route them through unmount_fiber.
+      {_, _, _} =
+        Reconciler.update(tree, "root", %{server: server, items: []}, owner_pid: self())
+
+      # GenServer.call flushes the preceding remove_projection casts.
+      assert KeyedTrackingObservable.proj_key_count(server) == 0
+      assert KeyedTrackingObservable.subscriber_count(server) == 0
+    end
+
+    test "2 of 3 proj_keys removed when list shrinks (3 → 1)", %{server: server} do
+      {tree, _, _} = Reconciler.mount(KeyedParent, %{server: server, items: []}, owner_pid: self())
+
+      {tree, _, _} =
+        Reconciler.update(tree, "root", %{server: server, items: ["a", "b", "c"]},
+          owner_pid: self()
+        )
+
+      assert KeyedTrackingObservable.proj_key_count(server) == 3
+
+      {_, _, _} =
+        Reconciler.update(tree, "root", %{server: server, items: ["a"]}, owner_pid: self())
+
+      assert KeyedTrackingObservable.proj_key_count(server) == 1
+      assert KeyedTrackingObservable.subscriber_count(server) == 1
+    end
+  end
 end
