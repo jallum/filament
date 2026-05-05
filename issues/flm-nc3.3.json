@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T08:11:50Z",
+  "description": "",
+  "id": "flm-nc3.3",
+  "labels": [],
+  "parent": "flm-nc3",
+  "priority": 1,
+  "status": "open",
+  "title": "flm-nc3.4: Docs — update hooks.ex moduledoc, filament.ex, all guides/*.md",
+  "type": "task",
+  "updated_at": "2026-05-05T08:11:50Z"
+}
