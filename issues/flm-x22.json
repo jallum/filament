@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T08:21:10Z",
+  "description": "",
+  "id": "flm-x22",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "flm-td1: Discuss: multiple use_observable calls with same {:via,...}/atom resolution token — do we deduplicate subscriptions?",
+  "type": "task",
+  "updated_at": "2026-05-05T08:21:10Z"
+}
