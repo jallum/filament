@@ -86,16 +86,15 @@ defmodule Cart.Test do
       assert view.rendered_html =~ "data-count=\"1\""
     end
 
-    test "projection suppresses update when count is unchanged" do
+    test "no update sent when raw state is unchanged (change-or-bust)" do
       {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
 
       sub = %Filament.Observable.Subscriber{
         pid: self(),
-        request: nil,
-        projections: %{{:badge_test_fiber, 0} => {fn state -> Cart.State.item_count(state) end, :unset}}
+        proj_keys: %{{:badge_test_fiber, 0} => true}
       }
 
-      {:ok, _initial} = Filament.Observable.subscribe(stub, nil, sub)
+      {:ok, _initial} = Filament.Observable.subscribe(stub, sub)
 
       state1 =
         Cart.State.add_item(
@@ -104,8 +103,9 @@ defmodule Cart.Test do
         )
 
       Stub.push(stub, state1)
-      assert_receive {:filament_observable_updates, [{:badge_test_fiber, 0, 1}]}, 500
+      assert_receive {:filament_observable_updates, [{:badge_test_fiber, 0, ^state1}]}, 500
 
+      # Same raw state — no update
       Stub.push(stub, state1)
       refute_receive {:filament_observable_updates, _}, 100
     end

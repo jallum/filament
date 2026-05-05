@@ -1,21 +1,20 @@
 defmodule Filament.Observable.Subscriber do
   @moduledoc false
 
-  @enforce_keys [:pid, :request]
+  @enforce_keys [:pid]
   defstruct [
     :pid,
-    :request,
     ref: nil,
-    projections: %{}
+    last_raw: :unset,
+    proj_keys: %{}
   ]
 
   @type projection_key :: {fiber_id :: term(), slot_index :: non_neg_integer()}
-  @type projection :: {project :: (term() -> term()), last_projected :: term() | :unset}
 
   @type t :: %__MODULE__{
           pid: pid(),
-          request: term(),
           ref: reference() | nil,
-          projections: %{projection_key() => projection()}
+          last_raw: term(),
+          proj_keys: %{projection_key() => true}
         }
 end

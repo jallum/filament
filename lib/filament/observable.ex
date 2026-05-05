@@ -16,7 +16,6 @@ defmodule Filament.Observable do
   Return `{:error, reason, new_state}` to reject.
   """
   @callback handle_subscribe(
-              request :: term(),
               subscriber :: term(),
               state :: term()
             ) ::
@@ -29,32 +28,26 @@ defmodule Filament.Observable do
   @callback handle_unsubscribe(subscriber :: term(), state :: term()) ::
               {:ok, new_state :: term()}
 
-  @optional_callbacks handle_subscribe: 3, handle_unsubscribe: 2
+  @optional_callbacks handle_subscribe: 2, handle_unsubscribe: 2
 
   # ── Public API ──────────────────────────────────────────────────────────────
 
   @doc false
-  @spec subscribe(
-          observable :: GenServer.server(),
-          request :: term(),
-          subscriber :: term()
-        ) ::
+  @spec subscribe(observable :: GenServer.server(), subscriber :: term()) ::
           {:ok, term()} | {:error, term()}
-  def subscribe(observable, request, subscriber) do
-    GenServer.call(observable, {:filament_subscribe, request, subscriber})
+  def subscribe(observable, subscriber) do
+    GenServer.call(observable, {:filament_subscribe, subscriber})
   end
 
   @doc false
   @spec remove_projection(
           observable :: GenServer.server(),
           owner_pid :: pid(),
-          request :: term(),
           fiber_id :: term(),
           slot_index :: non_neg_integer()
         ) :: :ok
-  def remove_projection(observable, owner_pid, request, fiber_id, slot_index) do
-    sub_key = {owner_pid, request}
+  def remove_projection(observable, owner_pid, fiber_id, slot_index) do
     proj_key = {fiber_id, slot_index}
-    GenServer.cast(observable, {:filament_remove_projection, sub_key, proj_key})
+    GenServer.cast(observable, {:filament_remove_projection, owner_pid, proj_key})
   end
 end

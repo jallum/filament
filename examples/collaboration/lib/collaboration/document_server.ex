@@ -44,7 +44,7 @@ defmodule Collaboration.DocumentServer do
 
   # Observable callback — called when a subscriber joins.
   @impl Filament.Observable
-  def handle_subscribe(_request, _subscriber, state) do
+  def handle_subscribe(_subscriber, state) do
     new_state = %{state | presence: state.presence + 1}
     initial_view = observable_view(new_state)
     notify_observers(initial_view)

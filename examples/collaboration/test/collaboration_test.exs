@@ -64,11 +64,10 @@ defmodule Collaboration.Test do
 
       sub = %Filament.Observable.Subscriber{
         pid: self(),
-        request: nil,
-        projections: %{{"presence_test", 0} => {&Function.identity/1, :unset}}
+        proj_keys: %{{"presence_test", 0} => true}
       }
 
-      {:ok, view1} = Filament.Observable.subscribe(server, nil, sub)
+      {:ok, view1} = Filament.Observable.subscribe(server, sub)
       assert view1.presence == 1
     end
   end

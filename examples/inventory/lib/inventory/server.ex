@@ -29,7 +29,7 @@ defmodule Inventory.Server do
   # Return the items map as the observable value so subscribers' project fns
   # (e.g. `&Map.get(&1, item_id)`) continue to work against a plain map.
   @impl Filament.Observable
-  def handle_subscribe(_request, _subscriber, state) do
+  def handle_subscribe(_subscriber, state) do
     {:ok, state.items, state}
   end
 

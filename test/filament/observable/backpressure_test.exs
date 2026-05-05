@@ -30,7 +30,7 @@ defmodule Filament.Observable.BackpressureTest do
   defp flood_mailbox(pid, n), do: for(_ <- 1..n, do: send(pid, :__flood__))
   defp drain_sleeper_mailbox(pid), do: Process.exit(pid, :kill)
 
-  defp get_subscriber(obs, pid, request), do: PressureCounter.get_subscriber(obs, {pid, request})
+  defp get_subscriber(obs, pid), do: PressureCounter.get_subscriber(obs, pid)
 
   # --- Tests ---
 
@@ -38,10 +38,9 @@ defmodule Filament.Observable.BackpressureTest do
     observable = start_supervised!({PressureCounter, 1})
     sub_pid = spawn_sleeper()
 
-    Observable.subscribe(observable, :any, %Subscriber{
+    Observable.subscribe(observable, %Subscriber{
       pid: sub_pid,
-      request: :any,
-      projections: %{{"root", 0} => {& &1, :unset}}
+      proj_keys: %{{"root", 0} => true}
     })
 
     PressureCounter.set(observable, 2)
@@ -53,14 +52,13 @@ defmodule Filament.Observable.BackpressureTest do
     drain_sleeper_mailbox(sub_pid)
   end
 
-  test "2. saturated subscriber receives resubscribe per projection, not update" do
+  test "2. saturated subscriber receives resubscribe per proj_key, not update" do
     observable = start_supervised!({PressureCounter, 1})
     sub_pid = spawn_sleeper()
 
-    Observable.subscribe(observable, :any, %Subscriber{
+    Observable.subscribe(observable, %Subscriber{
       pid: sub_pid,
-      request: :any,
-      projections: %{{"root", 0} => {& &1, :unset}}
+      proj_keys: %{{"root", 0} => true}
     })
 
     flood_mailbox(sub_pid, 110)
@@ -78,30 +76,27 @@ defmodule Filament.Observable.BackpressureTest do
     drain_sleeper_mailbox(sub_pid)
   end
 
-  test "3. last_projected not updated on saturation" do
+  test "3. last_raw not updated on saturation" do
     observable = start_supervised!({PressureCounter, 1})
     sub_pid = spawn_sleeper()
 
-    Observable.subscribe(observable, :any, %Subscriber{
+    Observable.subscribe(observable, %Subscriber{
       pid: sub_pid,
-      request: :any,
-      projections: %{{"root", 0} => {& &1, :unset}}
+      proj_keys: %{{"root", 0} => true}
     })
 
     PressureCounter.set(observable, 1)
 
-    sub = get_subscriber(observable, sub_pid, :any)
-    {_fun, last} = sub.projections[{"root", 0}]
-    assert last == 1
+    sub = get_subscriber(observable, sub_pid)
+    assert sub.last_raw == 1
 
     drain_sleeper_mailbox(sub_pid)
 
     sub_pid2 = spawn_sleeper()
 
-    Observable.subscribe(observable, :any, %Subscriber{
+    Observable.subscribe(observable, %Subscriber{
       pid: sub_pid2,
-      request: :any,
-      projections: %{{"root", 0} => {& &1, :unset}}
+      proj_keys: %{{"root", 0} => true}
     })
 
     flood_mailbox(sub_pid2, 110)
@@ -111,9 +106,10 @@ defmodule Filament.Observable.BackpressureTest do
       Logger.flush()
     end)
 
-    sub_after = get_subscriber(observable, sub_pid2, :any)
-    {_fun, last_after} = sub_after.projections[{"root", 0}]
-    assert last_after == :unset
+    sub_after = get_subscriber(observable, sub_pid2)
+    # last_raw stays at the subscribe-time initial value (1); saturation prevented
+    # it from being updated to 2.
+    assert sub_after.last_raw == 1
 
     drain_sleeper_mailbox(sub_pid2)
   end
@@ -122,10 +118,9 @@ defmodule Filament.Observable.BackpressureTest do
     observable = start_supervised!({PressureCounter, 1})
     sub_pid = spawn_sleeper()
 
-    Observable.subscribe(observable, :any, %Subscriber{
+    Observable.subscribe(observable, %Subscriber{
       pid: sub_pid,
-      request: :any,
-      projections: %{{"root", 0} => {& &1, :unset}}
+      proj_keys: %{{"root", 0} => true}
     })
 
     Process.exit(sub_pid, :kill)
@@ -141,10 +136,9 @@ defmodule Filament.Observable.BackpressureTest do
     observable = start_supervised!({PressureCounter, 1})
     sub_pid = spawn_sleeper()
 
-    Observable.subscribe(observable, :any, %Subscriber{
+    Observable.subscribe(observable, %Subscriber{
       pid: sub_pid,
-      request: :any,
-      projections: %{{"backpressure_test", 0} => {& &1, :unset}}
+      proj_keys: %{{"backpressure_test", 0} => true}
     })
 
     flood_mailbox(sub_pid, 110)

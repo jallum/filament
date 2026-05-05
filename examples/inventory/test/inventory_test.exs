@@ -46,11 +46,10 @@ defmodule Inventory.Test do
         spawn(fn ->
           sub = %Subscriber{
             pid: self(),
-            request: "item-a",
-            projections: %{{:holder_fiber, 0} => {&Function.identity/1, :unset}}
+            proj_keys: %{{:holder_fiber, 0} => true}
           }
 
-          {:ok, _} = Filament.Observable.subscribe(server, "item-a", sub)
+          {:ok, _} = Filament.Observable.subscribe(server, sub)
           :ok = GenServer.call(server, {:filament_hold, "item-a", 1, self()})
           send(parent, :acquired)
           receive do: (:die -> :ok)
@@ -72,11 +71,10 @@ defmodule Inventory.Test do
         spawn(fn ->
           sub = %Subscriber{
             pid: self(),
-            request: "item-a",
-            projections: %{{:"holder_#{i}", 0} => {&Function.identity/1, :unset}}
+            proj_keys: %{{:"holder_#{i}", 0} => true}
           }
 
-          {:ok, _} = Filament.Observable.subscribe(server, "item-a", sub)
+          {:ok, _} = Filament.Observable.subscribe(server, sub)
           :ok = GenServer.call(server, {:filament_hold, "item-a", 1, self()})
           send(parent, {:"h#{i}", :acquired})
           receive do: (:stop -> :ok)
@@ -129,11 +127,10 @@ defmodule Inventory.Test do
         spawn(fn ->
           sub = %Subscriber{
             pid: self(),
-            request: "last",
-            projections: %{{:holder, 0} => {&Function.identity/1, :unset}}
+            proj_keys: %{{:holder, 0} => true}
           }
 
-          {:ok, _} = Filament.Observable.subscribe(server, "last", sub)
+          {:ok, _} = Filament.Observable.subscribe(server, sub)
           :ok = GenServer.call(server, {:filament_hold, "last", 1, self()})
           send(parent, :held)
           receive do: (:stop -> :ok)

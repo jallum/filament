@@ -15,7 +15,7 @@ defmodule Filament.ReconcilerTest do
     def init(_), do: {:ok, []}
     def unsubscribe_calls(pid), do: GenServer.call(pid, :calls)
 
-    def handle_cast({:filament_remove_projection, {owner_pid, _req}, {fiber_id, slot_index}}, calls),
+    def handle_cast({:filament_remove_projection, owner_pid, {fiber_id, slot_index}}, calls),
       do: {:noreply, [{owner_pid, fiber_id, slot_index} | calls]}
 
     def handle_call(:calls, _from, calls), do: {:reply, calls, calls}
@@ -213,7 +213,7 @@ defmodule Filament.ReconcilerTest do
           props: %{count: 1},
           status: :stable,
           parent_id: "root",
-          hook_slots: %{0 => {:subscribed, server, nil, 42}}
+          hook_slots: %{0 => {:subscribed, server, 42}}
         )
 
       tree =

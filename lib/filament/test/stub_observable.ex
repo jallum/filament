@@ -15,8 +15,8 @@ defmodule Filament.Test.StubObservable do
   end
 
   @impl Filament.Observable
-  def handle_subscribe(request, _subscriber, state) do
-    initial = state.stub_fn.(request)
+  def handle_subscribe(_subscriber, state) do
+    initial = state.stub_fn.(nil)
     {:ok, initial, %{state | last_state: initial}}
   end
 

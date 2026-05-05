@@ -9,49 +9,46 @@ defmodule Filament.Test.StubTest do
 
     sub = %Subscriber{
       pid: self(),
-      request: nil,
-      projections: %{{"root", 0} => {&Function.identity/1, :unset}}
+      proj_keys: %{{"root", 0} => true}
     }
 
-    assert {:ok, 42} = Filament.Observable.subscribe(stub, nil, sub)
+    assert {:ok, 42} = Filament.Observable.subscribe(stub, sub)
   end
 
-  test "push delivers batched update to subscriber" do
+  test "push delivers raw state to all proj_keys in one message" do
     {:ok, stub} = Stub.start(fn _req -> 0 end)
 
     sub = %Subscriber{
       pid: self(),
-      request: nil,
-      projections: %{{"fiber_a", 1} => {&Function.identity/1, :unset}}
+      proj_keys: %{{"fiber_a", 1} => true}
     }
 
-    {:ok, _} = Filament.Observable.subscribe(stub, nil, sub)
+    {:ok, _} = Filament.Observable.subscribe(stub, sub)
     Stub.push(stub, 99)
     assert_receive {:filament_observable_updates, [{"fiber_a", 1, 99}]}
   end
 
-  test "push with projection — dedup applies per projection" do
+  test "push with unchanged raw state — no message sent (change-or-bust)" do
     {:ok, stub} = Stub.start(fn _req -> 0 end)
 
     sub = %Subscriber{
       pid: self(),
-      request: nil,
-      projections: %{{"fiber_b", 0} => {fn n -> n > 5 end, :unset}}
+      proj_keys: %{{"fiber_b", 0} => true}
     }
 
-    {:ok, 0} = Filament.Observable.subscribe(stub, nil, sub)
+    {:ok, 0} = Filament.Observable.subscribe(stub, sub)
 
-    # First push always notifies (last_projected starts as :unset)
+    # First push triggers update (last_raw was :unset)
     Stub.push(stub, 3)
-    assert_receive {:filament_observable_updates, [{"fiber_b", 0, false}]}
+    assert_receive {:filament_observable_updates, [{"fiber_b", 0, 3}]}
 
-    # Projected value unchanged — no message
-    Stub.push(stub, 4)
+    # Same value — no message
+    Stub.push(stub, 3)
     refute_receive {:filament_observable_updates, _}, 50
 
-    # Projected value changes
+    # Different value — message sent
     Stub.push(stub, 10)
-    assert_receive {:filament_observable_updates, [{"fiber_b", 0, true}]}
+    assert_receive {:filament_observable_updates, [{"fiber_b", 0, 10}]}
   end
 
   test "Stub.build/1 creates stubs for multiple servers" do

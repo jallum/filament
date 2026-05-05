@@ -11,8 +11,8 @@ defmodule Filament.ObservableTest do
     def start_link(test_pid), do: GenServer.start_link(__MODULE__, test_pid)
     def init(test_pid), do: {:ok, test_pid}
 
-    def handle_call({:filament_subscribe, request, subscriber}, _from, test_pid) do
-      send(test_pid, {:got_subscribe, request, subscriber})
+    def handle_call({:filament_subscribe, subscriber}, _from, test_pid) do
+      send(test_pid, {:got_subscribe, subscriber})
       {:reply, {:ok, :initial}, test_pid}
     end
 
@@ -24,45 +24,43 @@ defmodule Filament.ObservableTest do
 
   # --- Tests ---
 
-  test "Subscriber struct enforces :pid and :request, has projections map" do
+  test "Subscriber struct enforces :pid, has proj_keys and last_raw" do
     assert_raise ArgumentError, fn ->
-      struct!(Subscriber, pid: self())
+      struct!(Subscriber, proj_keys: %{})
     end
 
     sub = %Subscriber{
       pid: self(),
-      request: :my_request,
-      projections: %{{"root", 0} => {& &1, :unset}}
+      proj_keys: %{{"root", 0} => true}
     }
 
     assert sub.pid == self()
-    assert sub.request == :my_request
-    assert map_size(sub.projections) == 1
+    assert sub.proj_keys == %{{"root", 0} => true}
+    assert sub.last_raw == :unset
     assert is_nil(sub.ref)
   end
 
-  test "subscribe/3 sends the correct GenServer.call message" do
+  test "subscribe/2 sends the correct GenServer.call message" do
     pid = start_supervised!({TestObservable, self()})
 
     sub = %Subscriber{
       pid: self(),
-      request: nil,
-      projections: %{{"root", 0} => {& &1, :unset}}
+      proj_keys: %{{"root", 0} => true}
     }
 
-    assert {:ok, :initial} = Observable.subscribe(pid, :my_request, sub)
+    assert {:ok, :initial} = Observable.subscribe(pid, sub)
 
-    assert_receive {:got_subscribe, :my_request, received_sub}
+    assert_receive {:got_subscribe, received_sub}
     assert received_sub.pid == self()
-    assert received_sub.request == nil
+    assert received_sub.proj_keys == %{{"root", 0} => true}
   end
 
-  test "remove_projection/5 sends the correct GenServer.cast message" do
+  test "remove_projection/4 sends the correct GenServer.cast message" do
     pid = start_supervised!({TestObservable, self()})
 
-    :ok = Observable.remove_projection(pid, self(), :req, "fiber_a", 2)
+    :ok = Observable.remove_projection(pid, self(), "fiber_a", 2)
 
-    assert_receive {:got_remove_projection, {self_pid, :req}, {"fiber_a", 2}}
+    assert_receive {:got_remove_projection, self_pid, {"fiber_a", 2}}
     assert self_pid == self()
   end
 end

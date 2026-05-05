@@ -4,21 +4,22 @@ defmodule Filament.Observable.GenServer do
 
   `use Filament.Observable.GenServer` injects:
 
-    - `handle_call({:filament_subscribe, request, subscriber}, from, state)` —
-      subscriber registration; calls `handle_subscribe/3` (overridable)
-    - `handle_cast({:filament_remove_projection, sub_key, proj_key}, state)` —
+    - `handle_call({:filament_subscribe, subscriber}, from, state)` —
+      subscriber registration; calls `handle_subscribe/2` (overridable)
+    - `handle_cast({:filament_remove_projection, owner_pid, proj_key}, state)` —
       projection removal; auto-unsubscribes when the last projection is removed
     - `handle_info({:DOWN, ref, :process, pid, reason}, state)` —
       automatic subscriber cleanup when a LiveView process terminates
     - `notify_observers/1` — call this from your handlers whenever state changes
-      to push updates to all subscribed components
+      to push raw state to all subscribed components
 
-  Subscribers are keyed by `{owner_pid, request}`. All fibers within the same
-  LiveView that subscribe to the same server with the same request share one
-  subscriber entry. Each fiber registers a named projection; `notify_observers/1`
-  runs all projections, deduplicates by `last_projected`, and delivers one
-  `{:filament_observable_updates, [{fiber_id, slot_index, value}]}` message per
-  subscriber (only including projections whose value changed).
+  Subscribers are keyed by `owner_pid`. All fibers within the same LiveView that
+  subscribe to the same server share one subscriber entry. Each fiber registers a
+  named projection key; `notify_observers/1` sends one
+  `{:filament_observable_updates, [{fiber_id, slot_index, raw_state}]}` message
+  per subscriber whenever the raw state changes (change-or-bust at subscriber level).
+  Projection fns run client-side on each re-render, so closures over local component
+  state (filters, selections, etc.) always see the current value.
 
   ## Example
 
@@ -33,7 +34,7 @@ defmodule Filament.Observable.GenServer do
         def init(initial), do: {:ok, initial}
 
         @impl Filament.Observable
-        def handle_subscribe(_request, _subscriber, state) do
+        def handle_subscribe(_subscriber, state) do
           {:ok, state, state}
         end
 
@@ -57,18 +58,18 @@ defmodule Filament.Observable.GenServer do
       # ── Default Observable callbacks (overridable) ───────────────────────
 
       @impl Filament.Observable
-      def handle_subscribe(_request, _subscriber, state), do: {:ok, state, state}
+      def handle_subscribe(_subscriber, state), do: {:ok, state, state}
 
       @impl Filament.Observable
       def handle_unsubscribe(_subscriber, state), do: {:ok, state}
 
-      defoverridable handle_subscribe: 3, handle_unsubscribe: 2
+      defoverridable handle_subscribe: 2, handle_unsubscribe: 2
 
       # ── Injected GenServer message handlers ──────────────────────────────
 
       @impl true
-      def handle_call({:filament_subscribe, request, %Subscriber{} = sub_info}, _from, state) do
-        sub_key = {sub_info.pid, sub_info.request}
+      def handle_call({:filament_subscribe, %Subscriber{} = sub_info}, _from, state) do
+        sub_key = sub_info.pid
         subs = Process.get(:__filament_subscribers__, %{})
 
         case Map.get(subs, sub_key) do
@@ -76,9 +77,10 @@ defmodule Filament.Observable.GenServer do
             ref = Process.monitor(sub_info.pid)
             subscriber = %{sub_info | ref: ref}
 
-            case apply(__MODULE__, :handle_subscribe, [request, subscriber, state]) do
+            case apply(__MODULE__, :handle_subscribe, [subscriber, state]) do
               {:ok, initial_value, new_state} ->
-                Process.put(:__filament_subscribers__, Map.put(subs, sub_key, subscriber))
+                stored = %{subscriber | last_raw: initial_value}
+                Process.put(:__filament_subscribers__, Map.put(subs, sub_key, stored))
                 {:reply, {:ok, initial_value}, new_state}
 
               {:error, reason, new_state} ->
@@ -87,11 +89,11 @@ defmodule Filament.Observable.GenServer do
             end
 
           existing ->
-            merged = %{existing | projections: Map.merge(existing.projections, sub_info.projections)}
+            merged = %{existing | proj_keys: Map.merge(existing.proj_keys, sub_info.proj_keys)}
             Process.put(:__filament_subscribers__, Map.put(subs, sub_key, merged))
             # Call handle_subscribe to get the correctly-formatted initial_value.
             # We discard new_state — the subscriber is already registered and monitored.
-            {:ok, initial_value, _} = apply(__MODULE__, :handle_subscribe, [request, merged, state])
+            {:ok, initial_value, _} = apply(__MODULE__, :handle_subscribe, [merged, state])
             {:reply, {:ok, initial_value}, state}
         end
       end
@@ -105,15 +107,15 @@ defmodule Filament.Observable.GenServer do
             {:noreply, state}
 
           subscriber ->
-            new_projections = Map.delete(subscriber.projections, proj_key)
+            new_proj_keys = Map.delete(subscriber.proj_keys, proj_key)
 
-            if map_size(new_projections) == 0 do
+            if map_size(new_proj_keys) == 0 do
               Process.demonitor(subscriber.ref, [:flush])
               Process.put(:__filament_subscribers__, Map.delete(subs, sub_key))
               {:ok, new_state} = handle_unsubscribe(subscriber, state)
               {:noreply, new_state}
             else
-              updated = %{subscriber | projections: new_projections}
+              updated = %{subscriber | proj_keys: new_proj_keys}
               Process.put(:__filament_subscribers__, Map.put(subs, sub_key, updated))
               {:noreply, state}
             end
@@ -142,9 +144,10 @@ defmodule Filament.Observable.GenServer do
       @doc """
       Notify all subscribers of a new state value.
 
-      For each unique subscriber (LiveView process + request), runs all registered
-      projections, collects the ones whose value changed, and sends one
-      `{:filament_observable_updates, [{fiber_id, slot_index, value}]}` message.
+      For each unique subscriber (LiveView process), if the raw state changed,
+      sends one `{:filament_observable_updates, [{fiber_id, slot_index, raw_state}]}`
+      message covering all registered projection keys. Projection fns run client-side
+      at render time so closures over local component state always see current values.
 
       Call this from your `handle_call`/`handle_cast`/`handle_info` whenever
       state changes and subscribers should re-render.
@@ -168,31 +171,19 @@ defmodule Filament.Observable.GenServer do
   end
 
   defp notify_subscriber(subscriber, new_state, depth_result, max_mailbox_depth) do
-    if saturated_depth?(depth_result, max_mailbox_depth) do
-      log_and_resubscribe(subscriber, depth_result, max_mailbox_depth)
-      subscriber
-    else
-      {new_projections, updates} = collect_updates(subscriber.projections, new_state)
+    cond do
+      saturated_depth?(depth_result, max_mailbox_depth) ->
+        log_and_resubscribe(subscriber, depth_result, max_mailbox_depth)
+        subscriber
 
-      if updates != [] do
+      new_state === subscriber.last_raw ->
+        subscriber
+
+      true ->
+        updates = for {fid, si} <- Map.keys(subscriber.proj_keys), do: {fid, si, new_state}
         send(subscriber.pid, {:filament_observable_updates, updates})
-      end
-
-      %{subscriber | projections: new_projections}
+        %{subscriber | last_raw: new_state}
     end
-  end
-
-  defp collect_updates(projections, new_state) do
-    Enum.reduce(projections, {%{}, []}, fn {{fid, si} = key, {fun, last}}, {proj_acc, upd_acc} ->
-      new_val = fun.(new_state)
-      updated_proj = Map.put(proj_acc, key, {fun, new_val})
-
-      if new_val === last do
-        {updated_proj, upd_acc}
-      else
-        {updated_proj, [{fid, si, new_val} | upd_acc]}
-      end
-    end)
   end
 
   defp saturated_depth?(nil, _max), do: true
@@ -214,7 +205,7 @@ defmodule Filament.Observable.GenServer do
         "dropping update"
     )
 
-    Enum.each(subscriber.projections, fn {{fid, si}, _} ->
+    Enum.each(Map.keys(subscriber.proj_keys), fn {fid, si} ->
       send(subscriber.pid, {:filament_observable_resubscribe, fid, si})
     end)
 

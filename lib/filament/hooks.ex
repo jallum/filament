@@ -263,8 +263,8 @@ defmodule Filament.Hooks do
 
     if ctx.subscribe_enabled do
       server = resolve_server(server_or_fn, previous, ctx)
-      value = resolve_value(server, nil, project, slot_index, previous, ctx)
-      commit_slot(slot_index, {:subscribed, server, nil, value})
+      {value, raw} = resolve_value(server, project, slot_index, previous, ctx)
+      commit_slot(slot_index, {:subscribed, server, raw})
       value
     else
       commit_slot(slot_index, :uninitialized)
@@ -274,7 +274,7 @@ defmodule Filament.Hooks do
 
   defp resolve_server(factory_fn, previous, _ctx) when is_function(factory_fn, 0) do
     case previous do
-      {:subscribed, pid, _request, _} when is_pid(pid) ->
+      {:subscribed, pid, _raw} when is_pid(pid) ->
         if Process.alive?(pid), do: pid, else: call_factory(factory_fn)
 
       {:resolved, pid} when is_pid(pid) ->
@@ -296,56 +296,52 @@ defmodule Filament.Hooks do
     end
   end
 
-  defp resolve_value(server, request, project, slot_index, previous, ctx) do
+  defp resolve_value(server, project, slot_index, previous, ctx) do
     case previous do
       :uninitialized ->
-        do_subscribe(server, request, project, ctx, slot_index)
+        do_subscribe(server, project, ctx, slot_index)
 
-      {:subscribed, ^server, _request, _current} ->
-        # Same server — value comes from batched updates, just read it.
-        read_current_value(ctx, slot_index, previous)
+      {:subscribed, ^server, prev_raw} ->
+        # Same server — re-apply project with current closure.
+        # Prefer fresher raw state from new_hook_slots (server update since last render).
+        raw =
+          case Map.get(ctx.new_hook_slots, slot_index) do
+            {:subscribed, _, new_raw} -> new_raw
+            _ -> prev_raw
+          end
 
-      {:subscribed, old_server, old_request, _current} ->
+        {project.(raw), raw}
+
+      {:subscribed, old_server, _prev_raw} ->
         # Server changed — remove our projection from old server, subscribe to new.
-        maybe_remove_projection(ctx, old_server, old_request, slot_index)
-        do_subscribe(server, request, project, ctx, slot_index)
+        maybe_remove_projection(ctx, old_server, slot_index)
+        do_subscribe(server, project, ctx, slot_index)
 
       :needs_resubscribe ->
-        do_subscribe(server, request, project, ctx, slot_index)
+        do_subscribe(server, project, ctx, slot_index)
     end
   end
 
-  defp maybe_remove_projection(ctx, old_server, old_request, slot_index) do
+  defp maybe_remove_projection(ctx, old_server, slot_index) do
     if is_map_key(ctx.fiber_tree, ctx.fiber_id) do
       Filament.Observable.remove_projection(
         old_server,
         ctx.owner_pid,
-        old_request,
         ctx.fiber_id,
         slot_index
       )
     end
   end
 
-  defp read_current_value(ctx, slot_index, previous) do
-    case Map.get(ctx.new_hook_slots, slot_index, previous) do
-      {:subscribed, _server, _request, current} -> current
-      _ -> nil
-    end
-  end
-
-  defp do_subscribe(server, request, project, ctx, slot_index) do
+  defp do_subscribe(server, project, ctx, slot_index) do
     subscriber = %Subscriber{
       pid: ctx.owner_pid,
-      request: request,
-      projections: %{{ctx.fiber_id, slot_index} => {project, :unset}}
+      proj_keys: %{{ctx.fiber_id, slot_index} => true}
     }
 
-    case Filament.Observable.subscribe(server, request, subscriber) do
-      {:ok, initial_value} ->
-        # Apply projection to initial value so hooks always see the projected shape,
-        # consistent with subsequent update messages from notify_observers.
-        project.(initial_value)
+    case Filament.Observable.subscribe(server, subscriber) do
+      {:ok, initial_raw} ->
+        {project.(initial_raw), initial_raw}
 
       {:error, reason} ->
         raise Filament.ObservableError,

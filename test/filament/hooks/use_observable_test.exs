@@ -45,7 +45,7 @@ defmodule Filament.Hooks.UseObservableTest do
     end
 
     @impl Filament.Observable
-    def handle_subscribe(_request, _subscriber, state), do: {:ok, state.inner, state}
+    def handle_subscribe(_subscriber, state), do: {:ok, state.inner, state}
   end
 
   defmodule AlwaysRejectingObservable do
@@ -56,7 +56,7 @@ defmodule Filament.Hooks.UseObservableTest do
     def init(:ok), do: {:ok, :ok}
 
     @impl Filament.Observable
-    def handle_subscribe(_request, _subscriber, state), do: {:error, :not_allowed, state}
+    def handle_subscribe(_subscriber, state), do: {:error, :not_allowed, state}
   end
 
   # --- use_observable/2 (positional fn) tests ---
@@ -77,7 +77,7 @@ defmodule Filament.Hooks.UseObservableTest do
       end)
 
     assert value == 42
-    assert new_slots[0] == {:subscribed, observable, nil, 42}
+    assert new_slots[0] == {:subscribed, observable, 42}
   end
 
   test "2. stable re-render returns stored value without re-subscribing" do
@@ -96,7 +96,7 @@ defmodule Filament.Hooks.UseObservableTest do
       Fiber.new(
         id: "root",
         component: nil,
-        hook_slots: %{0 => {:subscribed, observable, nil, 10}},
+        hook_slots: %{0 => {:subscribed, observable, 10}},
         status: :stable
       )
 
@@ -112,9 +112,9 @@ defmodule Filament.Hooks.UseObservableTest do
       end)
 
     assert value2 == 10
-    assert new_slots[0] == {:subscribed, observable, nil, 10}
+    assert new_slots[0] == {:subscribed, observable, 10}
 
-    # Same {self(), nil} subscriber — still only one entry
+    # Same owner_pid subscriber — still only one entry
     subs = TestObservable.get_subs(observable)
     assert subs.count == 1
   end
@@ -127,7 +127,7 @@ defmodule Filament.Hooks.UseObservableTest do
       Fiber.new(
         id: "root",
         component: nil,
-        hook_slots: %{0 => {:subscribed, obs_a, nil, 1}},
+        hook_slots: %{0 => {:subscribed, obs_a, 1}},
         status: :stable
       )
 
@@ -146,26 +146,37 @@ defmodule Filament.Hooks.UseObservableTest do
     assert TestObservable.get_subs(obs_a).count == 0
   end
 
-  test "4. observable update via hook_slots — returns existing value" do
+  test "4. raw state update in new_hook_slots — re-applies projection" do
     observable = start_supervised!({TestObservable, 100})
 
     fiber =
       Fiber.new(
         id: "root",
         component: nil,
-        hook_slots: %{0 => {:subscribed, observable, nil, 555}},
+        hook_slots: %{0 => {:subscribed, observable, 555}},
         status: :stable
       )
 
+    # Simulate a server update arriving before this render: new_hook_slots has fresh raw
     value =
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->
+        # Inject a newer raw value into new_hook_slots to simulate server update
+        ctx = Hooks.current_context()
+
+        updated_ctx = %{
+          ctx
+          | new_hook_slots: Map.put(ctx.new_hook_slots, 0, {:subscribed, observable, 999})
+        }
+
+        Process.put(:filament_render_context, updated_ctx)
+
         Hooks.use_observable(observable, fn
           :disconnected -> nil
           s -> s
         end)
       end)
 
-    assert value == 555
+    assert value == 999
   end
 
   test "5. subscription rejection raises ObservableError" do
@@ -192,18 +203,17 @@ defmodule Filament.Hooks.UseObservableTest do
 
     sub = %Filament.Observable.Subscriber{
       pid: self(),
-      request: nil,
-      projections: %{{"root", 0} => {& &1, :unset}}
+      proj_keys: %{{"root", 0} => true}
     }
 
-    {:ok, _} = Filament.Observable.subscribe(observable, nil, sub)
+    {:ok, _} = Filament.Observable.subscribe(observable, sub)
     assert TestObservable.get_subs(observable).count == 1
 
     fiber =
       Fiber.new(
         id: "root",
         component: nil,
-        hook_slots: %{0 => {:subscribed, observable, nil, 42}},
+        hook_slots: %{0 => {:subscribed, observable, 42}},
         status: :stable
       )
 
@@ -324,9 +334,48 @@ defmodule Filament.Hooks.UseObservableTest do
     assert WrappingObservable.get_subs(observable).count == 1
   end
 
+  test "11. local state change — projection re-applied with updated closure" do
+    observable = start_supervised!({TestObservable, [1, 2, 3]})
+    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+
+    # First render: filter = :odd
+    value1 =
+      with_render_ctx("root", %{"root" => fiber}, self(), fn ->
+        filter = :odd
+
+        Hooks.use_observable(observable, fn
+          :disconnected -> []
+          items -> Enum.filter(items, fn n -> rem(n, 2) != 0 == (filter == :odd) end)
+        end)
+      end)
+
+    assert value1 == [1, 3]
+
+    # Second render: same raw state in slot, but filter changed to :even
+    fiber2 =
+      Fiber.new(
+        id: "root",
+        component: nil,
+        hook_slots: %{0 => {:subscribed, observable, [1, 2, 3]}},
+        status: :stable
+      )
+
+    value2 =
+      with_render_ctx("root", %{"root" => fiber2}, self(), fn ->
+        filter = :even
+
+        Hooks.use_observable(observable, fn
+          :disconnected -> []
+          items -> Enum.filter(items, fn n -> rem(n, 2) == 0 == (filter == :even) end)
+        end)
+      end)
+
+    assert value2 == [2]
+  end
+
   # --- use_observable/1 tests ---
 
-  test "11. use_observable/1 returns pid when connected" do
+  test "12. use_observable/1 returns pid when connected" do
     observable = start_supervised!({TestObservable, 42})
     fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 
@@ -340,7 +389,7 @@ defmodule Filament.Hooks.UseObservableTest do
     assert new_slots[0] == {:resolved, observable}
   end
 
-  test "12. use_observable/1 returns nil when disconnected" do
+  test "13. use_observable/1 returns nil when disconnected" do
     observable = start_supervised!({TestObservable, 42})
     fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 
@@ -356,7 +405,7 @@ defmodule Filament.Hooks.UseObservableTest do
     assert server == nil
   end
 
-  test "13. use_observable/1 with factory fn reuses pid if alive on re-render" do
+  test "14. use_observable/1 with factory fn reuses pid if alive on re-render" do
     observable = start_supervised!({TestObservable, 0})
     fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 

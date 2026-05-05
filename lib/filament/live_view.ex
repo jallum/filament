@@ -283,8 +283,8 @@ defmodule Filament.LiveView do
   defp apply_slot_update(tree, fiber_id, fiber, slot_index, new_value) do
     new_slot =
       case Map.get(fiber.hook_slots, slot_index, :uninitialized) do
-        {:subscribed, s, r, _} -> {:subscribed, s, r, new_value}
-        _ -> {:subscribed, nil, nil, new_value}
+        {:subscribed, s, _} -> {:subscribed, s, new_value}
+        _ -> {:subscribed, nil, new_value}
       end
 
     new_slots = Map.put(fiber.hook_slots, slot_index, new_slot)

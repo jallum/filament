@@ -69,7 +69,7 @@ defmodule Todo.Store do
   end
 
   @impl true
-  def handle_subscribe(_request, %Subscriber{} = _subscriber, state) do
+  def handle_subscribe(_subscriber, state) do
     {:ok, state.todos, state}
   end
 end
