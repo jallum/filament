@@ -2,7 +2,7 @@ defmodule InventoryWeb.Hooks do
   @moduledoc """
   Custom hooks for the Inventory example — demonstrates how to build
   domain-specific hooks on top of `Filament.Hooks.use_observable/1` and
-  `Filament.Hooks.use_projection/3`.
+  `Filament.Hooks.use_observable/2`.
   """
 
   import Filament.Hooks
@@ -27,7 +27,13 @@ defmodule InventoryWeb.Hooks do
     sentinel = :__hold_disconnected__
 
     srv = use_observable(server)
-    item = use_projection(srv, &Map.get(&1, item_id), disconnected: sentinel)
+
+    item =
+      use_observable(srv, fn
+        :disconnected -> sentinel
+        state -> Map.get(state, item_id)
+      end)
+
     {held_qty, set_held_qty} = use_state(0)
 
     if item == sentinel do

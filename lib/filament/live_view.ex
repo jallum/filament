@@ -284,7 +284,6 @@ defmodule Filament.LiveView do
     new_slot =
       case Map.get(fiber.hook_slots, slot_index, :uninitialized) do
         {:subscribed, s, r, _} -> {:subscribed, s, r, new_value}
-        {:projected, s, r, _} -> {:projected, s, r, new_value}
         _ -> {:subscribed, nil, nil, new_value}
       end
 

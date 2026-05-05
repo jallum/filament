@@ -26,8 +26,11 @@ defmodule Filament.Test.Rung3Test do
       prop(:server, :term, required: true)
 
       def render(%{server: server}) do
-        srv = use_observable(server)
-        count = use_projection(srv, & &1)
+        count =
+          use_observable(server, fn
+            :disconnected -> nil
+            s -> s
+          end)
 
         ~F"""
         <span id="count">Count: {count}</span>

@@ -6,7 +6,11 @@ defmodule CartWeb.Components.CartBadge do
     prop(:server, :any, default: nil)
 
     def render(%{server: server}) do
-      count = use_projection(server, &Cart.State.item_count/1, disconnected: 0)
+      count =
+        use_observable(server, fn
+          :disconnected -> 0
+          s -> Cart.State.item_count(s)
+        end)
 
       ~F"""
       <span class="cart-badge" data-count={count}>

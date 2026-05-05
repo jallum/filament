@@ -10,7 +10,11 @@ defmodule CartWeb.Components.CartItems do
     end
 
     def render(%{server: server}) do
-      cart = use_projection(server, & &1, disconnected: nil)
+      cart =
+        use_observable(server, fn
+          :disconnected -> nil
+          s -> s
+        end)
 
       ~F"""
       <section class="cart-section">

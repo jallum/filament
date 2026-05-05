@@ -11,7 +11,7 @@ component last saw, the update is suppressed — no re-render. This is the
 *change-or-bust* optimization that keeps large UIs fast.
 
 This guide uses the Cart & Checkout example from `examples/cart`. By the end you will
-understand `Observable.GenServer`, `use_observable/1` + `use_projection/3`, the
+understand `Observable.GenServer`, `use_observable/1` + `use_observable/2`, the
 change-or-bust mechanism, and how to test observable components.
 
 ## The Observable.GenServer macro
@@ -59,14 +59,14 @@ What the macro injects:
 - `handle_info({:DOWN, ...})` — automatically drops subscribers whose LiveView
   process terminates.
 - `notify_observers/1` — call this after every mutation. It iterates subscribers,
-  applies their projections, and sends `{:filament_observable_update, ...}` only
+  applies their projections, and sends `{:filament_observable_updates, ...}` only
   when the projected value changed.
 
 The default `handle_subscribe/3` returns `{:ok, state, state}` (the current state
 as the initial value). Override it to reject subscriptions or return a different
 initial value.
 
-## Subscribing from a component: use_observable/1 + use_projection/3
+## Subscribing from a component: use_observable/1 + use_observable/2
 
 The preferred pattern separates server resolution from value projection. The
 `CartBadge` component receives the server as a prop and projects the item count:
@@ -79,7 +79,11 @@ defmodule CartWeb.Components.CartBadge do
     prop(:server, :any, default: nil)
 
     def render(%{server: server}) do
-      count = use_projection(server, &Cart.State.item_count/1, disconnected: 0)
+      count =
+        use_observable(server, fn
+          :disconnected -> 0
+          s -> Cart.State.item_count(s)
+        end)
 
       ~F"""
       <span class="cart-badge" data-count={count}>
@@ -105,14 +109,17 @@ end
 ```
 
 `use_observable/1` returns the resolved pid (or `nil` during disconnected renders).
-`use_projection/3` subscribes this fiber and returns the projected value, returning
-the `:disconnected` option (default `:disconnected`) when `server` is `nil`.
+`use_observable/2` takes a projection function that receives `:disconnected` when the
+server is unavailable, letting it return a safe default.
 
 When the component owns the server's lifecycle, pass a factory function:
 
 ```elixir
 store = use_observable(fn -> Todo.Store.start_link([]) end)
-todos = use_projection(store, & &1, disconnected: [])
+todos = use_observable(store, fn
+  :disconnected -> []
+  s -> s
+end)
 ```
 
 This eliminates the need to start the server in `mount/3` and thread it as a prop —
@@ -127,17 +134,17 @@ end
 
 On the **first render** (HTTP pre-connect), `use_observable/1` returns `nil`
 because subscribing during an HTTP render would create zombie subscribers.
-`use_projection/3` returns the `:disconnected` value when server is `nil`:
+`use_observable/2` calls the projection function with `:disconnected`:
 
 ```elixir
-count = use_projection(server, &Cart.State.item_count/1, disconnected: 0)
+count = use_observable(server, fn :disconnected -> 0; s -> Cart.State.item_count(s) end)
 ```
 
-Or check the sentinel when you need branching logic:
+Or use branching logic with a sentinel:
 
 ```elixir
-cart = use_projection(server, & &1)
-if cart == :disconnected, do: render_loading(), else: render_cart(cart)
+cart = use_observable(server, fn :disconnected -> nil; s -> s end)
+if cart == nil, do: render_loading(), else: render_cart(cart)
 ```
 
 On subsequent renders (WebSocket-connected), the hook returns the projected value.
@@ -146,8 +153,8 @@ On subsequent renders (WebSocket-connected), the hook returns the projected valu
 
 Consider two components subscribed to the same `Cart.Server`:
 
-- `CartBadge` subscribes with `project: fn s -> Cart.State.item_count(s) end`
-- `CartView` subscribes with no projection (receives the full `Cart.State`)
+- `CartBadge` projects with `fn s -> Cart.State.item_count(s) end`
+- `CartView` projects with identity (receives the full `Cart.State`)
 
 When a user changes the price of an item without adding or removing it:
 
@@ -184,11 +191,11 @@ test "projection suppresses update when count is unchanged" do
     )
 
   Filament.Test.Stub.push(stub, state1)
-  assert_receive {:filament_observable_update, :badge_test_fiber, 0, 1}, 500
+  assert_receive {:filament_observable_updates, [_]}, 500
 
   # Push the same state again — count unchanged, no notification
   Filament.Test.Stub.push(stub, state1)
-  refute_receive {:filament_observable_update, :badge_test_fiber, 0, _}, 100
+  refute_receive {:filament_observable_updates, _}, 100
 end
 ```
 
@@ -199,7 +206,7 @@ the pattern generalises to any mutation. The important thing is the flow:
 
 1. User interaction triggers a call to `Cart.Server.remove_item/2`.
 2. The server runs `notify_observers(new_state)`.
-3. Filament sends `{:filament_observable_update, fiber_id, slot_index, projected_value}`
+3. Filament sends `{:filament_observable_updates, [{fiber_id, slot_index, projected_value}]}`
    to every subscribed LiveView.
 4. Each subscribed component's fiber re-renders with the new value.
 
@@ -282,4 +289,4 @@ See `Filament.Observable` for the full `@callback` specifications including the
   `use_hold` (see `examples/inventory/lib/inventory_web/hooks.ex` for a
   worked example of resource holds built on top of `use_observable`).
 - **API reference** — see `Filament.Observable`, `Filament.Observable.GenServer`,
-  and `Filament.Hooks` (`use_observable/1`, `use_projection/3`) for full signatures.
+  and `Filament.Hooks` (`use_observable/1`, `use_observable/2`) for full signatures.

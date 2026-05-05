@@ -51,8 +51,11 @@ defmodule Filament.TestTest do
       prop(:server, :term, required: true)
 
       def render(%{server: server}) do
-        srv = use_observable(server)
-        value = use_projection(srv, & &1)
+        value =
+          use_observable(server, fn
+            :disconnected -> nil
+            s -> s
+          end)
 
         ~F"""
         <div id="value">{value}</div>

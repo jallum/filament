@@ -50,22 +50,25 @@ end
 Setters are safe to capture in closures — the same function is reused across
 renders so you can compare them with `==` if needed.
 
-## use_observable/1 and use_projection/3
+## use_observable/1 and use_observable/2
 
 The preferred pattern separates server resolution from value projection:
 
 ```elixir
 server = use_observable(server_or_fn)
-value  = use_projection(server, project_fn, opts \\ [])
+value  = use_observable(server, fn
+  :disconnected -> default_value
+  state -> project(state)
+end)
 ```
 
 `use_observable/1` resolves the server reference to a live pid and returns it.
 Returns `nil` during disconnected (HTTP static) renders — no subscription is
 created until the WebSocket connects.
 
-`use_projection/3` subscribes this fiber's hook slot to the resolved server and
-returns the projected value. When `server` is `nil` it returns the `:disconnected`
-option (default `:disconnected`) without touching any server process.
+`use_observable/2` subscribes this fiber's hook slot to the server and returns
+the projected value. The projection function receives `:disconnected` when the
+server is `nil` or the mount is not yet live, letting it return a safe default.
 
 The first argument to `use_observable/1` can be:
 
@@ -74,40 +77,29 @@ The first argument to `use_observable/1` can be:
   process dies) to obtain a pid or `{:ok, pid}`; useful when the component owns
   the server lifecycle.
 
-`use_projection/3` options:
-
-- `:disconnected` — value returned when `server` is `nil` (default `:disconnected`).
-- `:request` — passed to `handle_subscribe/3` on the server (default `nil`).
-
 ```elixir
 # Connect to a running singleton server
 server = use_observable(Cart.Server)
-count  = use_projection(server, &Cart.State.item_count/1, disconnected: 0)
+count  = use_observable(server, fn
+  :disconnected -> 0
+  s -> Cart.State.item_count(s)
+end)
 
 # Component owns the server lifecycle — keep the pid for mutations
 store = use_observable(fn -> Todo.Store.start_link([]) end)
-todos = use_projection(store, & &1, disconnected: [])
+todos = use_observable(store, fn
+  :disconnected -> []
+  s -> s
+end)
 
 # Multiple projections from one server — one subscriber entry on the server
 server = use_observable(DocumentServer.via_registry(doc_id))
-title  = use_projection(server, & &1.title)
-locked = use_projection(server, & &1.locked, disconnected: false)
+title  = use_observable(server, fn :disconnected -> ""; s -> s.title end)
+locked = use_observable(server, fn :disconnected -> false; s -> s.locked end)
 ```
 
 Passing `server` as a prop to child components lets each child register its own
 projection without creating redundant subscriber entries on the server.
-
-### use_observable/2 (legacy)
-
-`use_observable/2` with explicit opts is still supported for compatibility. It
-combines resolution and subscription into one call and returns `{server, value}`:
-
-```elixir
-{_server, count} = use_observable(Cart.Server,
-  project: &Cart.State.item_count/1,
-  disconnected: 0
-)
-```
 
 See the [Observables guide](observables.html) for the change-or-bust mechanism
 and projection patterns.
@@ -149,9 +141,9 @@ Custom hooks let you extract domain behaviour that would otherwise clutter
 
 The inventory example (`examples/inventory/lib/inventory_web/hooks.ex`)
 defines `use_hold/3` — a hook that manages quantity-based resource holds
-against an `Inventory.Server`. It composes `use_observable`, `use_projection`,
-and `use_state` and returns a tuple of the held quantity, current item state,
-and `hold`/`release` closures:
+against an `Inventory.Server`. It composes `use_observable` and `use_state`
+and returns a tuple of the held quantity, current item state, and
+`hold`/`release` closures:
 
 ```elixir
 defmodule InventoryWeb.Hooks do
@@ -161,8 +153,14 @@ defmodule InventoryWeb.Hooks do
     disconnected_val = Keyword.get(opts, :disconnected, :disconnected)
     sentinel = :__hold_disconnected__
 
-    srv  = use_observable(server)
-    item = use_projection(srv, &Map.get(&1, item_id), disconnected: sentinel)
+    srv = use_observable(server)
+
+    item =
+      use_observable(srv, fn
+        :disconnected -> sentinel
+        state -> Map.get(state, item_id)
+      end)
+
     {held_qty, set_held_qty} = use_state(0)
 
     if item == sentinel do
@@ -190,9 +188,9 @@ end
 
 Key points about this implementation:
 
-- **`use_observable` with `:project`** — subscribes to the full inventory map
-  but projects to a single item, so only updates to `item_id` trigger a
-  re-render of this fiber.
+- **`use_observable/1` + `use_observable/2`** — resolves the server, then
+  projects to a single item, so only updates to `item_id` trigger a re-render
+  of this fiber.
 - **`use_state`** — tracks held quantity locally; the server is the source of
   truth for availability but the component tracks its own portion of the hold.
 - **`:disconnected` sentinel** — a private atom distinct from `nil` or `false`
@@ -288,4 +286,4 @@ between them.
 ## API reference
 
 See `Filament.Hooks` for the full `@spec` signatures of `use_state/1`,
-`use_observable/2`, and `use_effect/2`.
+`use_observable/1`, `use_observable/2`, and `use_effect/2`.

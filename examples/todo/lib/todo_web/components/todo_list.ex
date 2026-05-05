@@ -13,7 +13,13 @@ defmodule TodoWeb.Components.TodoList do
 
     def render(%{title: title}) do
       store = use_observable(fn -> Store.start_link([]) end)
-      todos = use_projection(store, & &1, disconnected: [])
+
+      todos =
+        use_observable(store, fn
+          :disconnected -> []
+          s -> s
+        end)
+
       {filter, set_filter} = use_state(:all)
       {clear_key, bump_clear} = use_state(0)
 

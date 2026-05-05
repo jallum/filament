@@ -114,7 +114,7 @@ defmodule MyApp.CartComponent do
     prop(:server, :any, default: MyApp.CartServer)
 
     def render(%{server: server}) do
-      cart = use_projection(server, & &1, disconnected: nil)
+      cart = use_observable(server, fn :disconnected -> nil; s -> s end)
       items = if cart == nil, do: [], else: cart.items
       total = if cart == nil, do: 0, else: cart.total
 
@@ -135,9 +135,9 @@ end
 
 Key differences from the LiveView template:
 
-- `use_projection(server, & &1)` subscribes this component to the server and returns
-  the current projected value. During disconnected (HTTP) renders it returns the
-  `:disconnected` option value (here `nil`).
+- `use_observable(server, fn :disconnected -> nil; s -> s end)` subscribes this
+  component to the server and returns the current projected value. The function
+  receives `:disconnected` during HTTP renders and returns a safe default.
 - `~F"""` templates use `{expression}` interpolation and `{for ... do}` / `{end}`
   loops instead of `<%= %>` and `<% %>`.
 - The component re-renders automatically when `notify_observers/1` is called on
@@ -161,9 +161,9 @@ def render(%{session_id: session_id}) do
   """
 end
 
-# Child: project with use_projection/3 — no redundant subscription
+# Child: project with use_observable/2 — no redundant subscription
 def render(%{server: server}) do
-  count = use_projection(server, &Cart.State.item_count/1, disconnected: 0)
+  count = use_observable(server, fn :disconnected -> 0; s -> Cart.State.item_count(s) end)
   ...
 end
 ```

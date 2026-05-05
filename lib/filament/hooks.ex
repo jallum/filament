@@ -8,20 +8,25 @@ defmodule Filament.Hooks do
 
     - `use_state/1` — local mutable state; returns `{value, setter}`
     - `use_observable/1` — resolves a server reference to a pid (or nil when disconnected)
-    - `use_projection/3` — registers a projection on an observable server and returns the projected value
-    - `use_observable/2` — legacy combined form; returns `{server, value}` (still supported)
+    - `use_observable/2` — resolves a server and projects its state; fn receives `:disconnected` when unavailable
     - `use_effect/2` — side-effect with optional cleanup
     - `memo_at/3` and `event_at/2` — invoked by compiler-generated code from `~F` templates
 
-  ## Preferred pattern: use_observable/1 + use_projection/3
+  ## Pattern: use_observable/1 + use_observable/2
 
-  Separating server resolution from value projection makes it easy to pass the server
-  pid to child components and to apply multiple projections from the same server:
+  Resolve the server once with `/1`, then project from it with `/2`. This lets you pass
+  the server pid to child components and apply multiple projections from the same process:
 
       def render(%{session_id: session_id}) do
         server = use_observable(fn -> MyServer.start_link(session_id) end)
-        count  = use_projection(server, fn s -> s.count end, disconnected: 0)
-        label  = use_projection(server, fn s -> s.label end)
+        count  = use_observable(server, fn
+          :disconnected -> 0
+          state -> state.count
+        end)
+        label  = use_observable(server, fn
+          :disconnected -> ""
+          state -> state.label
+        end)
         ...
       end
 
@@ -32,7 +37,10 @@ defmodule Filament.Hooks do
 
       # In the child:
       def render(%{server: server}) do
-        value = use_projection(server, fn s -> s.some_field end)
+        value = use_observable(server, fn
+          :disconnected -> nil
+          s -> s.some_field
+        end)
         ...
       end
 
@@ -184,13 +192,16 @@ defmodule Filament.Hooks do
   @doc """
   Resolves an observable server reference to a pid, without subscribing.
 
-  The first argument follows the same resolution rules as `use_observable/2`.
+  The argument can be any of:
+  - a pid, atom, `{:via, ...}`, or `{node, name}` — used directly as the server
+  - a zero-arity function — called on first connect (and again if the process dies) to
+    obtain a pid or `{:ok, pid}`; useful when the component owns the server's lifecycle
 
   Returns `nil` during disconnected (HTTP static) mounts. On subsequent renders,
   reuses an existing pid if still alive; restarts a factory fn otherwise.
 
   Use this hook when you want to pass the server identity to child components or
-  control subscription separately via `use_projection/3`.
+  apply multiple projections from the same server via `use_observable/2`.
 
   Must be called at the top level of `render/1` in consistent order (like all hooks).
   """
@@ -213,54 +224,51 @@ defmodule Filament.Hooks do
   end
 
   @doc """
-  Subscribe this fiber to an observable server, returning `{server, value}`.
+  Resolve an observable server and project its state into a value.
 
-  The first argument can be any of:
-  - a pid, atom, `{:via, ...}`, or `{node, name}` — used directly as the server
-  - a zero-arity function — called on first connect (and again if the process dies) to
-    obtain a pid or `{:ok, pid}`; useful when the component owns the server's lifecycle
+  The first argument is a server reference (same as `use_observable/1`). The second
+  argument is a projection function called on every state update from the server. When
+  the server is unavailable (disconnected HTTP mount or nil), the function is called
+  with the atom `:disconnected` so it can return a safe default:
 
-  Always returns `{server, value}`. Before the WebSocket connects, returns `{nil, disconnected}`.
+      count = use_observable(CartServer, fn
+        :disconnected -> 0
+        state        -> state.count
+      end)
 
-  Options:
-  - `:request`      — passed to `handle_subscribe/3` (default `nil`)
-  - `:project`      — `(state -> term())` applied to each update (default identity)
-  - `:disconnected` — the value half while disconnected (default `:disconnected`)
+  Passing the server as a prop lets a parent resolve the process once and share it with
+  children that each apply their own projection:
+
+      # Parent
+      server = use_observable(fn -> MyServer.start_link([]) end)
+      <Child server={server} />
+
+      # Child
+      value = use_observable(server, fn
+        :disconnected -> nil
+        s             -> s.some_field
+      end)
 
   Must be called at the top level of `render/1` in consistent order (like all hooks).
   Do not call inside conditionals or loops.
-
-  ## Examples
-
-      {_server, count} = use_observable(CounterServer, project: fn s -> s.count end)
-
-      {store, todos} = use_observable(fn -> Store.start_link!([]) end, disconnected: [])
-
-      {server, doc} = use_observable(DocumentServer.via_registry(doc_id), [])
   """
   @spec use_observable(
           server_or_fn ::
             GenServer.server()
             | (-> pid() | {:ok, pid()} | GenServer.server()),
-          opts :: [request: term(), project: (term() -> term()), disconnected: term()]
-        ) :: {server :: pid() | GenServer.server() | nil, value :: term()}
-  def use_observable(server_or_fn, opts) do
-    request = Keyword.get(opts, :request, nil)
-    project = Keyword.get(opts, :project, &Function.identity/1)
-    disconnected = Keyword.get(opts, :disconnected, :disconnected)
+          project :: (term() | :disconnected -> term())
+        ) :: term()
+  def use_observable(server_or_fn, project) when is_function(project, 1) do
     {slot_index, previous, ctx} = use_slot(:uninitialized)
 
-    # Skip subscription during disconnected (HTTP static) mounts — subscribing
-    # in the HTTP render creates zombie subscribers that inflate presence counts
-    # and race with the real WebSocket connection.
     if ctx.subscribe_enabled do
       server = resolve_server(server_or_fn, previous, ctx)
-      value = resolve_value(server, request, project, slot_index, previous, ctx)
-      commit_slot(slot_index, {:subscribed, server, request, value})
-      {server, value}
+      value = resolve_value(server, nil, project, slot_index, previous, ctx)
+      commit_slot(slot_index, {:subscribed, server, nil, value})
+      value
     else
       commit_slot(slot_index, :uninitialized)
-      {nil, disconnected}
+      project.(:disconnected)
     end
   end
 
@@ -342,90 +350,6 @@ defmodule Filament.Hooks do
       {:error, reason} ->
         raise Filament.ObservableError,
           message: "use_observable subscription rejected: #{inspect(reason)}",
-          observable: server,
-          reason: reason
-    end
-  end
-
-  @doc """
-  Project a value from an observable server into this fiber's hook slot.
-
-  `server` is typically the pid returned by `use_observable/1`. When `server`
-  is `nil` (disconnected or unresolved), returns the `:disconnected` option value.
-
-  On first render, subscribes this projection to the server. On subsequent renders,
-  reads the value from the slot (updated by batched `notify_observers` messages).
-  On unmount, removes the projection from the server.
-
-  Options:
-  - `:request`      — passed to `handle_subscribe/3` (default `nil`)
-  - `:disconnected` — returned when server is `nil` (default `:disconnected`)
-
-  Must be called at the top level of `render/1` in consistent order (like all hooks).
-
-  ## Example
-
-      server = use_observable(CounterServer)
-      count  = use_projection(server, fn s -> s.count end)
-  """
-  @spec use_projection(
-          server :: pid() | GenServer.server() | nil,
-          project :: (term() -> term()),
-          opts :: [request: term(), disconnected: term()]
-        ) :: term()
-  def use_projection(server, project, opts \\ []) when is_function(project, 1) do
-    request = Keyword.get(opts, :request, nil)
-    disconnected = Keyword.get(opts, :disconnected, :disconnected)
-    {slot_index, previous, ctx} = use_slot(:uninitialized)
-
-    if is_nil(server) do
-      commit_slot(slot_index, :uninitialized)
-      disconnected
-    else
-      value = resolve_projection(server, request, project, slot_index, previous, ctx)
-      commit_slot(slot_index, {:projected, server, request, value})
-      value
-    end
-  end
-
-  defp resolve_projection(server, request, project, slot_index, previous, ctx) do
-    case previous do
-      :uninitialized ->
-        do_project_subscribe(server, request, project, ctx, slot_index)
-
-      {:projected, ^server, _request, _current} ->
-        read_projected_value(ctx, slot_index, previous)
-
-      {:projected, old_server, old_request, _current} ->
-        maybe_remove_projection(ctx, old_server, old_request, slot_index)
-        do_project_subscribe(server, request, project, ctx, slot_index)
-
-      :needs_resubscribe ->
-        do_project_subscribe(server, request, project, ctx, slot_index)
-    end
-  end
-
-  defp read_projected_value(ctx, slot_index, previous) do
-    case Map.get(ctx.new_hook_slots, slot_index, previous) do
-      {:projected, _server, _request, current} -> current
-      _ -> nil
-    end
-  end
-
-  defp do_project_subscribe(server, request, project, ctx, slot_index) do
-    subscriber = %Subscriber{
-      pid: ctx.owner_pid,
-      request: request,
-      projections: %{{ctx.fiber_id, slot_index} => {project, :unset}}
-    }
-
-    case Filament.Observable.subscribe(server, request, subscriber) do
-      {:ok, initial_value} ->
-        project.(initial_value)
-
-      {:error, reason} ->
-        raise Filament.ObservableError,
-          message: "use_projection subscription rejected: #{inspect(reason)}",
           observable: server,
           reason: reason
     end

@@ -9,9 +9,14 @@ defmodule CollaborationWeb.Components.DocumentEditor do
 
     def render(%{doc_id: doc_id}) do
       server = use_observable(DocumentServer.via_registry(doc_id))
-      doc_view = use_projection(server, & &1)
 
-      if doc_view == :disconnected do
+      doc_view =
+        use_observable(server, fn
+          :disconnected -> nil
+          s -> s
+        end)
+
+      if doc_view == nil do
         ~F"""
         <div class="doc-editor">
           <p class="connecting">Connecting…</p>
