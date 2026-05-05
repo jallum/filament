@@ -336,7 +336,8 @@ defmodule Filament.Hooks do
   defp do_subscribe(server, project, ctx, slot_index) do
     subscriber = %Subscriber{
       pid: ctx.owner_pid,
-      proj_keys: %{{ctx.fiber_id, slot_index} => true}
+      proj_keys: %{{ctx.fiber_id, slot_index} => true},
+      session_token: ctx.session_token
     }
 
     case Filament.Observable.subscribe(server, subscriber) do

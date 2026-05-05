@@ -85,6 +85,13 @@ socket. Calling the setter re-renders only the affected fiber.
 every subscribed component re-renders automatically — no PubSub, no
 `handle_info` wiring in the LiveView.
 
+By default, subscriptions are made during the initial HTTP render so the page
+arrives with real data already populated (`static_subscribe: true`). Set
+`static_subscribe: false` when the projected value represents *who is
+connected* rather than *what the data is* — presence counts, online
+indicators, and live cursors — because the static render is not a real user
+session and should not contribute to those counts.
+
 **Projections and change-or-bust.** Pass a projection function as the second
 argument to `use_observable/2` to extract only the slice of state the component
 cares about. The function receives `:disconnected` or the raw server state and

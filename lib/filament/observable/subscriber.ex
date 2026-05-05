@@ -6,7 +6,8 @@ defmodule Filament.Observable.Subscriber do
     :pid,
     ref: nil,
     last_raw: :unset,
-    proj_keys: %{}
+    proj_keys: %{},
+    session_token: nil
   ]
 
   @type projection_key :: {fiber_id :: term(), slot_index :: non_neg_integer()}
@@ -15,6 +16,7 @@ defmodule Filament.Observable.Subscriber do
           pid: pid(),
           ref: reference() | nil,
           last_raw: term(),
-          proj_keys: %{projection_key() => true}
+          proj_keys: %{projection_key() => true},
+          session_token: String.t() | nil
         }
 end

@@ -10,6 +10,14 @@ defmodule CollaborationWeb.Components.DocumentEditor do
     def render(%{doc_id: doc_id}) do
       server = use_observable(DocumentServer.via_registry(doc_id))
 
+      # NOTE: This LiveView uses static_subscribe: false (see CollaborationLive).
+      # With the default (static_subscribe: true), the HTTP render process would
+      # call handle_subscribe and increment presence before the old WebSocket tears
+      # down on reload, producing a momentary 1→2→1 spike. Setting
+      # static_subscribe: false means this projection returns :disconnected during
+      # the HTTP render (showing nil / "Connecting…") and only subscribes once the
+      # real WebSocket session is established — so the presence count always reflects
+      # live connections only.
       doc_view =
         use_observable(server, fn
           :disconnected -> nil

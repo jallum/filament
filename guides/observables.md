@@ -239,6 +239,41 @@ end
 - `{:error, reason, new_state}` — reject the subscription; raises
   `Filament.ObservableError` in the component.
 
+## Presence tracking and static_subscribe
+
+`use Filament.LiveView` defaults to `static_subscribe: true`, which subscribes during
+the initial HTTP render so the page arrives at the browser with real data already
+populated. This is good for most read-only projections (item counts, document content,
+etc.) because users see meaningful content before the WebSocket connects.
+
+**For presence tracking it is the wrong default.** Here is why:
+
+Phoenix LiveView uses two separate OS processes per tab: a short-lived HTTP process for
+the static render, and a long-lived WebSocket process for the connected session.
+Filament's session-handoff mechanism ensures these two processes share one subscriber
+slot, so presence normally stays correct. However, on a page *reload* there is a
+window where the **departing** WS connection and the **arriving** static render
+overlap — both are alive simultaneously, so presence briefly spikes by one before the
+old WS tears down.
+
+The fix is simple:
+
+```elixir
+use Filament.LiveView, static_subscribe: false
+```
+
+With this setting, `use_observable/2` returns the `:disconnected` value on the HTTP
+render (so you might show "Connecting…" or `0` initially), then re-renders with live
+data the moment the WebSocket connects. Because no subscription is made during the
+static render, presence only ever counts real WebSocket connections — the spike
+disappears entirely.
+
+**Rule of thumb:** use `static_subscribe: true` (the default) when the projected value
+is useful in the initial HTML (cart totals, document content). Use
+`static_subscribe: false` when the projection represents *who is connected* rather than
+*what the data is* — presence counts, online indicators, and live cursors all fall into
+this category.
+
 ## Mutations from event closures
 
 `CartView` handles item removal via a Phoenix event, but the pattern generalises to

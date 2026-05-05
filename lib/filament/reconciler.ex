@@ -35,7 +35,8 @@ defmodule Filament.Reconciler do
       fiber_tree: %{},
       owner_pid: owner_pid,
       observable_stubs: Keyword.get(opts, :observable_stubs, %{}),
-      subscribe_enabled: Keyword.get(opts, :connected, true)
+      subscribe_enabled: Keyword.get(opts, :connected, true),
+      session_token: Keyword.get(opts, :session_token)
     }
 
     # Render the component

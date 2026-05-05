@@ -273,7 +273,8 @@ defmodule Filament.ReconcilerTest do
     @impl GenServer
     def handle_call(:proj_key_count, _from, state) do
       total =
-        Process.get(:__filament_subscribers__, %{})
+        :__filament_subscribers__
+        |> Process.get(%{})
         |> Map.values()
         |> Enum.reduce(0, fn s, acc -> acc + map_size(s.proj_keys) end)
 
@@ -327,9 +328,7 @@ defmodule Filament.ReconcilerTest do
 
       # Add 3 subscribed children via update (root fiber is now in the tree).
       {tree, _, _} =
-        Reconciler.update(tree, "root", %{server: server, items: ["a", "b", "c"]},
-          owner_pid: self()
-        )
+        Reconciler.update(tree, "root", %{server: server, items: ["a", "b", "c"]}, owner_pid: self())
 
       assert KeyedTrackingObservable.proj_key_count(server) == 3
 
@@ -346,9 +345,7 @@ defmodule Filament.ReconcilerTest do
       {tree, _, _} = Reconciler.mount(KeyedParent, %{server: server, items: []}, owner_pid: self())
 
       {tree, _, _} =
-        Reconciler.update(tree, "root", %{server: server, items: ["a", "b", "c"]},
-          owner_pid: self()
-        )
+        Reconciler.update(tree, "root", %{server: server, items: ["a", "b", "c"]}, owner_pid: self())
 
       assert KeyedTrackingObservable.proj_key_count(server) == 3
 

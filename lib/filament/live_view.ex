@@ -102,7 +102,11 @@ defmodule Filament.LiveView do
         subscribe_enabled = unquote(static_subscribe) or Phoenix.LiveView.connected?(socket)
 
         {tree, rendered, pending_effects} =
-          Reconciler.mount(component, props, owner_pid: self(), connected: subscribe_enabled)
+          Reconciler.mount(component, props,
+            owner_pid: self(),
+            connected: subscribe_enabled,
+            session_token: socket.id
+          )
 
         socket =
           socket
