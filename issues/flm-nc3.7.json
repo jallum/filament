@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-05T08:41:10Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "flm-nc3",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "flm-nc3.7: Test: two use_observable/2 calls on same server share one subscriber entry",
   "type": "task",
-  "updated_at": "2026-05-05T08:41:10Z"
+  "updated_at": "2026-05-05T08:41:13Z"
 }
