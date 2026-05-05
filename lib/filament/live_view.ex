@@ -17,12 +17,12 @@ defmodule Filament.LiveView do
 
   ## Options
 
-  `static_subscribe: boolean` (default `false`) — when `true`, observable
+  `static_subscribe: boolean` (default `true`) — when `true`, observable
   subscriptions are made during the static (HTTP) render pass, not just after
   the WebSocket connects. This produces fully-rendered initial HTML with real
   data, which is beneficial for SEO and perceived performance.
 
-  When `false` (default), all `use_observable` calls return their `:disconnected`
+  When `false`, all `use_observable` calls return their `:disconnected`
   value during the static render; real data appears after the WebSocket connects.
 
   Note: Phoenix LiveView uses separate OS processes for the static render and
@@ -86,7 +86,7 @@ defmodule Filament.LiveView do
   end
 
   defmacro __using__(opts) do
-    static_subscribe = Keyword.get(opts, :static_subscribe, false)
+    static_subscribe = Keyword.get(opts, :static_subscribe, true)
 
     quote do
       @behaviour Filament.LiveView

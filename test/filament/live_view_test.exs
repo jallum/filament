@@ -186,24 +186,13 @@ defmodule Filament.LiveViewTest do
   end
 
   defmodule NoStaticSubscribeLiveView do
-    use Filament.LiveView
+    use Filament.LiveView, static_subscribe: false
 
     def root_component, do: ObservableComponent
   end
 
   describe "static_subscribe option" do
-    test "default (false): disconnected socket returns :disconnected value" do
-      {:ok, server} = ObservableComponent.start_link(42)
-      socket = test_socket(%{server: server})
-
-      {:ok, socket} = NoStaticSubscribeLiveView.mount(%{}, %{}, socket)
-
-      rendered = socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
-      assert rendered =~ "disconnected"
-      refute rendered =~ "42"
-    end
-
-    test "static_subscribe: true — disconnected socket returns real data" do
+    test "default (true): disconnected socket returns real data" do
       {:ok, server} = ObservableComponent.start_link(42)
       socket = test_socket(%{server: server})
 
@@ -212,6 +201,17 @@ defmodule Filament.LiveViewTest do
       rendered = socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
       assert rendered =~ "42"
       refute rendered =~ "disconnected"
+    end
+
+    test "static_subscribe: false — disconnected socket returns :disconnected value" do
+      {:ok, server} = ObservableComponent.start_link(42)
+      socket = test_socket(%{server: server})
+
+      {:ok, socket} = NoStaticSubscribeLiveView.mount(%{}, %{}, socket)
+
+      rendered = socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+      assert rendered =~ "disconnected"
+      refute rendered =~ "42"
     end
   end
 
