@@ -2,13 +2,14 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-05T08:23:54Z",
   "created": "2026-05-05T08:10:03Z",
   "description": "",
   "id": "flm-nc3",
   "labels": [],
   "priority": 1,
-  "status": "open",
+  "status": "closed",
   "title": "Simplify observable hooks: positional-fn use_observable/2, drop use_projection/3",
   "type": "task",
-  "updated_at": "2026-05-05T08:10:03Z"
+  "updated_at": "2026-05-05T08:23:54Z"
 }
