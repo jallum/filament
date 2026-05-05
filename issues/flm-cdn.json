@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T23:13:56Z",
+  "description": "Currently, `\u003cscript :type={Phoenix.LiveView.ColocatedHook}\u003e` macro components fail inside `~F` templates with: `(ArgumentError) macro components are only supported in modules that `use Phoenix.Component``.\n\nFilament's TagEngine handles macro components separately from Phoenix's HEEx TagEngine and does not support the colocated hook pattern.\n\n**Workaround**: Functions that contain a colocated hook script must use `~H` instead of `~F`. All `\u003c.func\u003e` calls inside those `~H` functions must be converted to direct `{func(...)}` expressions to avoid Filament's prop-validation routing.\n\n**Request**: Filament's TagEngine should transparently support `\u003cscript :type={Phoenix.LiveView.ColocatedHook}\u003e` (and other Phoenix macro components) so that functions containing colocated hooks can use `~F` like the rest of the codebase.",
+  "id": "flm-cdn",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "Support colocated Phoenix hook scripts in ~F templates",
+  "type": "feature",
+  "updated_at": "2026-05-05T23:13:56Z"
+}
