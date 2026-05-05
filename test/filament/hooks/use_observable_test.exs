@@ -245,9 +245,35 @@ defmodule Filament.Hooks.UseObservableTest do
     assert value == 200
   end
 
+  test "10. two use_observable/2 calls on same server share one subscriber entry" do
+    observable = start_supervised!({TestObservable, 42})
+    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+
+    {count, total} =
+      with_render_ctx("root", %{"root" => fiber}, self(), fn ->
+        c =
+          Hooks.use_observable(observable, fn
+            :disconnected -> 0
+            s -> s
+          end)
+
+        t =
+          Hooks.use_observable(observable, fn
+            :disconnected -> 0
+            s -> s * 10
+          end)
+
+        {c, t}
+      end)
+
+    assert count == 42
+    assert total == 420
+    assert TestObservable.get_subs(observable).count == 1
+  end
+
   # --- use_observable/1 tests ---
 
-  test "10. use_observable/1 returns pid when connected" do
+  test "11. use_observable/1 returns pid when connected" do
     observable = start_supervised!({TestObservable, 42})
     fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 
@@ -261,7 +287,7 @@ defmodule Filament.Hooks.UseObservableTest do
     assert new_slots[0] == {:resolved, observable}
   end
 
-  test "11. use_observable/1 returns nil when disconnected" do
+  test "12. use_observable/1 returns nil when disconnected" do
     observable = start_supervised!({TestObservable, 42})
     fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 
@@ -277,7 +303,7 @@ defmodule Filament.Hooks.UseObservableTest do
     assert server == nil
   end
 
-  test "12. use_observable/1 with factory fn reuses pid if alive on re-render" do
+  test "13. use_observable/1 with factory fn reuses pid if alive on re-render" do
     observable = start_supervised!({TestObservable, 0})
     fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 
