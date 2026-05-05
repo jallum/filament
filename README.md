@@ -91,12 +91,13 @@ on first paint. When the WebSocket connects, Filament hands off the existing
 subscription so the component picks up live updates seamlessly, without
 re-fetching or re-running `handle_subscribe`.
 
-The one exception is observables that represent *who is connected* rather than
-*what the data is* — presence counts, online indicators, live cursors. The static
-render is not a real user session and should not count as one. Set
-`static_subscribe: false` on those LiveViews and the page will skip subscribing
-during the HTTP phase, showing the `:disconnected` fallback briefly until the
-WebSocket is established.
+> **Note:** One place where this behavior might not be desirable (and you can
+> easily turn it off) are observables that represent *who is connected* rather
+> than *what the data is* — presence counts, online indicators, live cursors.
+> The static render is not a real user session and should not count as one. Set
+> `static_subscribe: false` on those LiveViews and the page will skip
+> subscribing during the HTTP phase, showing the `:disconnected` fallback
+> briefly until the WebSocket is established.
 
 **Projections and change-or-bust.** Pass a projection function as the second
 argument to `use_observable/2` to extract only the slice of state the component
