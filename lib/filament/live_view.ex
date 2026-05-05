@@ -14,6 +14,27 @@ defmodule Filament.LiveView do
 
         def root_component(), do: MyApp.MyComponent
       end
+
+  ## Options
+
+  `static_subscribe: boolean` (default `false`) — when `true`, observable
+  subscriptions are made during the static (HTTP) render pass, not just after
+  the WebSocket connects. This produces fully-rendered initial HTML with real
+  data, which is beneficial for SEO and perceived performance.
+
+  When `false` (default), all `use_observable` calls return their `:disconnected`
+  value during the static render; real data appears after the WebSocket connects.
+
+  Note: Phoenix LiveView uses separate OS processes for the static render and
+  the connected session. With `static_subscribe: true` the static process
+  subscribes, renders, then terminates — subscriptions are cleaned up
+  automatically. The connected process re-subscribes normally on mount.
+
+      defmodule MyApp.MyLiveView do
+        use Filament.LiveView, static_subscribe: true
+
+        def root_component(), do: MyApp.MyComponent
+      end
   """
 
   alias Filament.Reconciler
@@ -64,7 +85,9 @@ defmodule Filament.LiveView do
     end
   end
 
-  defmacro __using__(_opts) do
+  defmacro __using__(opts) do
+    static_subscribe = Keyword.get(opts, :static_subscribe, false)
+
     quote do
       @behaviour Filament.LiveView
 
@@ -76,10 +99,10 @@ defmodule Filament.LiveView do
       def mount(_params, _session, socket) do
         component = root_component()
         props = build_props(socket)
-        connected = Phoenix.LiveView.connected?(socket)
+        subscribe_enabled = unquote(static_subscribe) or Phoenix.LiveView.connected?(socket)
 
         {tree, rendered, pending_effects} =
-          Reconciler.mount(component, props, owner_pid: self(), connected: connected)
+          Reconciler.mount(component, props, owner_pid: self(), connected: subscribe_enabled)
 
         socket =
           socket
