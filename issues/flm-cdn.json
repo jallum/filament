@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-05T23:13:56Z",
@@ -7,8 +7,8 @@
   "id": "flm-cdn",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Support colocated Phoenix hook scripts in ~F templates",
   "type": "feature",
-  "updated_at": "2026-05-05T23:13:56Z"
+  "updated_at": "2026-05-05T23:16:19Z"
 }
