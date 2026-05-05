@@ -28,6 +28,29 @@ defmodule Filament.Component do
       import Filament.Defcomponent
       import Filament.Hooks
       import Filament.SigilF
+
+      Module.register_attribute(__MODULE__, :__macro_components__, accumulate: true)
+      @before_compile Filament.Component
+    end
+  end
+
+  defmacro __before_compile__(env) do
+    macro_components = Module.get_attribute(env.module, :__macro_components__)
+
+    if macro_components && macro_components != [] do
+      grouped =
+        Enum.group_by(
+          macro_components,
+          fn {mod, _data} -> mod end,
+          fn {_mod, data} -> data end
+        )
+
+      quote do
+        @doc false
+        def __phoenix_macro_components__ do
+          unquote(Macro.escape(grouped))
+        end
+      end
     end
   end
 end

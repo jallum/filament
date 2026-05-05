@@ -875,9 +875,10 @@ defmodule Filament.TagEngine do
     # The AST is limited in functionality and we handle it separately in
     # the handle_ast function.
 
-    Macro.Env.required?(state.caller, Phoenix.Component) ||
+    (Macro.Env.required?(state.caller, Phoenix.Component) or
+       Macro.Env.required?(state.caller, Filament.Component)) ||
       raise ArgumentError,
-            "macro components are only supported in modules that `use Phoenix.Component`"
+            "macro components are only supported in modules that `use Phoenix.Component` or `use Filament.Component`"
 
     module = validate_module!(module_string, tag_meta, state)
 
