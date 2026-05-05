@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-05T08:11:45Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "flm-nc3",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "flm-nc3.1: Core — rewrite use_observable/2 with positional fn, drop use_projection/3 and {:projected,...} slot",
   "type": "task",
-  "updated_at": "2026-05-05T08:11:45Z"
+  "updated_at": "2026-05-05T08:13:28Z"
 }
