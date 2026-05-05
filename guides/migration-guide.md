@@ -78,7 +78,7 @@ defmodule MyApp.CartServer do
   def init(state), do: {:ok, state}
 
   @impl Filament.Observable
-  def handle_subscribe(_request, _subscriber, state), do: {:ok, state, state}
+  def handle_subscribe(_subscriber, state), do: {:ok, state, state}
 
   @impl GenServer
   def handle_call({:add_item, item}, _from, state) do
@@ -226,6 +226,96 @@ hook on top of `use_observable`. See
 implementation that acquires and releases quantity-based holds, with automatic
 release when the LiveView disconnects via `handle_unsubscribe/2` on the server.
 The [Hooks guide](hooks.html) covers composing and writing custom hooks.
+
+## Observable API breaking changes
+
+This section documents the breaking changes to the Observable/subscription API
+introduced after the initial 0.1 release. If you are starting fresh from the
+current release you can skip this section — the examples in Phases 3–6 above
+already reflect the new API.
+
+### `use_projection/3` removed — use `use_observable/2` instead
+
+`use_projection/3` no longer exists. Replace every call with `use_observable/2`,
+passing a two-clause function that handles the `:disconnected` case and projects
+the live state. The function runs client-side at render time and can close over
+local component assigns.
+
+```elixir
+# Before
+server = use_observable(CartServer)
+count = use_projection(server, fn state -> Cart.State.item_count(state) end, disconnected: 0)
+
+# After
+count = use_observable(CartServer, fn
+  :disconnected -> 0
+  state -> Cart.State.item_count(state)
+end)
+```
+
+The old `disconnected:` keyword option form of `use_observable/2` is also gone —
+use the function-argument form shown above for all cases.
+
+### `handle_subscribe/3` → `handle_subscribe/2`
+
+The `request` argument has been removed from the `handle_subscribe` callback.
+Drop the first parameter:
+
+```elixir
+# Before
+def handle_subscribe(_request, _subscriber, state), do: {:ok, state, state}
+
+# After
+def handle_subscribe(_subscriber, state), do: {:ok, state, state}
+```
+
+### `Observable.subscribe/3` → `Observable.subscribe/2`
+
+The `request` argument has been dropped from `Observable.subscribe/3`. If you
+call this function directly (e.g. in tests or low-level integration code), remove
+the second positional argument:
+
+```elixir
+# Before
+Observable.subscribe(server, nil, subscriber)
+
+# After
+Observable.subscribe(server, subscriber)
+```
+
+`Observable.remove_projection/5` is now `Observable.remove_projection/4` for the
+same reason — the `request` argument is gone.
+
+### `Subscriber` struct fields
+
+`Subscriber.request` and `Subscriber.projections` have been removed. The
+replacement for tracking active projections is `proj_keys`, a map of
+`{fiber_id, slot_index}` tuples to `true`:
+
+```elixir
+# Before
+%Subscriber{pid: self(), request: nil, projections: %{{"root", 0} => {& &1, :unset}}}
+
+# After
+%Subscriber{pid: self(), proj_keys: %{{"root", 0} => true}}
+```
+
+### `{:subscribed, ...}` slot shape
+
+The four-element `{:subscribed, server, request, projected_value}` tuple is gone.
+If you pattern-match on this shape anywhere, remove the `request` element.
+
+### Change-detection: raw state, client-side projection
+
+Previously the server compared projected values to decide whether to push an
+update. The server now sends raw state to all subscribers and each subscriber
+compares the raw value (`new_raw !== last_raw`) independently. Projection
+functions are applied at render time on the client side. The practical effect:
+
+- The projection function passed to `use_observable/2` can safely close over
+  component-local state without needing the server to know about it.
+- All subscribers to the same server share one raw-state broadcast; there is no
+  per-projection diffing on the server.
 
 ## Codemods (where automatable)
 

@@ -13,9 +13,10 @@ defmodule CartWeb.Components.CartView do
     prop(:cart_id, :string, required: true)
 
     def render(%{cart_id: cart_id}) do
-      {_server, cart} = use_observable({:via, Registry, {Cart.Registry, cart_id}},
-        disconnected: nil
-      )
+      cart = use_observable({:via, Registry, {Cart.Registry, cart_id}}, fn
+        :disconnected -> nil
+        state -> state
+      end)
 
       ~F"""
       <div class="cart">
@@ -45,10 +46,10 @@ defmodule CartWeb.Components.CartBadge do
     prop(:cart_id, :string, required: true)
 
     def render(%{cart_id: cart_id}) do
-      {_server, count} = use_observable({:via, Registry, {Cart.Registry, cart_id}},
-        project: &Cart.State.item_count/1,
-        disconnected: 0
-      )
+      count = use_observable({:via, Registry, {Cart.Registry, cart_id}}, fn
+        :disconnected -> 0
+        state -> Cart.State.item_count(state)
+      end)
 
       ~F"""
       <span class="badge">{count} items</span>
@@ -84,18 +85,21 @@ socket. Calling the setter re-renders only the affected fiber.
 every subscribed component re-renders automatically — no PubSub, no
 `handle_info` wiring in the LiveView.
 
-**Projections and change-or-bust.** A subscriber can supply a `project:`
-function that extracts only the slice of state it cares about. If the projected
-value is unchanged after a mutation, the update is suppressed and the component
-does not re-render. This keeps large UIs fast without manual shouldComponentUpdate
-logic.
+**Projections and change-or-bust.** Pass a projection function as the second
+argument to `use_observable/2` to extract only the slice of state the component
+cares about. The function receives `:disconnected` or the raw server state and
+runs on the client at render time, so it can safely close over local component
+state such as filters or selections. If the projected value is unchanged after a
+mutation, the update is suppressed and the component does not re-render. This
+keeps large UIs fast without manual shouldComponentUpdate logic.
 
 ```elixir
 # CartBadge only re-renders when the item count changes,
 # not on every cart mutation.
-{_server, count} = use_observable({:via, Registry, {Cart.Registry, cart_id}},
-  project: &Cart.State.item_count/1
-)
+count = use_observable({:via, Registry, {Cart.Registry, cart_id}}, fn
+  :disconnected -> 0
+  state -> Cart.State.item_count(state)
+end)
 ```
 
 **Automatic memoization.** The `~F` compiler automatically wraps closure

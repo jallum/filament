@@ -101,6 +101,46 @@ locked = use_observable(server, fn :disconnected -> false; s -> s.locked end)
 Passing `server` as a prop to child components lets each child register its own
 projection without creating redundant subscriber entries on the server.
 
+### Projection runs client-side and can close over local state
+
+The projection function is evaluated on the client (in the component's render
+pass), not on the server. This means it can close over any local variables that
+are in scope at the call site — including `use_state` values — and those
+captures are always current because the projection re-runs on every render.
+
+```elixir
+{filter, set_filter} = use_state(:all)
+
+filtered = use_observable(store, fn
+  :disconnected -> []
+  items -> Enum.filter(items, &matches?(&1, filter))
+end)
+```
+
+Whenever `filter` changes (via `set_filter`), the component re-renders and the
+projection immediately applies the new filter to the latest raw state from the
+server — no need to involve the server in the filtering logic.
+
+The server applies change-or-bust on the **raw state**: it sends an update only
+when `new_raw_state !== last_raw_state`. The projection is then applied
+client-side each render to derive the value the component actually uses.
+
+### handle_subscribe/2
+
+When writing an observable server you implement `handle_subscribe/2` to accept
+or reject subscriptions and supply the initial raw state for new subscribers:
+
+```elixir
+@impl Filament.Observable
+def handle_subscribe(_subscriber, state) do
+  {:ok, state, state}   # {:ok, initial_value_for_client, new_genserver_state}
+end
+```
+
+The return tuple is `{:ok, initial_value, new_state}`. Override the default
+when you need to reject a subscription or return a different initial value than
+the current server state.
+
 See the [Observables guide](observables.html) for the change-or-bust mechanism
 and projection patterns.
 

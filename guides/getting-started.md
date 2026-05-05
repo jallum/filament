@@ -231,7 +231,7 @@ they are safe to run with `async: true` and typically finish in under 5 ms.
 ## Next steps
 
 - **[Observables guide](observables.html)** — learn `Observable.GenServer`,
-  projections, and the change-or-bust pattern for efficient re-renders.
+  `use_observable/1` and `use_observable/2`, and the change-or-bust pattern for efficient re-renders.
 - **[Hooks guide](hooks.html)** — composing built-in hooks and writing
   custom hooks for domain logic.
 - **API reference** — see `Filament.Hooks` for the full hook signatures and
