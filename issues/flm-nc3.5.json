@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-05T08:23:54Z",
   "created": "2026-05-05T08:11:50Z",
   "description": "",
   "id": "flm-nc3.5",
   "labels": [],
   "parent": "flm-nc3",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "flm-nc3.6: Chrome smoke test — all four examples load and function correctly",
   "type": "task",
-  "updated_at": "2026-05-05T08:21:14Z"
+  "updated_at": "2026-05-05T08:23:54Z"
 }
