@@ -89,7 +89,10 @@ defmodule Filament.Observable.GenServer do
           existing ->
             merged = %{existing | projections: Map.merge(existing.projections, sub_info.projections)}
             Process.put(:__filament_subscribers__, Map.put(subs, sub_key, merged))
-            {:reply, {:ok, state}, state}
+            # Call handle_subscribe to get the correctly-formatted initial_value.
+            # We discard new_state — the subscriber is already registered and monitored.
+            {:ok, initial_value, _} = apply(__MODULE__, :handle_subscribe, [request, merged, state])
+            {:reply, {:ok, initial_value}, state}
         end
       end
 

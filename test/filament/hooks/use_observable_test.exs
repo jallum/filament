@@ -26,6 +26,28 @@ defmodule Filament.Hooks.UseObservableTest do
     end
   end
 
+  # Simulates Inventory.Server: internal state is a wrapper struct, but
+  # handle_subscribe returns only the inner value as the initial value.
+  defmodule WrappingObservable do
+    @moduledoc false
+    use Filament.Observable.GenServer
+
+    defstruct [:inner]
+
+    def start_link(n), do: GenServer.start_link(__MODULE__, n)
+    def init(n), do: {:ok, %__MODULE__{inner: n}}
+
+    def get_subs(pid), do: GenServer.call(pid, :get_subs)
+
+    def handle_call(:get_subs, _from, state) do
+      subs = Process.get(:__filament_subscribers__, %{})
+      {:reply, %{count: map_size(subs)}, state}
+    end
+
+    @impl Filament.Observable
+    def handle_subscribe(_request, _subscriber, state), do: {:ok, state.inner, state}
+  end
+
   defmodule AlwaysRejectingObservable do
     @moduledoc false
     use Filament.Observable.GenServer
@@ -269,6 +291,37 @@ defmodule Filament.Hooks.UseObservableTest do
     assert count == 42
     assert total == 420
     assert TestObservable.get_subs(observable).count == 1
+  end
+
+  test "10b. second fiber on same server gets handle_subscribe initial_value, not raw state" do
+    # WrappingObservable.handle_subscribe returns state.inner, not the struct.
+    # The merge branch must call handle_subscribe to get the correct initial_value,
+    # not return the raw GenServer state.
+    observable = start_supervised!({WrappingObservable, 99})
+
+    fiber_a = Fiber.new(id: "a", component: nil, hook_slots: %{}, status: :stable)
+    fiber_b = Fiber.new(id: "b", component: nil, hook_slots: %{}, status: :stable)
+    tree = %{"a" => fiber_a, "b" => fiber_b}
+
+    val_a =
+      with_render_ctx("a", tree, self(), fn ->
+        Hooks.use_observable(observable, fn
+          :disconnected -> nil
+          s -> s
+        end)
+      end)
+
+    val_b =
+      with_render_ctx("b", tree, self(), fn ->
+        Hooks.use_observable(observable, fn
+          :disconnected -> nil
+          s -> s
+        end)
+      end)
+
+    assert val_a == 99
+    assert val_b == 99
+    assert WrappingObservable.get_subs(observable).count == 1
   end
 
   # --- use_observable/1 tests ---
