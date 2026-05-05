@@ -13,20 +13,26 @@ defmodule TodoWeb.Components.TodoList do
 
     def render(%{title: title}) do
       store = use_observable(fn -> Store.start_link([]) end)
-
-      todos =
-        use_observable(store, fn
-          :disconnected -> []
-          s -> s
-        end)
-
       {filter, set_filter} = use_state(:all)
       {clear_key, bump_clear} = use_state(0)
 
-      filtered = apply_filter(todos, filter)
+      # Project everything derived from todos in one shot. change-or-bust
+      # suppresses re-renders when todos change but none of the derived values
+      # do (e.g. completing a todo while the Active filter is selected leaves
+      # filtered, active_count, and all_completed all unchanged).
+      {filtered, active_count, all_completed, any_todos} =
+        use_observable(store, fn
+          :disconnected ->
+            {[], 0, false, false}
 
-      active_count = Enum.count(todos, &(!&1.completed))
-      all_completed = todos != [] and Enum.all?(todos, & &1.completed)
+          todos ->
+            {
+              apply_filter(todos, filter),
+              Enum.count(todos, &(!&1.completed)),
+              todos != [] and Enum.all?(todos, & &1.completed),
+              todos != []
+            }
+        end)
 
       on_submit = fn %{"text" => val} ->
         if store && String.trim(val) != "", do: Store.add(store, val)
@@ -49,7 +55,7 @@ defmodule TodoWeb.Components.TodoList do
           </form>
         </header>
 
-        {if todos != [] do}
+        {if any_todos do}
           <section class="main">
             <input
               class="toggle-all"
