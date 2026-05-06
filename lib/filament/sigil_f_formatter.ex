@@ -200,7 +200,7 @@ defmodule Filament.SigilFFormatter do
        ) do
     {mode, block} =
       cond do
-        tag_name in ["pre", "textarea"] or contains_special_attrs?(attrs) ->
+        tag_name in ["pre", "script", "textarea"] or contains_special_attrs?(attrs) ->
           content =
             content_from_source(opts.source, open_meta.inner_location, close_meta.inner_location)
 

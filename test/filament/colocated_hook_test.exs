@@ -1,6 +1,8 @@
 defmodule Filament.ColocatedHookTest do
   use ExUnit.Case, async: true
 
+  alias Phoenix.HTML.Safe
+
   describe "colocated hook support in ~F templates" do
     test "compiles without error when module uses Filament.Component" do
       # This is the failing case from the ticket:
@@ -32,6 +34,34 @@ defmodule Filament.ColocatedHookTest do
       assert [{_mod, _}] = Code.compile_string(code)
     end
 
+    test "script tag does not appear in rendered HTML output" do
+      n = System.unique_integer([:positive])
+
+      code = """
+      defmodule ColocatedHookRender#{n} do
+        use Filament.Component
+
+        defcomponent do
+          def render(%{}) do
+            ~F\"\"\"
+            <div>
+              <span phx-hook=".RenderHook" id="render-el"></span>
+              <script :type={Phoenix.LiveView.ColocatedHook} name=".RenderHook">
+                export default { mounted() { console.log("mounted") } }
+              </script>
+            </div>
+            \"\"\"
+          end
+        end
+      end
+      """
+
+      [{mod, _}] = Code.compile_string(code)
+      html = mod.render(%{}) |> Safe.to_iodata() |> IO.iodata_to_binary()
+      refute html =~ "<script"
+      assert html =~ "phx-hook="
+    end
+
     test "module with colocated hook defines __phoenix_macro_components__/0" do
       n = System.unique_integer([:positive])
 
@@ -57,6 +87,10 @@ defmodule Filament.ColocatedHookTest do
       result = mod.__phoenix_macro_components__()
       assert is_map(result)
       assert Map.has_key?(result, Phoenix.LiveView.ColocatedHook)
+
+      [{_js_file, meta}] = result[Phoenix.LiveView.ColocatedHook]
+      assert meta[:name] =~ "DataHook"
+      assert meta[:key] == "hooks"
     end
 
     test "module without colocated hook does not define __phoenix_macro_components__/0" do
