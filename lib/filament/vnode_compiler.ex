@@ -6,7 +6,7 @@ defmodule Filament.VNodeCompiler do
   @spec compile(String.t(), Macro.Env.t() | nil) :: term()
   def compile(source, caller) do
     quoted =
-      Filament.TagEngine.compile(preprocess_jsx(source),
+      Filament.TagEngine.compile(source,
         file: caller.file,
         line: caller.line + 1,
         caller: caller,
@@ -17,28 +17,8 @@ defmodule Filament.VNodeCompiler do
     hoisted = hoist_dynamics(quoted, caller)
 
     in_scope = MapSet.new(Map.keys(caller.versioned_vars), fn {name, _ctx} -> name end)
-    {transformed, reactive_vars} = transform_at_assigns(hoisted, in_scope)
-
     in_scope_list = MapSet.to_list(in_scope)
-    assign_and_emit(transformed, {reactive_vars, in_scope_list})
-  end
-
-  # ─── JSX preprocessor ───────────────────────────────────────────────────────
-
-  # Transform JSX-style control flow syntax into standard EEx tags:
-  #   {if cond do}…{end}      →  <%= if cond do %>…<% end %>
-  #   {for x <- list do}…{end} →  <%= for x <- list do %>…<% end %>
-  #   {else}, {end}, {rescue}  →  <% else %>, <% end %>, <% rescue %>
-  #
-  # Uses greedy `.*` so compound block conditions (like `{for {{a,b},c} <- ...`)
-  # are captured correctly. Non-dotall: patterns don't cross newlines.
-  defp preprocess_jsx(source) do
-    source
-    |> String.replace(
-      ~r/\{(if|unless|for|case|cond|with|try|receive)\b(.*)\bdo\s*\}/,
-      "<%= \\1\\2do %>"
-    )
-    |> String.replace(~r/\{(else|end|rescue|after|catch)\s*\}/, "<% \\1 %>")
+    assign_and_emit(hoisted, {in_scope_list, in_scope_list})
   end
 
   # ─── Dynamic hoisting ────────────────────────────────────────────────────────
@@ -290,27 +270,6 @@ defmodule Filament.VNodeCompiler do
   end
 
   defp simplify_slot_expr(expr), do: expr
-
-  # ─── AST transformation ───────────────────────────────────────────────────────
-
-  # Transform @foo AST nodes to bare variable references when foo is lexically in
-  # scope at the call site.
-  defp transform_at_assigns(ast, in_scope) do
-    {transformed, reactive_names} =
-      Macro.postwalk(ast, MapSet.new(), fn
-        {{:., _, [{:assigns, _, _}, key]}, _, _} = node, acc when is_atom(key) ->
-          if MapSet.member?(in_scope, key) do
-            {{key, [], nil}, MapSet.put(acc, key)}
-          else
-            {node, acc}
-          end
-
-        other, acc ->
-          {other, acc}
-      end)
-
-    {transformed, MapSet.to_list(reactive_names)}
-  end
 
   # ─── Compile-time slot assignment ────────────────────────────────────────────
 

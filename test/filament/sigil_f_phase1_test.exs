@@ -20,10 +20,10 @@ defmodule Filament.SigilFPhase1Test do
     end
 
     test "template with one interpolation" do
-      assigns = %{text: "world"}
+      text = "world"
 
       result = ~F"""
-      <p>{@text}</p>
+      <p>{text}</p>
       """
 
       assert %Rendered{} = result
@@ -31,10 +31,10 @@ defmodule Filament.SigilFPhase1Test do
     end
 
     test "fingerprint is generated" do
-      assigns = %{text: "test"}
+      text = "test"
 
       result = ~F"""
-      <div>Stable {@text}</div>
+      <div>Stable {text}</div>
       """
 
       assert is_integer(result.fingerprint)
@@ -54,12 +54,13 @@ defmodule Filament.SigilFPhase1Test do
     end
 
     test "template with multiple interpolations" do
-      assigns = %{name: "Alice", count: 42}
+      name = "Alice"
+      count = 42
 
       result = ~F"""
       <div>
-        <h1>Hello {@name}</h1>
-        <p>You have {@count} items</p>
+        <h1>Hello {name}</h1>
+        <p>You have {count} items</p>
       </div>
       """
 

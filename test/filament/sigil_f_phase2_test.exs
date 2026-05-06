@@ -9,11 +9,11 @@ defmodule Filament.SigilFPhase2Test do
 
   describe "~F sigil Phase 2: :for comprehension" do
     test ":for comprehension produces Comprehension struct with items" do
-      assigns = %{items: [%{id: 1, name: "Item 1"}, %{id: 2, name: "Item 2"}]}
+      items = [%{id: 1, name: "Item 1"}, %{id: 2, name: "Item 2"}]
 
       result = ~F"""
       <ul>
-        <li :for={item <- @items}>
+        <li :for={item <- items}>
           {item.name}
         </li>
       </ul>
@@ -34,11 +34,11 @@ defmodule Filament.SigilFPhase2Test do
     end
 
     test ":for comprehension renders correctly with key attribute" do
-      assigns = %{items: [%{id: 1, name: "Item 1"}]}
+      items = [%{id: 1, name: "Item 1"}]
 
       result = ~F"""
       <ul>
-        <li :for={item <- @items} key={item.id}>
+        <li :for={item <- items} key={item.id}>
           {item.name}
         </li>
       </ul>
@@ -52,11 +52,11 @@ defmodule Filament.SigilFPhase2Test do
     end
 
     test ":for comprehension with dynamic content" do
-      assigns = %{items: [1, 2, 3]}
+      items = [1, 2, 3]
 
       result = ~F"""
       <ul>
-        <li :for={item_value <- @items}>
+        <li :for={item_value <- items}>
           Item: {item_value}
         </li>
       </ul>
@@ -109,6 +109,95 @@ defmodule Filament.SigilFPhase2Test do
       html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "alpha"
       assert html =~ "beta"
+    end
+  end
+
+  describe "~F sigil Phase 2: JSX {if} block syntax" do
+    test "{if cond do}…{end} renders then branch when true" do
+      show = true
+
+      result = ~F"""
+      <div>
+        {if show do}
+          <span>visible</span>
+        {end}
+      </div>
+      """
+
+      html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
+      assert html =~ "visible"
+    end
+
+    test "{if cond do}…{end} renders nothing when false" do
+      show = false
+
+      result = ~F"""
+      <div>
+        {if show do}
+          <span>visible</span>
+        {end}
+      </div>
+      """
+
+      html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
+      refute html =~ "visible"
+    end
+
+    test "{if cond do}…{else}…{end} renders correct branch" do
+      locked = true
+
+      result = ~F"""
+      <div>
+        {if locked do}
+          <span>locked</span>
+        {else}
+          <span>open</span>
+        {end}
+      </div>
+      """
+
+      html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
+      assert html =~ "locked"
+      refute html =~ "open"
+    end
+
+    test "{if cond do}…{else}…{end} renders else branch when false" do
+      locked = false
+
+      result = ~F"""
+      <div>
+        {if locked do}
+          <span>locked</span>
+        {else}
+          <span>open</span>
+        {end}
+      </div>
+      """
+
+      html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
+      refute html =~ "locked"
+      assert html =~ "open"
+    end
+
+    test "nested {if} blocks work correctly" do
+      a = true
+      b = false
+
+      result = ~F"""
+      <div>
+        {if a do}
+          {if b do}
+            <span>both</span>
+          {else}
+            <span>only-a</span>
+          {end}
+        {end}
+      </div>
+      """
+
+      html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
+      assert html =~ "only-a"
+      refute html =~ "both"
     end
   end
 

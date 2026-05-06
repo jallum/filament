@@ -286,14 +286,24 @@ defmodule Filament.TagEngine do
   defp has_tags?([_ | _]), do: true
   defp has_tags?([]), do: false
 
-  defp validate_unclosed_tags!(%{tags: []} = state, _context) do
-    state
-  end
-
   defp validate_unclosed_tags!(%{tags: [tag | _]} = state, context) do
     {_type, _name, _attrs, meta} = tag
     message = "end of #{context} reached without closing tag for <#{meta.tag_name}>"
     raise_syntax_error!(message, meta, state)
+  end
+
+  defp validate_unclosed_tags!(%{stack: stack} = state, context) do
+    case Enum.find(stack, &match?({:jsx_block, _, _, _}, &1)) do
+      {:jsx_block, kind, _ast, meta} ->
+        raise_syntax_error!(
+          "end of #{context} reached without closing {end} for {#{kind}}",
+          meta,
+          state
+        )
+
+      nil ->
+        state
+    end
   end
 
   @impl true
@@ -370,6 +380,101 @@ defmodule Filament.TagEngine do
 
   defp pop_substate_from_stack(%{stack: [{:substate, substate} | stack]} = state) do
     %{state | stack: stack, substate: substate}
+  end
+
+  defp push_stack_item(%{stack: stack} = state, item), do: %{state | stack: [item | stack]}
+
+  defp pop_stack_item(%{stack: [_ | stack]} = state), do: %{state | stack: stack}
+
+  defp classify_body_expr(value, _meta, opts) do
+    trimmed = String.trim(value)
+
+    cond do
+      trimmed == "else" ->
+        :jsx_else
+
+      trimmed == "end" ->
+        :jsx_end
+
+      (String.starts_with?(trimmed, "if ") or String.starts_with?(trimmed, "for ")) and
+          String.ends_with?(trimmed, " do") ->
+        case Code.string_to_quoted(trimmed <> "\nnil\nend", opts) do
+          {:ok, {:if, _, [cond_ast, [do: nil]]}} ->
+            {:if_block, cond_ast}
+
+          {:ok, {:for, _, for_args}} ->
+            {gen_args, _} = Enum.split(for_args, length(for_args) - 1)
+            {:for_block, gen_args}
+
+          _ ->
+            :expr
+        end
+
+      true ->
+        :expr
+    end
+  end
+
+  defp jsx_else(%{stack: [{:jsx_block, _kind, _expr, _block_meta} | _]} = state, _else_meta, tokens) do
+    then_body = invoke_subengine(state, :handle_end, [])
+
+    state
+    |> push_stack_item({:jsx_else, then_body})
+    |> update_subengine(:handle_begin, [])
+    |> continue(tokens)
+  end
+
+  defp jsx_else(state, else_meta, _tokens) do
+    raise_syntax_error!("{else} without matching {if}", else_meta, state)
+  end
+
+  defp jsx_end(%{stack: [{:jsx_else, then_body}, {:jsx_block, :if, cond_ast, _bm} | _]} = state, tokens) do
+    else_body = invoke_subengine(state, :handle_end, [])
+
+    ast =
+      quote do
+        if unquote(cond_ast), do: unquote(then_body), else: unquote(else_body)
+      end
+
+    state
+    |> pop_stack_item()
+    |> pop_stack_item()
+    |> pop_substate_from_stack()
+    |> set_root_on_not_tag()
+    |> update_subengine(:handle_expr, ["=", ast])
+    |> continue(tokens)
+  end
+
+  defp jsx_end(%{stack: [{:jsx_block, :if, cond_ast, _bm} | _]} = state, tokens) do
+    body = invoke_subengine(state, :handle_end, [])
+
+    ast =
+      quote do
+        if unquote(cond_ast), do: unquote(body)
+      end
+
+    state
+    |> pop_stack_item()
+    |> pop_substate_from_stack()
+    |> set_root_on_not_tag()
+    |> update_subengine(:handle_expr, ["=", ast])
+    |> continue(tokens)
+  end
+
+  defp jsx_end(%{stack: [{:jsx_block, :for, for_args, _bm} | _]} = state, tokens) do
+    body = invoke_subengine(state, :handle_end, [])
+    ast = {:for, [], for_args ++ [[do: body]]}
+
+    state
+    |> pop_stack_item()
+    |> pop_substate_from_stack()
+    |> set_root_on_not_tag()
+    |> update_subengine(:handle_expr, ["=", ast])
+    |> continue(tokens)
+  end
+
+  defp jsx_end(_state, _tokens) do
+    raise CompileError, description: "{end} without matching {if} or {for}"
   end
 
   defp invoke_subengine(%{subengine: subengine, substate: substate}, fun, args) do
@@ -502,13 +607,38 @@ defmodule Filament.TagEngine do
     |> continue(tokens)
   end
 
-  defp handle_token([{:body_expr, value, %{line: line, column: column}} | tokens], state) do
-    quoted = Code.string_to_quoted!(value, line: line, column: column, file: state.file)
+  defp handle_token([{:body_expr, value, %{line: line, column: column} = meta} | tokens], state) do
+    opts = [line: line, column: column, file: state.file]
 
-    state
-    |> set_root_on_not_tag()
-    |> update_subengine(:handle_expr, ["=", quoted])
-    |> continue(tokens)
+    case classify_body_expr(value, meta, opts) do
+      {:if_block, cond_ast} ->
+        state
+        |> push_substate_to_stack()
+        |> push_stack_item({:jsx_block, :if, cond_ast, meta})
+        |> update_subengine(:handle_begin, [])
+        |> continue(tokens)
+
+      {:for_block, for_args} ->
+        state
+        |> push_substate_to_stack()
+        |> push_stack_item({:jsx_block, :for, for_args, meta})
+        |> update_subengine(:handle_begin, [])
+        |> continue(tokens)
+
+      :jsx_else ->
+        jsx_else(state, meta, tokens)
+
+      :jsx_end ->
+        jsx_end(state, tokens)
+
+      :expr ->
+        quoted = Code.string_to_quoted!(value, opts)
+
+        state
+        |> set_root_on_not_tag()
+        |> update_subengine(:handle_expr, ["=", quoted])
+        |> continue(tokens)
+    end
   end
 
   # Text

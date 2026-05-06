@@ -70,7 +70,7 @@ defmodule Filament.VNodeCompilerTest do
 
             ~F"""
             <div>
-              <button on_click={fn -> set_count.(@count + 1) end}>A</button>
+              <button on_click={fn -> set_count.(count + 1) end}>A</button>
               <button on_click={fn -> :action2 end}>B</button>
             </div>
             """
@@ -97,16 +97,15 @@ defmodule Filament.VNodeCompilerTest do
 
       # Slot 1 is a stable closure (no reactive deps) — same fn object
       assert h1_slot1 === h2_slot1, "stable handler slot must be identical across renders"
-      # Slot 0 captures @count which changed — new fn, but SAME slot index
+      # Slot 0 captures count which changed — new fn, but SAME slot index
       assert is_function(h2_slot0), "handler at slot 0 must still be a function after re-render"
       refute h1_slot0 === h2_slot0, "reactive handler must change when dep changes"
     end
   end
 
   describe "stable closure fn identity" do
-    # Closure capturing only a stable setter (not in reactive_vars because it is
-    # never referenced via @) → memo_at({:t, N}, [], fn -> closure end) → same fn object
-    # every render.
+    # Closure capturing only a stable setter (set_val doesn't change between renders)
+    # → memo_at({:t, N}, [set_val], fn -> closure end) → same fn object every render.
     test "stable closure produces identical fn reference across renders" do
       defmodule StableClosureComp do
         @moduledoc false
@@ -134,7 +133,7 @@ defmodule Filament.VNodeCompilerTest do
   end
 
   describe "reactive closure fn identity" do
-    # Closure capturing a reactive var (@count in the template) → deps = [count].
+    # Closure capturing a reactive var (count in the template) → deps = [count].
     # When count changes, memo_at invalidates and produces a new fn.
     test "reactive closure produces new fn reference when dep changes" do
       defmodule ReactiveClosureComp do
@@ -144,7 +143,7 @@ defmodule Filament.VNodeCompilerTest do
         defcomponent ReactiveClosure do
           def render(_assigns) do
             {count, set_count} = use_state(0)
-            ~F'<button on_click={fn -> set_count.(@count + 1) end}>+</button>'
+            ~F'<button on_click={fn -> set_count.(count + 1) end}>+</button>'
           end
         end
       end
@@ -175,7 +174,7 @@ defmodule Filament.VNodeCompilerTest do
         defcomponent ReactiveClosureStable do
           def render(_assigns) do
             {count, set_count} = use_state(0)
-            ~F'<button on_click={fn -> set_count.(@count + 1) end}>+</button>'
+            ~F'<button on_click={fn -> set_count.(count + 1) end}>+</button>'
           end
         end
       end
