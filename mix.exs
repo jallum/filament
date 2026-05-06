@@ -91,8 +91,8 @@ defmodule Filament.MixProject do
   defp package do
     [
       description: "JSX-like LiveView components — events as closures, state as hooks, servers as observables",
-      licenses: ["Apache-2.0"],
-      links: %{}
+      licenses: ["MIT"],
+      links: %{"GitHub" => "https://github.com/jallum/filament"}
     ]
   end
 end

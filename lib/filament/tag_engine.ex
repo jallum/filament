@@ -390,27 +390,28 @@ defmodule Filament.TagEngine do
     trimmed = String.trim(value)
 
     cond do
-      trimmed == "else" ->
-        :jsx_else
+      trimmed == "else" -> :jsx_else
+      trimmed == "end" -> :jsx_end
+      block_opener?(trimmed) -> parse_block_opener(trimmed, opts)
+      true -> :expr
+    end
+  end
 
-      trimmed == "end" ->
-        :jsx_end
+  defp block_opener?(trimmed) do
+    (String.starts_with?(trimmed, "if ") or String.starts_with?(trimmed, "for ")) and
+      String.ends_with?(trimmed, " do")
+  end
 
-      (String.starts_with?(trimmed, "if ") or String.starts_with?(trimmed, "for ")) and
-          String.ends_with?(trimmed, " do") ->
-        case Code.string_to_quoted(trimmed <> "\nnil\nend", opts) do
-          {:ok, {:if, _, [cond_ast, [do: nil]]}} ->
-            {:if_block, cond_ast}
+  defp parse_block_opener(trimmed, opts) do
+    case Code.string_to_quoted(trimmed <> "\nnil\nend", opts) do
+      {:ok, {:if, _, [cond_ast, [do: nil]]}} ->
+        {:if_block, cond_ast}
 
-          {:ok, {:for, _, for_args}} ->
-            {gen_args, _} = Enum.split(for_args, length(for_args) - 1)
-            {:for_block, gen_args}
+      {:ok, {:for, _, for_args}} ->
+        {gen_args, _} = Enum.split(for_args, length(for_args) - 1)
+        {:for_block, gen_args}
 
-          _ ->
-            :expr
-        end
-
-      true ->
+      _ ->
         :expr
     end
   end

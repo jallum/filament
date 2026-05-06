@@ -25,3 +25,5 @@ filament-*.tar
 
 .tmp/
 .pi/
+.elixir_ls/
+.expert/

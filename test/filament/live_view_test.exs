@@ -165,6 +165,7 @@ defmodule Filament.LiveViewTest do
     defcomponent do
       prop(:server, :any, required: true)
 
+      @impl true
       def render(%{server: server}) do
         value =
           use_observable(server, fn
