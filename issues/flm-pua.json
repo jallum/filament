@@ -6,12 +6,12 @@
   "blocks": [],
   "closed_at": "2026-05-07T14:55:16Z",
   "created": "2026-05-07T14:23:25Z",
-  "description": "## Motivation\n\nBinding a handler to a window-level keydown event currently requires raw Phoenix attributes:\n\n```elixir\n\u003cdiv\n  phx-window-keydown={\"filament:\" \u003c\u003e Filament.Hooks.register_event_handler(fn _ -\u003e on_close.() end)}\n  phx-key=\"escape\"\n\u003e\n```\n\nThis is verbose, exposes internals, and is inconsistent with how every other event is handled in Filament templates (`on_click`, `on_change`, etc.).\n\n## Proposed API\n\nAdd `on_key` as a recognized `on_*` attribute in `Filament.HTMLEngine`. It compiles to `phx-window-keydown=\"filament:...\"` and registers a handler that calls `user_fn.(params[\"key\"])`. Key filtering is done server-side via Elixir pattern matching — no `phx-key` needed.\n\n```elixir\n\u003cdiv class=\"modal\" on_key={fn\n  \"Escape\" -\u003e on_close.()\n  _ -\u003e :ok\nend}\u003e\n```\n\n## Notes\n\n- Window-scope (not element-focus-scope) is the right default for this use case\n- Multiple keys handled by one attribute via pattern matching — no per-key attribute name parsing needed\n- Fits the existing `on_*` mental model with no new concepts\n\nDepends on the index collision fix (flm-yp7) — without that fix, `on_key` on a component that also has `{for}`-loop handlers would still be broken.",
+  "description": "## Motivation\n\nBinding a handler to a window-level keydown event currently requires raw Phoenix attributes:\n\n```elixir\n<div\n  phx-window-keydown={\"filament:\" <> Filament.Hooks.register_event_handler(fn _ -> on_close.() end)}\n  phx-key=\"escape\"\n>\n```\n\nThis is verbose, exposes internals, and is inconsistent with how every other event is handled in Filament templates (`on_click`, `on_change`, etc.).\n\n## Proposed API\n\nAdd `on_key` as a recognized `on_*` attribute in `Filament.HTMLEngine`. It compiles to `phx-window-keydown=\"filament:...\"` and registers a handler that calls `user_fn.(params[\"key\"])`. Key filtering is done server-side via Elixir pattern matching — no `phx-key` needed.\n\n```elixir\n<div class=\"modal\" on_key={fn\n  \"Escape\" -> on_close.()\n  _ -> :ok\nend}>\n```\n\n## Notes\n\n- Window-scope (not element-focus-scope) is the right default for this use case\n- Multiple keys handled by one attribute via pattern matching — no per-key attribute name parsing needed\n- Fits the existing `on_*` mental model with no new concepts\n\nDepends on the index collision fix (flm-yp7) — without that fix, `on_key` on a component that also has `{for}`-loop handlers would still be broken.",
   "id": "flm-pua",
   "labels": [],
   "priority": 3,
   "status": "closed",
   "title": "Add on_key attribute for window keydown binding",
   "type": "task",
-  "updated_at": "2026-05-07T14:55:16Z"
+  "updated_at": "2026-05-07T23:34:04.769919Z"
 }
