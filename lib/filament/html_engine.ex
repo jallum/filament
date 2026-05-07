@@ -61,14 +61,13 @@ defmodule Filament.HTMLEngine do
   defp transform_event_pair({"on_key", v}) do
     wrapped = quote do
       fn params ->
-        %Filament.KeyEvent{
-          key: params["key"],
+        mods = %Filament.Modifiers{
           ctrl: params["ctrl"] || false,
           shift: params["shift"] || false,
           alt: params["alt"] || false,
           meta: params["meta"] || false
         }
-        |> then(unquote(v))
+        unquote(v).(params["key"], mods)
       end
     end
     wire_var = Macro.unique_var(:_filament_key_wire, __MODULE__)

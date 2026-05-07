@@ -73,7 +73,7 @@ defmodule Filament.TestTest do
         {last_event, set_last_event} = use_state(nil)
 
         ~F"""
-        <div on_key={fn key_event -> set_last_event.(key_event) end}>
+        <div on_key={fn key, mods -> set_last_event.({key, mods}) end}>
           <span id="last-key">{inspect(last_event)}</span>
         </div>
         """
@@ -157,14 +157,14 @@ defmodule Filament.TestTest do
     assert click(view, "#nonexistent") == {:error, {:no_element, "#nonexistent"}}
   end
 
-  test "9. key_down delivers a %Filament.KeyEvent{} to the handler" do
+  test "9. key_down delivers key string and %Filament.Modifiers{} to the handler" do
     {:ok, view} = mount(KeyModalComp.KeyModal, %{})
 
     {:ok, view} = key_down(view, "Escape")
-    assert render_text(view) =~ ~s(%Filament.KeyEvent{key: "Escape")
+    assert render_text(view) =~ ~s({"Escape", %Filament.Modifiers{)
 
     {:ok, view} = key_down(view, "s", ctrl: true)
-    assert render_text(view) =~ ~s(%Filament.KeyEvent{key: "s")
+    assert render_text(view) =~ ~s({"s", %Filament.Modifiers{)
     assert render_text(view) =~ "ctrl: true"
   end
 
