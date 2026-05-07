@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-07T14:23:16Z",
+  "description": "## Problem\n\n`event_at(slot, handler)` (used by the compiler for all `on_*` template attributes) and `register_event_handler(handler)` (used by hoisted `{for}`-loop handlers) both write to the same `new_event_handlers` integer-keyed map, but assign indices through independent mechanisms:\n\n- `event_at` uses compile-time-assigned consecutive slots from `e_ctr` (0, 1, 2...) and never touches `event_handler_index`\n- `register_event_handler` uses `event_handler_index`, an auto-increment counter that resets to 0 each render\n\nResult: `register_event_handler` calls inside a `{for}` loop (hoisted by Pass 3 of the VNode compiler into `memo_at` wrappers) start from index 0 and overwrite `event_at` slots that were already written. Any component with both `on_*` attributes and `{for}`-loop `on_*` handlers silently dispatches key events to the wrong handlers.\n\n## Reproduction\n\nA component with any `on_click` (or similar) handler on a non-loop element AND an `on_*` handler inside a `{for}` loop — e.g. a settings modal with an X button and a list of checkboxes. Clicking the X button calls the first checkbox handler instead.\n\n## Fix\n\nIn `vnode_compiler.ex`, after `do_walk` computes the final `e_ctr`, prepend a `Filament.Hooks.set_event_handler_floor(e_ctr)` call to the compiled template body:\n\n```elixir\ndefp assign_and_emit(ast, rv) do\n  {result, {_t_ctr, e_ctr}} = do_walk(ast, rv, {0, 0})\n  floor_call = quote do: Filament.Hooks.set_event_handler_floor(unquote(e_ctr))\n  {:__block__, [], [floor_call, result]}\nend\n```\n\nIn `hooks.ex`, add:\n\n```elixir\ndef set_event_handler_floor(n) when is_integer(n) do\n  case Process.get(:filament_render_context) do\n    nil -\u003e :ok\n    ctx when ctx.event_handler_index \u003c n -\u003e\n      Process.put(:filament_render_context, %{ctx | event_handler_index: n})\n    _ -\u003e :ok\n  end\nend\n```\n\nThis ensures `register_event_handler` always starts above all `event_at` slots, eliminating any possible collision. ~10 lines total, no wire ref format changes, no breaking changes.",
+  "id": "flm-yp7",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "Fix event handler index collision between event_at and register_event_handler",
+  "type": "bug",
+  "updated_at": "2026-05-07T14:23:16Z"
+}
