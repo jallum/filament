@@ -193,6 +193,51 @@ defmodule Filament.VNodeCompilerTest do
     end
   end
 
+  describe "event_at / register_event_handler slot isolation" do
+    # Components with both on_* attributes on non-loop elements AND on_* handlers
+    # inside a {for} loop previously collided: register_event_handler reset its
+    # counter to 0 each render, overwriting event_at slots already written.
+    test "non-loop on_click handler is not overwritten by for-loop on_click handlers" do
+      defmodule MixedHandlerComp do
+        @moduledoc false
+        use Filament.Component
+
+        defcomponent MixedHandler do
+          def render(assigns) do
+            {_open, set_open} = use_state(true)
+
+            ~F"""
+            <div>
+              <button on_click={fn -> set_open.(false) end}>X</button>
+              {for {val, label} <- assigns.items do}
+                <li><a on_click={fn -> set_open.(val) end}>{label}</a></li>
+              {end}
+            </div>
+            """
+          end
+        end
+      end
+
+      items = [{:a, "A"}, {:b, "B"}, {:c, "C"}]
+
+      {tree, _rendered, _} =
+        Reconciler.mount(MixedHandlerComp.MixedHandler, %{items: items}, owner_pid: self())
+
+      close_handler = FiberTree.get_event_handler(tree, "root", 0)
+      loop_handler_0 = FiberTree.get_event_handler(tree, "root", 1)
+      loop_handler_1 = FiberTree.get_event_handler(tree, "root", 2)
+      loop_handler_2 = FiberTree.get_event_handler(tree, "root", 3)
+
+      assert is_function(close_handler), "slot 0 must hold the X-button close handler"
+      assert is_function(loop_handler_0), "slot 1 must hold the first loop handler"
+      assert is_function(loop_handler_1), "slot 2 must hold the second loop handler"
+      assert is_function(loop_handler_2), "slot 3 must hold the third loop handler"
+
+      refute close_handler === loop_handler_0,
+             "X-button handler must not be overwritten by the first loop handler"
+    end
+  end
+
   describe "comprehension memoization" do
     test "for-loop with handlers reuses result when outer-scope deps unchanged" do
       defmodule CompMemoComp do
