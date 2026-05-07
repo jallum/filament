@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.2.1] - 2026-05-07
+
+### Changed
+
+- The project license has changed from Apache-2.0 to MIT.
+
+### Fixed
+
+- `~F` formatter now preserves `<script>` block content verbatim. Previously,
+  JavaScript inside colocated `<script :type={ColocatedHook}>` blocks was
+  re-indented as if it were HTML, corrupting indentation-sensitive code.
+
 ## [0.2.0] - 2026-05-06
 
 ### Added

@@ -151,7 +151,7 @@ assert render_text(view) =~ "Buy milk"
 
 ```elixir
 # mix.exs
-{:filament, "~> 0.1"}
+{:filament, "~> 0.2"}
 ```
 
 ## Examples
