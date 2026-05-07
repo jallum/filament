@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-07T18:35:17Z",
+  "description": "## Problem\n\nFilament's VNode model already supports keyed component instances — the\n`{:component, module, props, key}` tuple has a fourth element, and the\nreconciler correctly handles it inside `:keyed_list` nodes. But `~F`\ntemplates have no way to set that key. There is no `:key` attribute in\nthe tag engine.\n\nThe practical consequence is that any list of components that need stable\nDOM identity must use a wrapper element carrying a LiveView `id`:\n\n```elixir\n{for block \u003c- turn.blocks do}\n  \u003cdiv id={\"block-#{block_id(block)}\"} class=\"ml-4\"\u003e\n    \u003cBlock block={block} /\u003e\n  \u003c/div\u003e\n{end}\n```\n\nThis is a workaround, not a pattern. The wrapper div exists solely because\nthere is no way to key the `Block` component itself. It adds DOM noise,\nforces the caller to know internal ID-derivation logic, and prevents the\nreconciler from tracking component identity directly.\n\n## Desired syntax\n\n```heex\n{for block \u003c- turn.blocks do}\n  \u003cBlock block={block} :key={block_id(block)} /\u003e\n{end}\n```\n\n`:key` should be treated as a reserved attribute (like `:if` and `:for`)\n— extracted by TagEngine and threaded through as the fourth element of the\n`{:component, module, props, key}` VNode, never passed into `props`.\n\nWhen `:key` is present, the compiled output should emit a `:keyed_list`\nVNode wrapping the components, so the reconciler can match instances across\nre-renders by logical identity rather than position.\n\n## Implementation sketch\n\n1. **TagEngine**: Recognize `:key` as a special attribute alongside `:if`\n   and `:for`. Extract it from the attribute list before passing remaining\n   attrs as props. Emit `{:component, mod, props, key_value}`.\n\n2. **VNodeCompiler**: When a `{for}` comprehension contains keyed\n   components, wrap the result in `{:keyed_list, [{key, vnode}, ...]}`.\n   The compiler already has a comprehension-hoisting pass; keyed components\n   need to be recognized there.\n\n3. **Validator**: `Filament.VNode.validate!/1` already enforces that\n   components inside a `:keyed_list` have a non-nil key — no change needed.\n\n4. **Reconciler/Renderer**: Already handles `:keyed_list` and keyed\n   component matching — no change needed.\n\n## Expected outcome\n\nWith `:key` support, `Block`/`ChildBlock`-style dispatch components can\nidentify themselves to the reconciler without wrapper divs. The wrapper\nelement pattern disappears from callsites, and reconciliation quality\nimproves for any list where component identity is not positional.",
+  "id": "flm-1op",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "Expose :key attribute on component tags in ~F templates",
+  "type": "task",
+  "updated_at": "2026-05-07T18:35:17Z"
+}
