@@ -77,6 +77,8 @@ defmodule Filament.Defcomponent do
         @behaviour Filament.Component
 
         Module.register_attribute(__MODULE__, :filament_props, accumulate: true)
+        Module.register_attribute(__MODULE__, :__macro_components__, accumulate: true)
+        @before_compile Filament.Component
 
         unquote(block)
 

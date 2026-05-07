@@ -43,6 +43,7 @@ Guidelines for changelog entries:
 ## Version bump
 
 1. Update the `version:` field in `mix.exs` to the new version string.
+2. Update any `{:filament, "~> X.Y"}` version references in `README.md` to `"~> X.Y"` using the new major.minor (patch is omitted in `~>` constraints).
 
 ## Verify
 
@@ -54,3 +55,8 @@ Guidelines for changelog entries:
 1. Commit all changes: `Bump version to X.Y.Z`
 2. Tag: `git tag -a vX.Y.Z -m "vX.Y.Z"`
 3. Push: `git push && git push --tags`
+
+## Publish
+
+1. Run `mix hex.publish` and confirm when prompted. If the user is not authenticated, stop and tell them to run `mix hex.user auth` first, then re-run `/release`.
+2. Report the hex.pm package URL: `https://hex.pm/packages/filament/X.Y.Z`
