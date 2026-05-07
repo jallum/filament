@@ -239,4 +239,19 @@ defmodule Filament.TestTest do
 
     assert_receive {:submitted, %{"name" => "Alice"}}
   end
+
+  test "bang variants return view directly and enable pipelining" do
+    view =
+      mount!(CounterComp.Counter, %{initial: 0})
+      |> click!("button")
+      |> click!("button")
+      |> click!("button")
+
+    assert render_text(view) =~ "Count: 3"
+  end
+
+  test "bang variant raises on error" do
+    view = mount!(CounterComp.Counter, %{initial: 0})
+    assert_raise RuntimeError, ~r/click!.*failed/, fn -> click!(view, "#nope") end
+  end
 end

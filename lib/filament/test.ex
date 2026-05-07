@@ -238,6 +238,71 @@ defmodule Filament.Test do
     end
   end
 
+  # ── Bang variants ─────────────────────────────────────────────────────────
+
+  @doc "Like `mount/3` but returns the view directly, raising on error."
+  @spec mount!(module(), map(), keyword()) :: t()
+  def mount!(component, props, opts \\ []) do
+    case mount(component, props, opts) do
+      {:ok, view} -> view
+      {:error, reason} -> raise "Filament.Test.mount!/3 failed: #{inspect(reason)}"
+    end
+  end
+
+  @doc "Like `click/2` but returns the view directly, raising on error."
+  @spec click!(t(), String.t()) :: t()
+  def click!(%__MODULE__{} = view, selector) do
+    case click(view, selector) do
+      {:ok, view} -> view
+      {:error, reason} -> raise "Filament.Test.click!/2 failed: #{inspect(reason)}"
+    end
+  end
+
+  @doc "Like `submit/3` but returns the view directly, raising on error."
+  @spec submit!(t(), String.t(), map()) :: t()
+  def submit!(%__MODULE__{} = view, selector, params \\ %{}) do
+    case submit(view, selector, params) do
+      {:ok, view} -> view
+      {:error, reason} -> raise "Filament.Test.submit!/3 failed: #{inspect(reason)}"
+    end
+  end
+
+  @doc "Like `change/3` but returns the view directly, raising on error."
+  @spec change!(t(), String.t(), map()) :: t()
+  def change!(%__MODULE__{} = view, selector, params) do
+    case change(view, selector, params) do
+      {:ok, view} -> view
+      {:error, reason} -> raise "Filament.Test.change!/3 failed: #{inspect(reason)}"
+    end
+  end
+
+  @doc "Like `blur/2` but returns the view directly, raising on error."
+  @spec blur!(t(), String.t()) :: t()
+  def blur!(%__MODULE__{} = view, selector) do
+    case blur(view, selector) do
+      {:ok, view} -> view
+      {:error, reason} -> raise "Filament.Test.blur!/2 failed: #{inspect(reason)}"
+    end
+  end
+
+  @doc "Like `key_down/3` but returns the view directly, raising on error."
+  @spec key_down!(t(), String.t(), keyword()) :: t()
+  def key_down!(%__MODULE__{} = view, key, opts \\ []) do
+    case key_down(view, key, opts) do
+      {:ok, view} -> view
+      {:error, reason} -> raise "Filament.Test.key_down!/3 failed: #{inspect(reason)}"
+    end
+  end
+
+  @doc "Like `keydown/3` but returns the view directly, raising on error."
+  @spec keydown!(t(), String.t(), String.t()) :: t()
+  def keydown!(%__MODULE__{} = view, selector, key) do
+    case keydown(view, selector, key) do
+      {:ok, view} -> view
+      {:error, reason} -> raise "Filament.Test.keydown!/3 failed: #{inspect(reason)}"
+    end
+  end
+
   @doc """
   Drain pending filament messages and re-render the view.
   Useful after pushing to an observable stub from outside the component.
