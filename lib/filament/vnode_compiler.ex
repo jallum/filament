@@ -277,8 +277,9 @@ defmodule Filament.VNodeCompiler do
   # and emits memo_at/event_at calls directly. Does NOT recurse into fn literals,
   # so only the linear render body is affected (not PLV comprehension entry fns).
   defp assign_and_emit(ast, rv) do
-    {result, _counters} = do_walk(ast, rv, {0, 0})
-    result
+    {result, {_t_ctr, e_ctr}} = do_walk(ast, rv, {0, 0})
+    floor_call = quote do: Filament.Hooks.set_event_handler_floor(unquote(e_ctr))
+    {:__block__, [], [floor_call, result]}
   end
 
   defp do_walk({:fn, _, _} = node, _rv, counters), do: {node, counters}

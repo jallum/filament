@@ -439,6 +439,16 @@ defmodule Filament.Hooks do
   end
 
   @doc false
+  def set_event_handler_floor(n) when is_integer(n) do
+    case Process.get(:filament_render_context) do
+      nil -> :ok
+      ctx when ctx.event_handler_index < n ->
+        Process.put(:filament_render_context, %{ctx | event_handler_index: n})
+      _ -> :ok
+    end
+  end
+
+  @doc false
   @spec register_event_handler(handler :: function()) :: wire_ref :: String.t()
   def register_event_handler(handler) when is_function(handler) do
     ctx =
