@@ -161,23 +161,33 @@ defmodule Filament.Test do
   end
 
   @doc """
-  Simulate a window keydown event with the given key string.
-  Finds the first element with a `phx-window-keydown` attribute, dispatches the
-  handler with `%{"key" => key}`, flushes state updates, and re-renders.
+  Simulate a window keydown event with the given key string and optional modifiers.
+
+  Accepts `ctrl: true`, `shift: true`, `alt: true`, `meta: true` in opts.
+  Finds the first element with `phx-hook="FilamentKey"`, dispatches the handler
+  with `%{"key" => key, "ctrl" => ..., ...}`, flushes state updates, and re-renders.
   Returns `{:ok, updated_view}` or `{:error, reason}`.
   """
-  @spec key_down(t(), key :: String.t()) :: {:ok, t()} | {:error, term()}
-  def key_down(%__MODULE__{} = view, key) do
+  @spec key_down(t(), key :: String.t(), opts :: keyword()) :: {:ok, t()} | {:error, term()}
+  def key_down(%__MODULE__{} = view, key, opts \\ []) do
     require_floki!()
 
-    refs =
+    wires =
       view.rendered_html
       |> Floki.parse_fragment!()
-      |> Floki.attribute("[phx-window-keydown]", "phx-window-keydown")
+      |> Floki.attribute("[phx-hook=FilamentKey]", "data-filament-wire")
 
-    case refs do
+    params = %{
+      "key" => key,
+      "ctrl" => Keyword.get(opts, :ctrl, false),
+      "shift" => Keyword.get(opts, :shift, false),
+      "alt" => Keyword.get(opts, :alt, false),
+      "meta" => Keyword.get(opts, :meta, false)
+    }
+
+    case wires do
       [] -> {:error, :no_window_keydown_handler}
-      [ref | _] -> dispatch_event(view, ref, %{"key" => key})
+      [wire | _] -> dispatch_event(view, "filament:" <> wire, params)
     end
   end
 

@@ -39,7 +39,30 @@ defmodule Filament.LiveView do
 
   alias Filament.Reconciler
 
+  import Phoenix.Component, only: [sigil_H: 2]
+
   @callback root_component() :: module()
+
+  @doc false
+  def render(assigns) do
+    ~H"""
+    <%= @_filament_rendered %>
+    <script data-phx-runtime-hook="FilamentKey">
+      window.phx_hook_FilamentKey = window.phx_hook_FilamentKey || function() {
+        return {
+          mounted() {
+            this._handler = (e) => this.pushEvent(
+              "filament:" + this.el.dataset.filamentWire,
+              { key: e.key, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey }
+            );
+            window.addEventListener("keydown", this._handler);
+          },
+          destroyed() { window.removeEventListener("keydown", this._handler); }
+        };
+      };
+    </script>
+    """
+  end
 
   @doc false
   def apply_effects(pending_effects, fiber_tree) do
@@ -135,7 +158,7 @@ defmodule Filament.LiveView do
       Returns the pre-rendered Filament output.
       """
       def render(assigns) do
-        assigns._filament_rendered
+        Filament.LiveView.render(assigns)
       end
 
       @doc """

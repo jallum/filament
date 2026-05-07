@@ -134,7 +134,7 @@ defmodule Filament.SigilFPhase1Test do
       assert Filament.FiberTree.get_event_handler(tree, "root", 0)
     end
 
-    test "on_key wires to phx-window-keydown and passes key string to handler" do
+    test "on_key wires to phx-hook FilamentKey with data-filament-wire and id" do
       defmodule OnKeyComp do
         @moduledoc false
         use Filament.Component
@@ -143,7 +143,7 @@ defmodule Filament.SigilFPhase1Test do
           def render(_assigns) do
             ~F"""
             <div on_key={fn
-              "Escape" -> :close
+              %{key: "Escape"} -> :close
               _ -> :ignore
             end}>modal</div>
             """
@@ -152,18 +152,49 @@ defmodule Filament.SigilFPhase1Test do
       end
 
       {tree, rendered, _} = Filament.Reconciler.mount(OnKeyComp.OnKey, %{}, owner_pid: self())
+      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
 
-      assert Enum.any?(rendered.static, &String.contains?(&1, "phx-window-keydown")),
-             "on_key must emit phx-window-keydown attribute"
+      assert html =~ ~s(phx-hook="FilamentKey"),
+             "on_key must emit phx-hook=\"FilamentKey\""
 
-      refute Enum.any?(rendered.static, &String.contains?(&1, "phx-key")),
-             "on_key must not emit a phx-key= attribute — filtering is done in the handler"
+      assert html =~ "data-filament-wire=",
+             "on_key must emit data-filament-wire attribute"
+
+      refute html =~ "phx-window-keydown",
+             "on_key must not fall back to phx-window-keydown"
+
+      assert html =~ ~r/id="[^"]+"/,
+             "on_key element must have an id for the hook"
 
       handler = Filament.FiberTree.get_event_handler(tree, "root", 0)
-      assert is_function(handler, 1), "handler must be arity-1 (receives params map)"
+      assert is_function(handler, 1), "handler must be arity-1"
 
-      assert handler.(%{"key" => "Escape"}) == :close
-      assert handler.(%{"key" => "Enter"}) == :ignore
+      assert handler.(%{"key" => "Escape", "ctrl" => false, "shift" => false, "alt" => false, "meta" => false}) == :close
+      assert handler.(%{"key" => "Enter",  "ctrl" => false, "shift" => false, "alt" => false, "meta" => false}) == :ignore
+    end
+
+    test "on_key handler receives a %Filament.KeyEvent{} with modifier fields" do
+      defmodule OnKeyModComp do
+        @moduledoc false
+        use Filament.Component
+
+        defcomponent OnKeyMod do
+          def render(_assigns) do
+            {last, set_last} = use_state(nil)
+
+            ~F"""
+            <div on_key={fn key_event -> set_last.(key_event) end}>{inspect(last)}</div>
+            """
+          end
+        end
+      end
+
+      {tree, _rendered, _} = Filament.Reconciler.mount(OnKeyModComp.OnKeyMod, %{}, owner_pid: self())
+
+      handler = Filament.FiberTree.get_event_handler(tree, "root", 0)
+      handler.(%{"key" => "s", "ctrl" => true, "shift" => false, "alt" => false, "meta" => false})
+
+      assert_received {:filament_set_state, _, _, %Filament.KeyEvent{key: "s", ctrl: true, shift: false}}
     end
 
     test "on_keydown wires to phx-keydown" do

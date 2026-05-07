@@ -45,11 +45,11 @@ defmodule Filament.HTMLEngine do
   end
 
   defp transform_event_attrs(list) when is_list(list) do
-    Enum.map(list, &transform_event_pair/1)
+    Enum.flat_map(list, fn pair -> List.wrap(transform_event_pair(pair)) end)
   end
 
   defp transform_event_attrs({:%{}, meta, pairs}) do
-    {:%{}, meta, Enum.map(pairs, &transform_event_pair/1)}
+    {:%{}, meta, Enum.flat_map(pairs, fn pair -> List.wrap(transform_event_pair(pair)) end)}
   end
 
   defp transform_event_attrs({:__block__, meta, exprs}) do
@@ -59,8 +59,25 @@ defmodule Filament.HTMLEngine do
   defp transform_event_attrs(other), do: other
 
   defp transform_event_pair({"on_key", v}) do
-    wrapped = quote do: fn params -> (unquote(v)).(params["key"]) end
-    {"phx-window-keydown", quote(do: "filament:" <> Filament.Hooks.register_event_handler(unquote(wrapped)))}
+    wrapped = quote do
+      fn params ->
+        %Filament.KeyEvent{
+          key: params["key"],
+          ctrl: params["ctrl"] || false,
+          shift: params["shift"] || false,
+          alt: params["alt"] || false,
+          meta: params["meta"] || false
+        }
+        |> then(unquote(v))
+      end
+    end
+    wire_var = Macro.unique_var(:_filament_key_wire, __MODULE__)
+    [
+      {"phx-hook", "FilamentKey"},
+      {"data-filament-wire",
+       quote(do: unquote(wire_var) = Filament.Hooks.register_event_handler(unquote(wrapped)))},
+      {"id", quote(do: unquote(wire_var))}
+    ]
   end
 
   defp transform_event_pair({"on_" <> event, v}) do
