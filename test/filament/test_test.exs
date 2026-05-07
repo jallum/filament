@@ -206,9 +206,9 @@ defmodule Filament.TestTest do
     assert render_text(view) =~ "blurred"
   end
 
-  test "keydown (element-scoped) delivers key string and re-renders" do
+  test "key_down (element-scoped) delivers key string and re-renders" do
     {:ok, view} = mount(InputComp.Input, %{})
-    {:ok, view} = keydown(view, "#field", "Tab")
+    {:ok, view} = key_down(view, "#field", "Tab")
     assert render_text(view) =~ "Tab"
   end
 
@@ -222,9 +222,9 @@ defmodule Filament.TestTest do
     assert blur(view, "#nope") == {:error, {:no_element, "#nope"}}
   end
 
-  test "keydown (element-scoped) on nonexistent selector returns error" do
+  test "key_down (element-scoped) on nonexistent selector returns error" do
     {:ok, view} = mount(InputComp.Input, %{})
-    assert keydown(view, "#nope", "Tab") == {:error, {:no_element, "#nope"}}
+    assert key_down(view, "#nope", "Tab") == {:error, {:no_element, "#nope"}}
   end
 
   test "submit delivers params to handler" do

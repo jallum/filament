@@ -161,15 +161,23 @@ defmodule Filament.Test do
   end
 
   @doc """
-  Simulate a window keydown event with the given key string and optional modifiers.
+  Simulate a keydown event.
 
-  Accepts `ctrl: true`, `shift: true`, `alt: true`, `meta: true` in opts.
-  Finds the first element with `phx-hook="FilamentKey"`, dispatches the handler
-  with `%{"key" => key, "ctrl" => ..., ...}`, flushes state updates, and re-renders.
-  Returns `{:ok, updated_view}` or `{:error, reason}`.
+  Two forms:
+
+    * `key_down(view, key, opts \\\\ [])` — window-level (`on_key`). Finds the
+      first `phx-hook="FilamentKey"` element and dispatches with modifier opts:
+      `ctrl: true`, `shift: true`, `alt: true`, `meta: true`.
+
+    * `key_down(view, selector, key)` — element-scoped (`on_keydown`). Finds
+      the element matching `selector`, dispatches with `%{"key" => key}`.
+
+  Both flush state updates and re-render. Return `{:ok, updated_view}` or
+  `{:error, reason}`.
   """
-  @spec key_down(t(), key :: String.t(), opts :: keyword()) :: {:ok, t()} | {:error, term()}
-  def key_down(%__MODULE__{} = view, key, opts \\ []) do
+  @spec key_down(t(), String.t(), keyword()) :: {:ok, t()} | {:error, term()}
+  @spec key_down(t(), String.t(), String.t()) :: {:ok, t()} | {:error, term()}
+  def key_down(%__MODULE__{} = view, key, opts \\ []) when is_list(opts) do
     require_floki!()
 
     wires =
@@ -188,6 +196,15 @@ defmodule Filament.Test do
     case wires do
       [] -> {:error, :no_window_keydown_handler}
       [wire | _] -> dispatch_event(view, "filament:" <> wire, params)
+    end
+  end
+
+  def key_down(%__MODULE__{} = view, selector, key) when is_binary(key) do
+    require_floki!()
+
+    case find_event_ref(view.rendered_html, selector, "phx-keydown") do
+      {:ok, ref} -> dispatch_event(view, ref, %{"key" => key})
+      {:error, _} = err -> err
     end
   end
 
@@ -217,23 +234,6 @@ defmodule Filament.Test do
 
     case find_event_ref(view.rendered_html, selector, "phx-blur") do
       {:ok, ref} -> dispatch_event(view, ref, %{})
-      {:error, _} = err -> err
-    end
-  end
-
-  @doc """
-  Simulate an element-scoped keydown event on the element matching `selector`.
-  Finds the `phx-keydown` attribute, dispatches the handler with `%{"key" => key}`,
-  flushes state updates, re-renders. Returns `{:ok, updated_view}` or `{:error, reason}`.
-
-  For window-level keydown (`on_key`), use `key_down/2` instead.
-  """
-  @spec keydown(t(), selector :: String.t(), key :: String.t()) :: {:ok, t()} | {:error, term()}
-  def keydown(%__MODULE__{} = view, selector, key) do
-    require_floki!()
-
-    case find_event_ref(view.rendered_html, selector, "phx-keydown") do
-      {:ok, ref} -> dispatch_event(view, ref, %{"key" => key})
       {:error, _} = err -> err
     end
   end
@@ -294,12 +294,12 @@ defmodule Filament.Test do
     end
   end
 
-  @doc "Like `keydown/3` but returns the view directly, raising on error."
-  @spec keydown!(t(), String.t(), String.t()) :: t()
-  def keydown!(%__MODULE__{} = view, selector, key) do
-    case keydown(view, selector, key) do
+  @doc "Like `key_down/3` (element-scoped) but returns the view directly, raising on error."
+  @spec key_down!(t(), String.t(), String.t()) :: t()
+  def key_down!(%__MODULE__{} = view, selector, key) when is_binary(key) do
+    case key_down(view, selector, key) do
       {:ok, view} -> view
-      {:error, reason} -> raise "Filament.Test.keydown!/3 failed: #{inspect(reason)}"
+      {:error, reason} -> raise "Filament.Test.key_down!/3 failed: #{inspect(reason)}"
     end
   end
 
