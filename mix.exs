@@ -77,6 +77,7 @@ defmodule Filament.MixProject do
         "guides/getting-started.md",
         "guides/observables.md",
         "guides/hooks.md",
+        "guides/testing.md",
         "guides/migration-guide.md"
       ],
       groups_for_modules: [
