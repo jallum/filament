@@ -177,7 +177,9 @@ defmodule Filament.Test do
   """
   @spec key_down(t(), String.t(), keyword()) :: {:ok, t()} | {:error, term()}
   @spec key_down(t(), String.t(), String.t()) :: {:ok, t()} | {:error, term()}
-  def key_down(%__MODULE__{} = view, key, opts \\ []) when is_list(opts) do
+  def key_down(view, key_or_selector, opts_or_key \\ [])
+
+  def key_down(%__MODULE__{} = view, key, opts) when is_list(opts) do
     require_floki!()
 
     wires =
@@ -240,13 +242,11 @@ defmodule Filament.Test do
 
   # ── Bang variants ─────────────────────────────────────────────────────────
 
-  @doc "Like `mount/3` but returns the view directly, raising on error."
+  @doc "Like `mount/3` but returns the view directly."
   @spec mount!(module(), map(), keyword()) :: t()
   def mount!(component, props, opts \\ []) do
-    case mount(component, props, opts) do
-      {:ok, view} -> view
-      {:error, reason} -> raise "Filament.Test.mount!/3 failed: #{inspect(reason)}"
-    end
+    {:ok, view} = mount(component, props, opts)
+    view
   end
 
   @doc "Like `click/2` but returns the view directly, raising on error."
@@ -285,17 +285,18 @@ defmodule Filament.Test do
     end
   end
 
-  @doc "Like `key_down/3` but returns the view directly, raising on error."
+  @doc "Like `key_down/2,3` but returns the view directly, raising on error."
   @spec key_down!(t(), String.t(), keyword()) :: t()
-  def key_down!(%__MODULE__{} = view, key, opts \\ []) do
+  @spec key_down!(t(), String.t(), String.t()) :: t()
+  def key_down!(view, key_or_selector, opts_or_key \\ [])
+
+  def key_down!(%__MODULE__{} = view, key, opts) when is_list(opts) do
     case key_down(view, key, opts) do
       {:ok, view} -> view
       {:error, reason} -> raise "Filament.Test.key_down!/3 failed: #{inspect(reason)}"
     end
   end
 
-  @doc "Like `key_down/3` (element-scoped) but returns the view directly, raising on error."
-  @spec key_down!(t(), String.t(), String.t()) :: t()
   def key_down!(%__MODULE__{} = view, selector, key) when is_binary(key) do
     case key_down(view, selector, key) do
       {:ok, view} -> view
