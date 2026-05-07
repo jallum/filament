@@ -142,6 +142,15 @@ defmodule Cart.Test do
       refute render_text(view) =~ "Gadget"
     end
 
+    test "clicking Remove button removes item from view", %{server: server, view: view} do
+      Cart.Server.add_item(server, %Cart.Item{id: "r1", name: "Removable", price_cents: 100, quantity: 1})
+      view = Filament.Test.update(view)
+      assert render_text(view) =~ "Removable"
+
+      {:ok, view} = click(view, ".btn-remove")
+      refute render_text(view) =~ "Removable"
+    end
+
     test "eventually/2 retries until cart is updated asynchronously", %{server: server, view: view} do
       spawn(fn ->
         Process.sleep(50)

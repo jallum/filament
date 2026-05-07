@@ -161,6 +161,53 @@ defmodule Filament.Test do
   end
 
   @doc """
+  Simulate a change event on the element matching `selector` with `params`.
+  Finds the `phx-change` attribute, dispatches the handler with params,
+  flushes state updates, re-renders. Returns `{:ok, updated_view}` or `{:error, reason}`.
+  """
+  @spec change(t(), selector :: String.t(), params :: map()) :: {:ok, t()} | {:error, term()}
+  def change(%__MODULE__{} = view, selector, params) do
+    require_floki!()
+
+    case find_event_ref(view.rendered_html, selector, "phx-change") do
+      {:ok, ref} -> dispatch_event(view, ref, params)
+      {:error, _} = err -> err
+    end
+  end
+
+  @doc """
+  Simulate a blur event on the element matching `selector`.
+  Finds the `phx-blur` attribute, dispatches the handler, flushes state updates,
+  re-renders. Returns `{:ok, updated_view}` or `{:error, reason}`.
+  """
+  @spec blur(t(), selector :: String.t()) :: {:ok, t()} | {:error, term()}
+  def blur(%__MODULE__{} = view, selector) do
+    require_floki!()
+
+    case find_event_ref(view.rendered_html, selector, "phx-blur") do
+      {:ok, ref} -> dispatch_event(view, ref, %{})
+      {:error, _} = err -> err
+    end
+  end
+
+  @doc """
+  Simulate an element-scoped keydown event on the element matching `selector`.
+  Finds the `phx-keydown` attribute, dispatches the handler with `%{"key" => key}`,
+  flushes state updates, re-renders. Returns `{:ok, updated_view}` or `{:error, reason}`.
+
+  For window-level keydown (`on_key`), use `key_down/2` instead.
+  """
+  @spec key_down(t(), selector :: String.t(), key :: String.t()) :: {:ok, t()} | {:error, term()}
+  def key_down(%__MODULE__{} = view, selector, key) do
+    require_floki!()
+
+    case find_event_ref(view.rendered_html, selector, "phx-keydown") do
+      {:ok, ref} -> dispatch_event(view, ref, %{"key" => key})
+      {:error, _} = err -> err
+    end
+  end
+
+  @doc """
   Drain pending filament messages and re-render the view.
   Useful after pushing to an observable stub from outside the component.
   """
