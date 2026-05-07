@@ -140,6 +140,45 @@ end}>
 - Because closures own both the side effect and any state updates, there is no
   `handle_event` callback to write — the closure is the handler.
 
+### Keyboard events with on_key
+
+`on_key` binds a window-level keydown listener to any element. The handler
+receives two arguments: the key string and a `%Filament.KeyModifiers{}` struct
+containing the modifier state. This lets you pattern-match cleanly on both the
+key and modifiers together:
+
+```elixir
+~F"""
+<div on_key={fn
+  "Escape", _              -> close_modal()
+  "s",      %{ctrl: true}  -> save()
+  "?",      _              -> show_help()
+  _,        _              -> :ignore
+end}>
+  {children}
+</div>
+```
+
+`%Filament.KeyModifiers{}` has fields `ctrl`, `shift`, `alt`, and `meta`, all
+defaulting to `false`. Unspecified fields are ignored in a pattern match, so
+`%{ctrl: true}` matches any combination that includes Ctrl held down.
+
+Under the hood, Filament injects a `FilamentKey` Phoenix LiveView hook via a
+`<script data-phx-runtime-hook>` tag in `Filament.LiveView.render/1`. No
+JavaScript configuration or `liveSocket` hook registration is required — it
+activates automatically whenever you use `on_key`.
+
+**Full event attribute reference:**
+
+| Attribute     | Phoenix event      | Handler arity / arguments                          |
+|---------------|--------------------|----------------------------------------------------|
+| `on_click`    | `phx-click`        | 0-arity or 1-arity `(params)`                      |
+| `on_submit`   | `phx-submit`       | 1-arity `(params)` — full form data map            |
+| `on_change`   | `phx-change`       | 1-arity `(params)` — changed field map             |
+| `on_blur`     | `phx-blur`         | 0-arity or 1-arity `(params)`                      |
+| `on_keydown`  | `phx-keydown`      | 1-arity `(params)` — `%{"key" => key_string, ...}` |
+| `on_key`      | `FilamentKey` hook | 2-arity `(key :: String.t(), %Filament.KeyModifiers{})` |
+
 ## Composing components and keyed lists
 
 Child components are rendered with their module name as a tag in `~F` templates:
@@ -179,7 +218,7 @@ Child components are rendered with their module name as a tag in `~F` templates:
 Filament's rung-2 API mounts a component tree in-process with no WebSocket
 required. Tests run with `async: true` and complete in milliseconds.
 
-Here are the rung-2 tests from `examples/todo/test/todo_test.exs`:
+### Basic usage
 
 ```elixir
 defmodule Todo.Test do
@@ -188,42 +227,107 @@ defmodule Todo.Test do
 
   describe "TodoList component" do
     test "renders empty state on first mount" do
-      {:ok, view} = mount(TodoWeb.Components.TodoList, %{})
+      view = mount!(TodoWeb.Components.TodoList, %{})
       refute view.rendered_html =~ "<li"
     end
 
     test "renders todo items after submission" do
-      {:ok, view} = mount(TodoWeb.Components.TodoList, %{})
-      {:ok, view} = submit(view, "form", %{"text" => "First task"})
-      {:ok, view} = submit(view, "form", %{"text" => "Second task"})
+      view =
+        mount!(TodoWeb.Components.TodoList, %{})
+        |> submit!("form", %{"text" => "First task"})
+        |> submit!("form", %{"text" => "Second task"})
 
-      text = render_text(view)
-      assert text =~ "First task"
-      assert text =~ "Second task"
+      assert render_text(view) =~ "First task"
+      assert render_text(view) =~ "Second task"
     end
 
     test "toggling a todo marks it completed" do
-      {:ok, view} = mount(TodoWeb.Components.TodoList, %{})
-      {:ok, view} = submit(view, "form", %{"text" => "Done task"})
-      {:ok, view} = click(view, ".todo-list li input[type=checkbox]")
+      view =
+        mount!(TodoWeb.Components.TodoList, %{})
+        |> submit!("form", %{"text" => "Done task"})
+        |> click!(".todo-list li input[type=checkbox]")
 
-      assert view.rendered_html =~ "class=\"completed"
+      assert view.rendered_html =~ ~s(class="completed)
     end
   end
 end
 ```
 
-Key API functions:
+The bang variants (`mount!`, `click!`, `submit!`, etc.) unwrap `{:ok, view}`
+and raise on error, enabling pipelines. Use the non-bang forms when you need
+to assert on the error tuple itself:
 
-- `mount(Component, props)` — renders the component in isolation and returns
-  `{:ok, view}`. The `view` struct holds `rendered_html` and a live
-  `fiber_tree`.
-- `render_text(view)` — strips HTML tags and returns plain text, useful for
-  content assertions.
-- `click(view, selector)` — fires the `on_click` handler on the first element
-  matching the CSS selector and returns `{:ok, updated_view}`.
-- `submit(view, selector, params)` — fires a form submit handler with the
-  given params map.
+```elixir
+assert click(view, "#missing") == {:error, {:no_element, "#missing"}}
+```
+
+### Full helper reference
+
+**Mounting:**
+
+- `mount!(Component, props, opts \\ [])` — mount and return the view directly.
+- `mount(Component, props, opts \\ [])` — returns `{:ok, view}`.
+
+Options: `stub: [{server_identity, fn _req -> initial_value end}]` — injects
+observable stubs so components that call `use_observable` get test data
+without a real server process.
+
+**Interacting:**
+
+| Helper | Triggers | Notes |
+|--------|----------|-------|
+| `click!(view, selector)` | `on_click` | |
+| `submit!(view, selector, params \\ %{})` | `on_submit` | Pass the form data map |
+| `change!(view, selector, params)` | `on_change` | |
+| `blur!(view, selector)` | `on_blur` | |
+| `key_down!(view, key, opts \\ [])` | `on_key` (window) | `ctrl: true`, `shift: true`, etc. |
+| `key_down!(view, selector, key)` | `on_keydown` (element) | Third arg is a string, not a keyword list |
+
+All bang variants have non-bang counterparts returning `{:ok, view} \| {:error, reason}`.
+
+**Asserting:**
+
+- `render_text(view)` — strips HTML tags; use with `=~` for content assertions.
+- `has_class?(view, selector, class_name)` — returns `true`/`false`; raises if
+  no element matches the selector.
+
+**Observable stubs:**
+
+```elixir
+test "shows item count from server" do
+  {:ok, view} =
+    mount(CartBadge, %{server: :cart},
+      stub: [{:cart, fn _req -> %{items: ["a", "b"]} end}]
+    )
+
+  assert render_text(view) =~ "2"
+
+  # Push a new value to trigger a re-render
+  Filament.Test.Stub.push(view.stubs[:cart], %{items: []})
+  view = Filament.Test.update(view)
+  assert render_text(view) =~ "0"
+end
+```
+
+**Keyboard events:**
+
+```elixir
+test "Escape closes the modal" do
+  view =
+    mount!(MyModal, %{})
+    |> key_down!("Escape")
+
+  refute render_text(view) =~ "modal-open"
+end
+
+test "Ctrl+S triggers save" do
+  view =
+    mount!(Editor, %{})
+    |> key_down!("s", ctrl: true)
+
+  assert render_text(view) =~ "Saved"
+end
+```
 
 Because rung-2 tests use in-process message passing rather than a browser,
 they are safe to run with `async: true` and typically finish in under 5 ms.
