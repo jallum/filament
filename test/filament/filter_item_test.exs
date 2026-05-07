@@ -1,6 +1,8 @@
 defmodule Filament.FilterItemTest do
   use ExUnit.Case, async: true
 
+  import Filament.Test
+
   alias Filament.FiberTree
   alias Filament.Reconciler
   alias Phoenix.HTML.Safe
@@ -47,6 +49,32 @@ defmodule Filament.FilterItemTest do
         handler = FiberTree.get_event_handler(tree, fiber_id, 0)
         assert is_function(handler), "expected handler at slot 0 for fiber #{fiber_id}"
       end
+    end
+
+    test "clicking a filter item moves the selected class and fires on_change" do
+      test_pid = self()
+      on_change = fn val -> send(test_pid, {:filter_changed, val}) end
+
+      {:ok, view} = mount(FilterBar, %{filters: @filters, default: :all, on_change: on_change})
+
+      assert view.rendered_html =~ ~s(<a class="selected")
+      assert view.rendered_html =~ "All"
+
+      {:ok, view} = click(view, "a[href]")
+
+      assert_receive {:filter_changed, _}
+      assert view.rendered_html =~ ~s(class="selected")
+    end
+
+    test "clicking Active filter shows Active as selected" do
+      test_pid = self()
+      on_change = fn val -> send(test_pid, {:filter_changed, val}) end
+
+      {:ok, view} = mount(FilterBar, %{filters: @filters, default: :all, on_change: on_change})
+
+      {:ok, view} = click(view, "li:nth-child(2) a")
+      assert_receive {:filter_changed, :active}
+      assert view.rendered_html =~ "Active"
     end
   end
 end

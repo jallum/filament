@@ -115,5 +115,36 @@ defmodule Collaboration.Test do
       {:ok, view} = mount(DocumentEditor, %{server: server, doc_id: doc_id})
       assert render_text(view) =~ "user"
     end
+
+    test "clicking Edit acquires the lock and shows Release button" do
+      doc_id = "edit-test-#{:erlang.unique_integer()}"
+      server = start_supervised!({Collaboration.DocumentServer, [doc_id: doc_id]}, id: make_ref())
+
+      {:ok, view} = mount(DocumentEditor, %{server: server, doc_id: doc_id})
+      assert render_text(view) =~ "Edit"
+      refute render_text(view) =~ "Release"
+
+      {:ok, view} = click(view, ".btn-primary")
+      view = Filament.Test.update(view)
+
+      assert render_text(view) =~ "Release"
+      assert render_text(view) =~ "Editing"
+    end
+
+    test "clicking Release frees the lock and shows Edit button again" do
+      doc_id = "edit-test-#{:erlang.unique_integer()}"
+      server = start_supervised!({Collaboration.DocumentServer, [doc_id: doc_id]}, id: make_ref())
+
+      {:ok, view} = mount(DocumentEditor, %{server: server, doc_id: doc_id})
+      {:ok, view} = click(view, ".btn-primary")
+      view = Filament.Test.update(view)
+      assert render_text(view) =~ "Release"
+
+      {:ok, view} = click(view, ".btn-release")
+      view = Filament.Test.update(view)
+
+      assert render_text(view) =~ "Edit"
+      refute render_text(view) =~ "Release"
+    end
   end
 end

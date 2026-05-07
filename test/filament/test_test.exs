@@ -81,6 +81,32 @@ defmodule Filament.TestTest do
     end
   end
 
+  defmodule InputComp do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent Input do
+      def render(_assigns) do
+        {last_change, set_last_change} = use_state(nil)
+        {last_blur, set_last_blur} = use_state(nil)
+        {last_key, set_last_key} = use_state(nil)
+
+        ~F"""
+        <div>
+          <input id="field"
+            on_change={fn params -> set_last_change.(params["value"]) end}
+            on_blur={fn -> set_last_blur.("blurred") end}
+            on_keydown={fn params -> set_last_key.(params["key"]) end}
+          />
+          <span id="change">{last_change}</span>
+          <span id="blur">{last_blur}</span>
+          <span id="key">{last_key}</span>
+        </div>
+        """
+      end
+    end
+  end
+
   defmodule FormComp do
     @moduledoc false
     use Filament.Component
@@ -99,12 +125,12 @@ defmodule Filament.TestTest do
     end
   end
 
-  test "1. mount returns rendered HTML" do
+  test "mount returns rendered HTML" do
     {:ok, view} = mount(CounterComp.Counter, %{initial: 0})
     assert render_text(view) =~ "Count: 0"
   end
 
-  test "2. click updates state and re-renders" do
+  test "click updates state and re-renders" do
     {:ok, view} = mount(CounterComp.Counter, %{initial: 0})
 
     {:ok, view} = click(view, "button")
@@ -114,18 +140,18 @@ defmodule Filament.TestTest do
     assert render_text(view) =~ "Count: 2"
   end
 
-  test "3. has_class? true" do
+  test "has_class? true" do
     {:ok, view} = mount(ClassComp.Class, %{active: true})
     assert has_class?(view, "div", "active") == true
     assert has_class?(view, "div", "bold") == true
   end
 
-  test "4. has_class? false" do
+  test "has_class? false" do
     {:ok, view} = mount(ClassComp.Class, %{active: true})
     assert has_class?(view, "div", "missing") == false
   end
 
-  test "5. has_class? raises on missing selector" do
+  test "has_class? raises on missing selector" do
     {:ok, view} = mount(ClassComp.Class, %{active: true})
 
     assert_raise RuntimeError, ~r/no element matched selector/, fn ->
@@ -133,14 +159,14 @@ defmodule Filament.TestTest do
     end
   end
 
-  test "6. stub observable injected at mount" do
+  test "stub observable injected at mount" do
     {:ok, view} =
       mount(ObservableComp.Observable, %{server: :my_server}, stub: [{:my_server, fn _req -> 42 end}])
 
     assert render_text(view) =~ "42"
   end
 
-  test "7. stub push updates rendered output" do
+  test "stub push updates rendered output" do
     {:ok, view} =
       mount(ObservableComp.Observable, %{server: :my_server}, stub: [{:my_server, fn _req -> 0 end}])
 
@@ -152,12 +178,12 @@ defmodule Filament.TestTest do
     assert render_text(view) =~ "99"
   end
 
-  test "8. click on nonexistent selector" do
+  test "click on nonexistent selector" do
     {:ok, view} = mount(CounterComp.Counter, %{initial: 0})
     assert click(view, "#nonexistent") == {:error, {:no_element, "#nonexistent"}}
   end
 
-  test "9. key_down delivers key string and %Filament.KeyModifiers{} to the handler" do
+  test "key_down delivers key string and %Filament.KeyModifiers{} to the handler" do
     {:ok, view} = mount(KeyModalComp.KeyModal, %{})
 
     {:ok, view} = key_down(view, "Escape")
@@ -168,7 +194,40 @@ defmodule Filament.TestTest do
     assert render_text(view) =~ "ctrl: true"
   end
 
-  test "10. submit delivers params to handler" do
+  test "change delivers params to handler and re-renders" do
+    {:ok, view} = mount(InputComp.Input, %{})
+    {:ok, view} = change(view, "#field", %{"value" => "hello"})
+    assert render_text(view) =~ "hello"
+  end
+
+  test "blur fires handler and re-renders" do
+    {:ok, view} = mount(InputComp.Input, %{})
+    {:ok, view} = blur(view, "#field")
+    assert render_text(view) =~ "blurred"
+  end
+
+  test "keydown (element-scoped) delivers key string and re-renders" do
+    {:ok, view} = mount(InputComp.Input, %{})
+    {:ok, view} = keydown(view, "#field", "Tab")
+    assert render_text(view) =~ "Tab"
+  end
+
+  test "change on nonexistent selector returns error" do
+    {:ok, view} = mount(InputComp.Input, %{})
+    assert change(view, "#nope", %{}) == {:error, {:no_element, "#nope"}}
+  end
+
+  test "blur on nonexistent selector returns error" do
+    {:ok, view} = mount(InputComp.Input, %{})
+    assert blur(view, "#nope") == {:error, {:no_element, "#nope"}}
+  end
+
+  test "keydown (element-scoped) on nonexistent selector returns error" do
+    {:ok, view} = mount(InputComp.Input, %{})
+    assert keydown(view, "#nope", "Tab") == {:error, {:no_element, "#nope"}}
+  end
+
+  test "submit delivers params to handler" do
     test_pid = self()
 
     handler = fn params ->

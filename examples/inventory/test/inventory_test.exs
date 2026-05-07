@@ -116,6 +116,37 @@ defmodule Inventory.Test do
       assert text =~ "In Stock Item"
     end
 
+    test "clicking + holds one unit and shows held count" do
+      server =
+        start_supervised!(
+          {Inventory.Server, items: [%Inventory.Item{id: "h1", name: "Holdable", available: 2}]}
+        )
+
+      {:ok, view} = mount(InventoryItem, %{server: server, item_id: "h1"})
+      refute render_text(view) =~ "Holding"
+
+      {:ok, view} = click(view, "button")
+      view = Filament.Test.update(view)
+
+      assert render_text(view) =~ "Holding: 1"
+    end
+
+    test "clicking − releases a held unit" do
+      server =
+        start_supervised!(
+          {Inventory.Server, items: [%Inventory.Item{id: "r1", name: "Releasable", available: 2}]}
+        )
+
+      {:ok, view} = mount(InventoryItem, %{server: server, item_id: "r1"})
+      {:ok, view} = click(view, "button")
+      view = Filament.Test.update(view)
+      assert render_text(view) =~ "Holding: 1"
+
+      {:ok, view} = click(view, "button")
+      view = Filament.Test.update(view)
+      refute render_text(view) =~ "Holding"
+    end
+
     test "second component sees Out of Stock once first has acquired a hold" do
       server =
         start_supervised!({Inventory.Server, items: [%Inventory.Item{id: "last", name: "LastUnit", available: 1}]})
