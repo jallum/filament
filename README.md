@@ -187,7 +187,7 @@ refute render_text(view) =~ "Search commands"
 
 ```elixir
 # mix.exs
-{:filament, "~> 0.2"}
+{:filament, "~> 0.3"}
 ```
 
 ## Examples

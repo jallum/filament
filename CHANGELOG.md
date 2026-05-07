@@ -19,6 +19,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.3.0] - 2026-05-07
+
+### Added
+
+- `on_key` attribute for zero-config keyboard event handling. Add it to any
+  element to bind a window-level keydown handler; the handler receives the key
+  string and a `%Filament.KeyModifiers{}` struct with `ctrl`, `shift`, `alt`,
+  and `meta` boolean fields — no `phx-key`, no custom JS hook required:
+
+  ```elixir
+  ~F"""
+  <div on_key={fn "Escape", _ -> close() end}>
+    …
+  </div>
+  """
+  ```
+
+  Pattern match on the key string to filter; use `_` to ignore modifiers you
+  don't care about.
+
+- Bang variants for all `Filament.Test` helpers: `mount!/2`, `click!/2`,
+  `submit!/3`, `change!/3`, `blur!/2`, `key_down!/2`, `key_down!/3`. Each
+  unwraps `{:ok, view}` and raises on error, enabling pipeline-style test
+  composition:
+
+  ```elixir
+  mount!(Counter, %{initial: 0})
+  |> click!("button")
+  |> click!("button")
+  |> assert_text("2")
+  ```
+
+- `Filament.Test.change/3` — triggers a `phx-change` event on a form element.
+- `Filament.Test.blur/2` — triggers a `phx-blur` event on an element.
+- `Filament.Test.key_down/3` — element-scoped `phx-keydown` (3-arity, alongside
+  the existing 2-arity window-scoped `key_down/2`).
+
+### Fixed
+
+- Fixed event handler index collision between compile-time `on_*` handlers and
+  runtime `register_event_handler` calls. Previously, handlers registered inside
+  `{for … do}` loops could silently overwrite `on_*` handlers in the same
+  component.
+
 ## [0.2.1] - 2026-05-07
 
 ### Changed
