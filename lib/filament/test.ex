@@ -161,6 +161,27 @@ defmodule Filament.Test do
   end
 
   @doc """
+  Simulate a window keydown event with the given key string.
+  Finds the first element with a `phx-window-keydown` attribute, dispatches the
+  handler with `%{"key" => key}`, flushes state updates, and re-renders.
+  Returns `{:ok, updated_view}` or `{:error, reason}`.
+  """
+  @spec key_down(t(), key :: String.t()) :: {:ok, t()} | {:error, term()}
+  def key_down(%__MODULE__{} = view, key) do
+    require_floki!()
+
+    refs =
+      view.rendered_html
+      |> Floki.parse_fragment!()
+      |> Floki.attribute("[phx-window-keydown]", "phx-window-keydown")
+
+    case refs do
+      [] -> {:error, :no_window_keydown_handler}
+      [ref | _] -> dispatch_event(view, ref, %{"key" => key})
+    end
+  end
+
+  @doc """
   Drain pending filament messages and re-render the view.
   Useful after pushing to an observable stub from outside the component.
   """

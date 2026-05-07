@@ -64,6 +64,23 @@ defmodule Filament.TestTest do
     end
   end
 
+  defmodule KeyModalComp do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent KeyModal do
+      def render(_assigns) do
+        {last_key, set_last_key} = use_state(nil)
+
+        ~F"""
+        <div on_key={fn key -> set_last_key.(key) end}>
+          <span id="last-key">{last_key}</span>
+        </div>
+        """
+      end
+    end
+  end
+
   defmodule FormComp do
     @moduledoc false
     use Filament.Component
@@ -140,7 +157,18 @@ defmodule Filament.TestTest do
     assert click(view, "#nonexistent") == {:error, {:no_element, "#nonexistent"}}
   end
 
-  test "9. submit delivers params to handler" do
+  test "9. key_down dispatches window keydown with key string" do
+    {:ok, view} = mount(KeyModalComp.KeyModal, %{})
+    assert render_text(view) =~ ""
+
+    {:ok, view} = key_down(view, "Escape")
+    assert render_text(view) =~ "Escape"
+
+    {:ok, view} = key_down(view, "Enter")
+    assert render_text(view) =~ "Enter"
+  end
+
+  test "10. submit delivers params to handler" do
     test_pid = self()
 
     handler = fn params ->

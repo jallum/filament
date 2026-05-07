@@ -134,6 +134,38 @@ defmodule Filament.SigilFPhase1Test do
       assert Filament.FiberTree.get_event_handler(tree, "root", 0)
     end
 
+    test "on_key wires to phx-window-keydown and passes key string to handler" do
+      defmodule OnKeyComp do
+        @moduledoc false
+        use Filament.Component
+
+        defcomponent OnKey do
+          def render(_assigns) do
+            ~F"""
+            <div on_key={fn
+              "Escape" -> :close
+              _ -> :ignore
+            end}>modal</div>
+            """
+          end
+        end
+      end
+
+      {tree, rendered, _} = Filament.Reconciler.mount(OnKeyComp.OnKey, %{}, owner_pid: self())
+
+      assert Enum.any?(rendered.static, &String.contains?(&1, "phx-window-keydown")),
+             "on_key must emit phx-window-keydown attribute"
+
+      refute Enum.any?(rendered.static, &String.contains?(&1, "phx-key")),
+             "on_key must not emit a phx-key= attribute — filtering is done in the handler"
+
+      handler = Filament.FiberTree.get_event_handler(tree, "root", 0)
+      assert is_function(handler, 1), "handler must be arity-1 (receives params map)"
+
+      assert handler.(%{"key" => "Escape"}) == :close
+      assert handler.(%{"key" => "Enter"}) == :ignore
+    end
+
     test "on_keydown wires to phx-keydown" do
       defmodule OnKeydownComp do
         @moduledoc false

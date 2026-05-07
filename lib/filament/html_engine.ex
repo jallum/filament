@@ -58,6 +58,11 @@ defmodule Filament.HTMLEngine do
 
   defp transform_event_attrs(other), do: other
 
+  defp transform_event_pair({"on_key", v}) do
+    wrapped = quote do: fn params -> (unquote(v)).(params["key"]) end
+    {"phx-window-keydown", quote(do: "filament:" <> Filament.Hooks.register_event_handler(unquote(wrapped)))}
+  end
+
   defp transform_event_pair({"on_" <> event, v}) do
     {"phx-" <> event, quote(do: "filament:" <> Filament.Hooks.register_event_handler(unquote(v)))}
   end
