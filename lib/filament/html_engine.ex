@@ -61,7 +61,7 @@ defmodule Filament.HTMLEngine do
   defp transform_event_pair({"on_key", v}) do
     wrapped = quote do
       fn params ->
-        mods = %Filament.Modifiers{
+        mods = %Filament.KeyModifiers{
           ctrl: params["ctrl"] || false,
           shift: params["shift"] || false,
           alt: params["alt"] || false,

@@ -173,7 +173,7 @@ defmodule Filament.SigilFPhase1Test do
       assert handler.(%{"key" => "Enter",  "ctrl" => false, "shift" => false, "alt" => false, "meta" => false}) == :ignore
     end
 
-    test "on_key handler receives key string and %Filament.Modifiers{} with modifier fields" do
+    test "on_key handler receives key string and %Filament.KeyModifiers{} with modifier fields" do
       defmodule OnKeyModComp do
         @moduledoc false
         use Filament.Component
@@ -194,7 +194,7 @@ defmodule Filament.SigilFPhase1Test do
       handler = Filament.FiberTree.get_event_handler(tree, "root", 0)
       handler.(%{"key" => "s", "ctrl" => true, "shift" => false, "alt" => false, "meta" => false})
 
-      assert_received {:filament_set_state, _, _, {"s", %Filament.Modifiers{ctrl: true, shift: false}}}
+      assert_received {:filament_set_state, _, _, {"s", %Filament.KeyModifiers{ctrl: true, shift: false}}}
     end
 
     test "on_keydown wires to phx-keydown" do
