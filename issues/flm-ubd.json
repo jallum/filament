@@ -2,13 +2,14 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-07T16:03:42Z",
   "created": "2026-05-07T15:59:53Z",
   "description": "Add Filament.Test.change/3 (phx-change), blur/2 (phx-blur), and key_down/3 (element-scoped phx-keydown, 3-arity alongside existing 2-arity window variant). Then update filter_item_test, cart_test, collaboration_test, and inventory_test to exercise on_click handlers via Filament.Test.click rather than low-level FiberTree assertions or direct server calls.",
   "id": "flm-ubd",
   "labels": [],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Add change/blur/key_down helpers and exercise on_click in example tests",
   "type": "task",
-  "updated_at": "2026-05-07T15:59:56Z"
+  "updated_at": "2026-05-07T16:03:42Z"
 }
