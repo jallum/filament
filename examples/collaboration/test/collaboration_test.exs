@@ -79,7 +79,7 @@ defmodule Collaboration.Test do
       doc_id = "edit-test-#{:erlang.unique_integer()}"
       server = start_supervised!({Collaboration.DocumentServer, [doc_id: doc_id]}, id: make_ref())
 
-      {:ok, view} = mount(DocumentEditor, %{server: server, doc_id: doc_id})
+      view = mount!(DocumentEditor, %{server: server, doc_id: doc_id})
 
       text = render_text(view)
       assert text =~ "Edit"
@@ -101,8 +101,7 @@ defmodule Collaboration.Test do
 
       assert_receive {:locked, {:ok, :lock_token}}, 1000
 
-      {:ok, view} = mount(DocumentEditor, %{server: server, doc_id: doc_id})
-      view = Filament.Test.update(view)
+      view = mount!(DocumentEditor, %{server: server, doc_id: doc_id}) |> Filament.Test.update()
       assert render_text(view) =~ "Locked"
 
       Process.exit(other_holder, :kill)
@@ -112,7 +111,7 @@ defmodule Collaboration.Test do
       doc_id = "edit-test-#{:erlang.unique_integer()}"
       server = start_supervised!({Collaboration.DocumentServer, [doc_id: doc_id]}, id: make_ref())
 
-      {:ok, view} = mount(DocumentEditor, %{server: server, doc_id: doc_id})
+      view = mount!(DocumentEditor, %{server: server, doc_id: doc_id})
       assert render_text(view) =~ "user"
     end
 
@@ -120,12 +119,11 @@ defmodule Collaboration.Test do
       doc_id = "edit-test-#{:erlang.unique_integer()}"
       server = start_supervised!({Collaboration.DocumentServer, [doc_id: doc_id]}, id: make_ref())
 
-      {:ok, view} = mount(DocumentEditor, %{server: server, doc_id: doc_id})
+      view = mount!(DocumentEditor, %{server: server, doc_id: doc_id})
       assert render_text(view) =~ "Edit"
       refute render_text(view) =~ "Release"
 
-      {:ok, view} = click(view, ".btn-primary")
-      view = Filament.Test.update(view)
+      view = click!(view, ".btn-primary") |> Filament.Test.update()
 
       assert render_text(view) =~ "Release"
       assert render_text(view) =~ "Editing"
@@ -135,13 +133,11 @@ defmodule Collaboration.Test do
       doc_id = "edit-test-#{:erlang.unique_integer()}"
       server = start_supervised!({Collaboration.DocumentServer, [doc_id: doc_id]}, id: make_ref())
 
-      {:ok, view} = mount(DocumentEditor, %{server: server, doc_id: doc_id})
-      {:ok, view} = click(view, ".btn-primary")
-      view = Filament.Test.update(view)
+      view = mount!(DocumentEditor, %{server: server, doc_id: doc_id})
+      view = click!(view, ".btn-primary") |> Filament.Test.update()
       assert render_text(view) =~ "Release"
 
-      {:ok, view} = click(view, ".btn-release")
-      view = Filament.Test.update(view)
+      view = click!(view, ".btn-release") |> Filament.Test.update()
 
       assert render_text(view) =~ "Edit"
       refute render_text(view) =~ "Release"

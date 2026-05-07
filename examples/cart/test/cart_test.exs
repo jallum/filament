@@ -64,7 +64,7 @@ defmodule Cart.Test do
   describe "CartBadge (rung-2)" do
     test "renders item count from stub observable" do
       {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
-      {:ok, view} = mount(CartBadge, %{server: stub})
+      view = mount!(CartBadge, %{server: stub})
 
       assert view.rendered_html =~ "cart-badge"
       refute view.rendered_html =~ "data-count=\"1\""
@@ -72,7 +72,7 @@ defmodule Cart.Test do
 
     test "badge updates when count changes" do
       {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
-      {:ok, view} = mount(CartBadge, %{server: stub})
+      view = mount!(CartBadge, %{server: stub})
       assert view.rendered_html =~ "data-count=\"0\""
 
       new_state =
@@ -116,7 +116,7 @@ defmodule Cart.Test do
   describe "CartItems (rung-3)" do
     setup do
       server = start_supervised!(%{id: Cart.Server, start: {Cart.Server, :start_link, [[name: nil]]}})
-      {:ok, view} = mount(CartWeb.Components.CartItems, %{server: server})
+      view = mount!(CartWeb.Components.CartItems, %{server: server})
       %{server: server, view: view}
     end
 
@@ -147,7 +147,7 @@ defmodule Cart.Test do
       view = Filament.Test.update(view)
       assert render_text(view) =~ "Removable"
 
-      {:ok, view} = click(view, ".btn-remove")
+      view = click!(view, ".btn-remove")
       refute render_text(view) =~ "Removable"
     end
 

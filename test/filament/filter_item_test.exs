@@ -55,12 +55,12 @@ defmodule Filament.FilterItemTest do
       test_pid = self()
       on_change = fn val -> send(test_pid, {:filter_changed, val}) end
 
-      {:ok, view} = mount(FilterBar, %{filters: @filters, default: :all, on_change: on_change})
+      view = mount!(FilterBar, %{filters: @filters, default: :all, on_change: on_change})
 
       assert view.rendered_html =~ ~s(<a class="selected")
       assert view.rendered_html =~ "All"
 
-      {:ok, view} = click(view, "a[href]")
+      view = click!(view, "a[href]")
 
       assert_receive {:filter_changed, _}
       assert view.rendered_html =~ ~s(class="selected")
@@ -70,9 +70,7 @@ defmodule Filament.FilterItemTest do
       test_pid = self()
       on_change = fn val -> send(test_pid, {:filter_changed, val}) end
 
-      {:ok, view} = mount(FilterBar, %{filters: @filters, default: :all, on_change: on_change})
-
-      {:ok, view} = click(view, "li:nth-child(2) a")
+      view = mount!(FilterBar, %{filters: @filters, default: :all, on_change: on_change}) |> click!("li:nth-child(2) a")
       assert_receive {:filter_changed, :active}
       assert view.rendered_html =~ "Active"
     end

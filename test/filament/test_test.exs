@@ -126,33 +126,31 @@ defmodule Filament.TestTest do
   end
 
   test "mount returns rendered HTML" do
-    {:ok, view} = mount(CounterComp.Counter, %{initial: 0})
+    view = mount!(CounterComp.Counter, %{initial: 0})
     assert render_text(view) =~ "Count: 0"
   end
 
   test "click updates state and re-renders" do
-    {:ok, view} = mount(CounterComp.Counter, %{initial: 0})
-
-    {:ok, view} = click(view, "button")
+    view = mount!(CounterComp.Counter, %{initial: 0}) |> click!("button")
     assert render_text(view) =~ "Count: 1"
 
-    {:ok, view} = click(view, "button")
+    view = click!(view, "button")
     assert render_text(view) =~ "Count: 2"
   end
 
   test "has_class? true" do
-    {:ok, view} = mount(ClassComp.Class, %{active: true})
+    view = mount!(ClassComp.Class, %{active: true})
     assert has_class?(view, "div", "active") == true
     assert has_class?(view, "div", "bold") == true
   end
 
   test "has_class? false" do
-    {:ok, view} = mount(ClassComp.Class, %{active: true})
+    view = mount!(ClassComp.Class, %{active: true})
     assert has_class?(view, "div", "missing") == false
   end
 
   test "has_class? raises on missing selector" do
-    {:ok, view} = mount(ClassComp.Class, %{active: true})
+    view = mount!(ClassComp.Class, %{active: true})
 
     assert_raise RuntimeError, ~r/no element matched selector/, fn ->
       has_class?(view, "span", "active")
@@ -179,51 +177,46 @@ defmodule Filament.TestTest do
   end
 
   test "click on nonexistent selector" do
-    {:ok, view} = mount(CounterComp.Counter, %{initial: 0})
+    view = mount!(CounterComp.Counter, %{initial: 0})
     assert click(view, "#nonexistent") == {:error, {:no_element, "#nonexistent"}}
   end
 
   test "key_down delivers key string and %Filament.KeyModifiers{} to the handler" do
-    {:ok, view} = mount(KeyModalComp.KeyModal, %{})
-
-    {:ok, view} = key_down(view, "Escape")
+    view = mount!(KeyModalComp.KeyModal, %{}) |> key_down!("Escape")
     assert render_text(view) =~ ~s({"Escape", %Filament.KeyModifiers{)
 
-    {:ok, view} = key_down(view, "s", ctrl: true)
+    view = key_down!(view, "s", ctrl: true)
     assert render_text(view) =~ ~s({"s", %Filament.KeyModifiers{)
     assert render_text(view) =~ "ctrl: true"
   end
 
   test "change delivers params to handler and re-renders" do
-    {:ok, view} = mount(InputComp.Input, %{})
-    {:ok, view} = change(view, "#field", %{"value" => "hello"})
+    view = mount!(InputComp.Input, %{}) |> change!("#field", %{"value" => "hello"})
     assert render_text(view) =~ "hello"
   end
 
   test "blur fires handler and re-renders" do
-    {:ok, view} = mount(InputComp.Input, %{})
-    {:ok, view} = blur(view, "#field")
+    view = mount!(InputComp.Input, %{}) |> blur!("#field")
     assert render_text(view) =~ "blurred"
   end
 
   test "key_down (element-scoped) delivers key string and re-renders" do
-    {:ok, view} = mount(InputComp.Input, %{})
-    {:ok, view} = key_down(view, "#field", "Tab")
+    view = mount!(InputComp.Input, %{}) |> key_down!("#field", "Tab")
     assert render_text(view) =~ "Tab"
   end
 
   test "change on nonexistent selector returns error" do
-    {:ok, view} = mount(InputComp.Input, %{})
+    view = mount!(InputComp.Input, %{})
     assert change(view, "#nope", %{}) == {:error, {:no_element, "#nope"}}
   end
 
   test "blur on nonexistent selector returns error" do
-    {:ok, view} = mount(InputComp.Input, %{})
+    view = mount!(InputComp.Input, %{})
     assert blur(view, "#nope") == {:error, {:no_element, "#nope"}}
   end
 
   test "key_down (element-scoped) on nonexistent selector returns error" do
-    {:ok, view} = mount(InputComp.Input, %{})
+    view = mount!(InputComp.Input, %{})
     assert key_down(view, "#nope", "Tab") == {:error, {:no_element, "#nope"}}
   end
 
@@ -234,8 +227,7 @@ defmodule Filament.TestTest do
       send(test_pid, {:submitted, params})
     end
 
-    {:ok, view} = mount(FormComp.Form, %{on_submit: handler})
-    {:ok, _view} = submit(view, "form", %{"name" => "Alice"})
+    mount!(FormComp.Form, %{on_submit: handler}) |> submit!("form", %{"name" => "Alice"})
 
     assert_receive {:submitted, %{"name" => "Alice"}}
   end
