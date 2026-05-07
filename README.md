@@ -139,12 +139,48 @@ Filament component tree into any existing LiveView. Promote to
 
 **Fast, isolated tests.** Filament's test API mounts a component tree
 in-process with no browser or WebSocket needed. Tests run with `async: true`
-and finish in milliseconds.
+and finish in milliseconds. Bang helpers and pipelines keep multi-step tests
+readable:
 
 ```elixir
-{:ok, view} = mount(TodoWeb.Components.TodoList, %{})
-{:ok, view} = submit(view, "form", %{"text" => "Buy milk"})
+view =
+  mount!(TodoWeb.Components.TodoList, %{})
+  |> submit!("form", %{"text" => "Buy milk"})
+  |> submit!("form", %{"text" => "Walk the dog"})
+  |> click!(".todo-list li:first-child input[type=checkbox]")
+
 assert render_text(view) =~ "Buy milk"
+assert view.rendered_html =~ ~s(class="completed)
+```
+
+**Keyboard bindings with `on_key`.** Attach window-level keydown handlers
+directly in the template. The handler receives the key string and a
+`%Filament.KeyModifiers{}` struct — pattern-match on both at once, with no
+JavaScript configuration required:
+
+```elixir
+~F"""
+<div on_key={fn
+  "k", %{ctrl: true} -> set_open.(true)
+  "Escape", _        -> set_open.(false)
+  _, _               -> :ignore
+end}>
+  {if open, do: render_palette()}
+</div>
+"""
+```
+
+Testing keyboard interactions is as clean as any other event:
+
+```elixir
+view =
+  mount!(CommandPalette, %{})
+  |> key_down!("k", ctrl: true)
+
+assert render_text(view) =~ "Search commands"
+
+view = key_down!(view, "Escape")
+refute render_text(view) =~ "Search commands"
 ```
 
 ## Installation
@@ -166,6 +202,7 @@ assert render_text(view) =~ "Buy milk"
 ## Guides
 
 - [Getting Started](guides/getting-started.md) — `defcomponent`, props, `use_state`, events, testing
+- [Testing](guides/testing.md) — bang helpers, pipelines, observable stubs, keyboard events, async assertions
 - [Observables](guides/observables.md) — `Observable.GenServer`, `use_observable`, projections
 - [Hooks](guides/hooks.md) — built-in hooks, `use_effect`, composing custom hooks
 - [Migration Guide](guides/migration-guide.md) — incrementally adopting Filament in an existing LiveView app

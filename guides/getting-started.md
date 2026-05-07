@@ -215,128 +215,37 @@ Child components are rendered with their module name as a tag in `~F` templates:
 
 ## Testing with Filament.Test
 
-Filament's rung-2 API mounts a component tree in-process with no WebSocket
-required. Tests run with `async: true` and complete in milliseconds.
-
-### Basic usage
+Filament's test API mounts a component tree in-process — no browser, no
+WebSocket, no endpoint. Tests run with `async: true` and finish in
+milliseconds.
 
 ```elixir
 defmodule Todo.Test do
   use ExUnit.Case, async: true
   import Filament.Test
 
-  describe "TodoList component" do
-    test "renders empty state on first mount" do
-      view = mount!(TodoWeb.Components.TodoList, %{})
-      refute view.rendered_html =~ "<li"
-    end
+  test "renders todo items after submission" do
+    view =
+      mount!(TodoWeb.Components.TodoList, %{})
+      |> submit!("form", %{"text" => "First task"})
+      |> submit!("form", %{"text" => "Second task"})
 
-    test "renders todo items after submission" do
-      view =
-        mount!(TodoWeb.Components.TodoList, %{})
-        |> submit!("form", %{"text" => "First task"})
-        |> submit!("form", %{"text" => "Second task"})
-
-      assert render_text(view) =~ "First task"
-      assert render_text(view) =~ "Second task"
-    end
-
-    test "toggling a todo marks it completed" do
-      view =
-        mount!(TodoWeb.Components.TodoList, %{})
-        |> submit!("form", %{"text" => "Done task"})
-        |> click!(".todo-list li input[type=checkbox]")
-
-      assert view.rendered_html =~ ~s(class="completed)
-    end
+    assert render_text(view) =~ "First task"
+    assert render_text(view) =~ "Second task"
   end
 end
 ```
 
-The bang variants (`mount!`, `click!`, `submit!`, etc.) unwrap `{:ok, view}`
-and raise on error, enabling pipelines. Use the non-bang forms when you need
-to assert on the error tuple itself:
+Bang variants (`mount!`, `click!`, `submit!`, `change!`, `blur!`, `key_down!`)
+unwrap `{:ok, view}` and raise on error, enabling pipelines. Use the non-bang
+forms when asserting on errors.
 
-```elixir
-assert click(view, "#missing") == {:error, {:no_element, "#missing"}}
-```
-
-### Full helper reference
-
-**Mounting:**
-
-- `mount!(Component, props, opts \\ [])` — mount and return the view directly.
-- `mount(Component, props, opts \\ [])` — returns `{:ok, view}`.
-
-Options: `stub: [{server_identity, fn _req -> initial_value end}]` — injects
-observable stubs so components that call `use_observable` get test data
-without a real server process.
-
-**Interacting:**
-
-| Helper | Triggers | Notes |
-|--------|----------|-------|
-| `click!(view, selector)` | `on_click` | |
-| `submit!(view, selector, params \\ %{})` | `on_submit` | Pass the form data map |
-| `change!(view, selector, params)` | `on_change` | |
-| `blur!(view, selector)` | `on_blur` | |
-| `key_down!(view, key, opts \\ [])` | `on_key` (window) | `ctrl: true`, `shift: true`, etc. |
-| `key_down!(view, selector, key)` | `on_keydown` (element) | Third arg is a string, not a keyword list |
-
-All bang variants have non-bang counterparts returning `{:ok, view} \| {:error, reason}`.
-
-**Asserting:**
-
-- `render_text(view)` — strips HTML tags; use with `=~` for content assertions.
-- `has_class?(view, selector, class_name)` — returns `true`/`false`; raises if
-  no element matches the selector.
-
-**Observable stubs:**
-
-```elixir
-test "shows item count from server" do
-  {:ok, view} =
-    mount(CartBadge, %{server: :cart},
-      stub: [{:cart, fn _req -> %{items: ["a", "b"]} end}]
-    )
-
-  assert render_text(view) =~ "2"
-
-  # Push a new value to trigger a re-render
-  Filament.Test.Stub.push(view.stubs[:cart], %{items: []})
-  view = Filament.Test.update(view)
-  assert render_text(view) =~ "0"
-end
-```
-
-**Keyboard events:**
-
-```elixir
-test "Escape closes the modal" do
-  view =
-    mount!(MyModal, %{})
-    |> key_down!("Escape")
-
-  refute render_text(view) =~ "modal-open"
-end
-
-test "Ctrl+S triggers save" do
-  view =
-    mount!(Editor, %{})
-    |> key_down!("s", ctrl: true)
-
-  assert render_text(view) =~ "Saved"
-end
-```
-
-Because rung-2 tests use in-process message passing rather than a browser,
-they are safe to run with `async: true` and typically finish in under 5 ms.
+See the **[Testing guide](testing.html)** for the full API reference:
+observable stubs, async assertions, keyboard events, and more.
 
 ## Next steps
 
-- **[Observables guide](observables.html)** — learn `Observable.GenServer`,
-  `use_observable/1` and `use_observable/2`, and the change-or-bust pattern for efficient re-renders.
-- **[Hooks guide](hooks.html)** — composing built-in hooks and writing
-  custom hooks for domain logic.
-- **API reference** — see `Filament.Hooks` for the full hook signatures and
-  `Filament.Component` for the behaviour callbacks.
+- **[Testing guide](testing.html)** — full test API reference: bang/pipeline helpers, observable stubs, async assertions, keyboard events.
+- **[Observables guide](observables.html)** — `Observable.GenServer`, `use_observable/1` and `use_observable/2`, and the change-or-bust pattern.
+- **[Hooks guide](hooks.html)** — composing built-in hooks and writing custom hooks for domain logic.
+- **API reference** — see `Filament.Hooks` for the full hook signatures and `Filament.Component` for the behaviour callbacks.
