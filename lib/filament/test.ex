@@ -161,6 +161,150 @@ defmodule Filament.Test do
   end
 
   @doc """
+  Simulate a keydown event.
+
+  Two forms:
+
+    * `key_down(view, key, opts \\\\ [])` — window-level (`on_key`). Finds the
+      first `phx-hook="FilamentKey"` element and dispatches with modifier opts:
+      `ctrl: true`, `shift: true`, `alt: true`, `meta: true`.
+
+    * `key_down(view, selector, key)` — element-scoped (`on_keydown`). Finds
+      the element matching `selector`, dispatches with `%{"key" => key}`.
+
+  Both flush state updates and re-render. Return `{:ok, updated_view}` or
+  `{:error, reason}`.
+  """
+  @spec key_down(t(), String.t(), keyword()) :: {:ok, t()} | {:error, term()}
+  @spec key_down(t(), String.t(), String.t()) :: {:ok, t()} | {:error, term()}
+  def key_down(view, key_or_selector, opts_or_key \\ [])
+
+  def key_down(%__MODULE__{} = view, key, opts) when is_list(opts) do
+    require_floki!()
+
+    wires =
+      view.rendered_html
+      |> Floki.parse_fragment!()
+      |> Floki.attribute("[phx-hook=FilamentKey]", "data-filament-wire")
+
+    params = %{
+      "key" => key,
+      "ctrl" => Keyword.get(opts, :ctrl, false),
+      "shift" => Keyword.get(opts, :shift, false),
+      "alt" => Keyword.get(opts, :alt, false),
+      "meta" => Keyword.get(opts, :meta, false)
+    }
+
+    case wires do
+      [] -> {:error, :no_window_keydown_handler}
+      [wire | _] -> dispatch_event(view, "filament:" <> wire, params)
+    end
+  end
+
+  def key_down(%__MODULE__{} = view, selector, key) when is_binary(key) do
+    require_floki!()
+
+    case find_event_ref(view.rendered_html, selector, "phx-keydown") do
+      {:ok, ref} -> dispatch_event(view, ref, %{"key" => key})
+      {:error, _} = err -> err
+    end
+  end
+
+  @doc """
+  Simulate a change event on the element matching `selector` with `params`.
+  Finds the `phx-change` attribute, dispatches the handler with params,
+  flushes state updates, re-renders. Returns `{:ok, updated_view}` or `{:error, reason}`.
+  """
+  @spec change(t(), selector :: String.t(), params :: map()) :: {:ok, t()} | {:error, term()}
+  def change(%__MODULE__{} = view, selector, params) do
+    require_floki!()
+
+    case find_event_ref(view.rendered_html, selector, "phx-change") do
+      {:ok, ref} -> dispatch_event(view, ref, params)
+      {:error, _} = err -> err
+    end
+  end
+
+  @doc """
+  Simulate a blur event on the element matching `selector`.
+  Finds the `phx-blur` attribute, dispatches the handler, flushes state updates,
+  re-renders. Returns `{:ok, updated_view}` or `{:error, reason}`.
+  """
+  @spec blur(t(), selector :: String.t()) :: {:ok, t()} | {:error, term()}
+  def blur(%__MODULE__{} = view, selector) do
+    require_floki!()
+
+    case find_event_ref(view.rendered_html, selector, "phx-blur") do
+      {:ok, ref} -> dispatch_event(view, ref, %{})
+      {:error, _} = err -> err
+    end
+  end
+
+  # ── Bang variants ─────────────────────────────────────────────────────────
+
+  @doc "Like `mount/3` but returns the view directly."
+  @spec mount!(module(), map(), keyword()) :: t()
+  def mount!(component, props, opts \\ []) do
+    {:ok, view} = mount(component, props, opts)
+    view
+  end
+
+  @doc "Like `click/2` but returns the view directly, raising on error."
+  @spec click!(t(), String.t()) :: t()
+  def click!(%__MODULE__{} = view, selector) do
+    case click(view, selector) do
+      {:ok, view} -> view
+      {:error, reason} -> raise "Filament.Test.click!/2 failed: #{inspect(reason)}"
+    end
+  end
+
+  @doc "Like `submit/3` but returns the view directly, raising on error."
+  @spec submit!(t(), String.t(), map()) :: t()
+  def submit!(%__MODULE__{} = view, selector, params \\ %{}) do
+    case submit(view, selector, params) do
+      {:ok, view} -> view
+      {:error, reason} -> raise "Filament.Test.submit!/3 failed: #{inspect(reason)}"
+    end
+  end
+
+  @doc "Like `change/3` but returns the view directly, raising on error."
+  @spec change!(t(), String.t(), map()) :: t()
+  def change!(%__MODULE__{} = view, selector, params) do
+    case change(view, selector, params) do
+      {:ok, view} -> view
+      {:error, reason} -> raise "Filament.Test.change!/3 failed: #{inspect(reason)}"
+    end
+  end
+
+  @doc "Like `blur/2` but returns the view directly, raising on error."
+  @spec blur!(t(), String.t()) :: t()
+  def blur!(%__MODULE__{} = view, selector) do
+    case blur(view, selector) do
+      {:ok, view} -> view
+      {:error, reason} -> raise "Filament.Test.blur!/2 failed: #{inspect(reason)}"
+    end
+  end
+
+  @doc "Like `key_down/2,3` but returns the view directly, raising on error."
+  @spec key_down!(t(), String.t(), keyword()) :: t()
+  @spec key_down!(t(), String.t(), String.t()) :: t()
+  def key_down!(view, key_or_selector, opts_or_key \\ [])
+
+  def key_down!(%__MODULE__{} = view, key, opts) when is_list(opts) do
+    case key_down(view, key, opts) do
+      {:ok, view} -> view
+      {:error, reason} -> raise "Filament.Test.key_down!/3 failed: #{inspect(reason)}"
+    end
+  end
+
+  def key_down!(%__MODULE__{} = view, selector, key) when is_binary(key) do
+    case key_down(view, selector, key) do
+      {:ok, view} -> view
+      {:error, reason} -> raise "Filament.Test.key_down!/3 failed: #{inspect(reason)}"
+    end
+  end
+
+  @doc """
   Drain pending filament messages and re-render the view.
   Useful after pushing to an observable stub from outside the component.
   """

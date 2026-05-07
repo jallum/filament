@@ -96,8 +96,7 @@ defmodule Inventory.Test do
       server =
         start_supervised!({Inventory.Server, items: [%Inventory.Item{id: "oos", name: "Scarce", available: 0}]})
 
-      {:ok, view} =
-        mount(InventoryItem, %{server: server, item_id: "oos"})
+      view = mount!(InventoryItem, %{server: server, item_id: "oos"})
 
       assert render_text(view) =~ "Out of Stock"
     end
@@ -108,12 +107,39 @@ defmodule Inventory.Test do
           {Inventory.Server, items: [%Inventory.Item{id: "avail", name: "In Stock Item", available: 3}]}
         )
 
-      {:ok, view} =
-        mount(InventoryItem, %{server: server, item_id: "avail"})
+      view = mount!(InventoryItem, %{server: server, item_id: "avail"})
 
       text = render_text(view)
       refute text =~ "Out of Stock"
       assert text =~ "In Stock Item"
+    end
+
+    test "clicking + holds one unit and shows held count" do
+      server =
+        start_supervised!(
+          {Inventory.Server, items: [%Inventory.Item{id: "h1", name: "Holdable", available: 2}]}
+        )
+
+      view = mount!(InventoryItem, %{server: server, item_id: "h1"})
+      refute render_text(view) =~ "Holding"
+
+      view = click!(view, "button") |> Filament.Test.update()
+
+      assert render_text(view) =~ "Holding: 1"
+    end
+
+    test "clicking − releases a held unit" do
+      server =
+        start_supervised!(
+          {Inventory.Server, items: [%Inventory.Item{id: "r1", name: "Releasable", available: 2}]}
+        )
+
+      view = mount!(InventoryItem, %{server: server, item_id: "r1"})
+      view = click!(view, "button") |> Filament.Test.update()
+      assert render_text(view) =~ "Holding: 1"
+
+      view = click!(view, "button") |> Filament.Test.update()
+      refute render_text(view) =~ "Holding"
     end
 
     test "second component sees Out of Stock once first has acquired a hold" do
@@ -139,8 +165,7 @@ defmodule Inventory.Test do
       assert_receive :held, 500
 
       # A second component subscribing now should see 0 available → Out of Stock
-      {:ok, view2} =
-        mount(InventoryItem, %{server: server, item_id: "last"})
+      view2 = mount!(InventoryItem, %{server: server, item_id: "last"})
 
       assert render_text(view2) =~ "Out of Stock"
 

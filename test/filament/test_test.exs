@@ -64,6 +64,49 @@ defmodule Filament.TestTest do
     end
   end
 
+  defmodule KeyModalComp do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent KeyModal do
+      def render(_assigns) do
+        {last_event, set_last_event} = use_state(nil)
+
+        ~F"""
+        <div on_key={fn key, mods -> set_last_event.({key, mods}) end}>
+          <span id="last-key">{inspect(last_event)}</span>
+        </div>
+        """
+      end
+    end
+  end
+
+  defmodule InputComp do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent Input do
+      def render(_assigns) do
+        {last_change, set_last_change} = use_state(nil)
+        {last_blur, set_last_blur} = use_state(nil)
+        {last_key, set_last_key} = use_state(nil)
+
+        ~F"""
+        <div>
+          <input id="field"
+            on_change={fn params -> set_last_change.(params["value"]) end}
+            on_blur={fn -> set_last_blur.("blurred") end}
+            on_keydown={fn params -> set_last_key.(params["key"]) end}
+          />
+          <span id="change">{last_change}</span>
+          <span id="blur">{last_blur}</span>
+          <span id="key">{last_key}</span>
+        </div>
+        """
+      end
+    end
+  end
+
   defmodule FormComp do
     @moduledoc false
     use Filament.Component
@@ -82,48 +125,46 @@ defmodule Filament.TestTest do
     end
   end
 
-  test "1. mount returns rendered HTML" do
-    {:ok, view} = mount(CounterComp.Counter, %{initial: 0})
+  test "mount returns rendered HTML" do
+    view = mount!(CounterComp.Counter, %{initial: 0})
     assert render_text(view) =~ "Count: 0"
   end
 
-  test "2. click updates state and re-renders" do
-    {:ok, view} = mount(CounterComp.Counter, %{initial: 0})
-
-    {:ok, view} = click(view, "button")
+  test "click updates state and re-renders" do
+    view = mount!(CounterComp.Counter, %{initial: 0}) |> click!("button")
     assert render_text(view) =~ "Count: 1"
 
-    {:ok, view} = click(view, "button")
+    view = click!(view, "button")
     assert render_text(view) =~ "Count: 2"
   end
 
-  test "3. has_class? true" do
-    {:ok, view} = mount(ClassComp.Class, %{active: true})
+  test "has_class? true" do
+    view = mount!(ClassComp.Class, %{active: true})
     assert has_class?(view, "div", "active") == true
     assert has_class?(view, "div", "bold") == true
   end
 
-  test "4. has_class? false" do
-    {:ok, view} = mount(ClassComp.Class, %{active: true})
+  test "has_class? false" do
+    view = mount!(ClassComp.Class, %{active: true})
     assert has_class?(view, "div", "missing") == false
   end
 
-  test "5. has_class? raises on missing selector" do
-    {:ok, view} = mount(ClassComp.Class, %{active: true})
+  test "has_class? raises on missing selector" do
+    view = mount!(ClassComp.Class, %{active: true})
 
     assert_raise RuntimeError, ~r/no element matched selector/, fn ->
       has_class?(view, "span", "active")
     end
   end
 
-  test "6. stub observable injected at mount" do
+  test "stub observable injected at mount" do
     {:ok, view} =
       mount(ObservableComp.Observable, %{server: :my_server}, stub: [{:my_server, fn _req -> 42 end}])
 
     assert render_text(view) =~ "42"
   end
 
-  test "7. stub push updates rendered output" do
+  test "stub push updates rendered output" do
     {:ok, view} =
       mount(ObservableComp.Observable, %{server: :my_server}, stub: [{:my_server, fn _req -> 0 end}])
 
@@ -135,21 +176,74 @@ defmodule Filament.TestTest do
     assert render_text(view) =~ "99"
   end
 
-  test "8. click on nonexistent selector" do
-    {:ok, view} = mount(CounterComp.Counter, %{initial: 0})
+  test "click on nonexistent selector" do
+    view = mount!(CounterComp.Counter, %{initial: 0})
     assert click(view, "#nonexistent") == {:error, {:no_element, "#nonexistent"}}
   end
 
-  test "9. submit delivers params to handler" do
+  test "key_down delivers key string and %Filament.KeyModifiers{} to the handler" do
+    view = mount!(KeyModalComp.KeyModal, %{}) |> key_down!("Escape")
+    assert render_text(view) =~ ~s({"Escape", %Filament.KeyModifiers{)
+
+    view = key_down!(view, "s", ctrl: true)
+    assert render_text(view) =~ ~s({"s", %Filament.KeyModifiers{)
+    assert render_text(view) =~ "ctrl: true"
+  end
+
+  test "change delivers params to handler and re-renders" do
+    view = mount!(InputComp.Input, %{}) |> change!("#field", %{"value" => "hello"})
+    assert render_text(view) =~ "hello"
+  end
+
+  test "blur fires handler and re-renders" do
+    view = mount!(InputComp.Input, %{}) |> blur!("#field")
+    assert render_text(view) =~ "blurred"
+  end
+
+  test "key_down (element-scoped) delivers key string and re-renders" do
+    view = mount!(InputComp.Input, %{}) |> key_down!("#field", "Tab")
+    assert render_text(view) =~ "Tab"
+  end
+
+  test "change on nonexistent selector returns error" do
+    view = mount!(InputComp.Input, %{})
+    assert change(view, "#nope", %{}) == {:error, {:no_element, "#nope"}}
+  end
+
+  test "blur on nonexistent selector returns error" do
+    view = mount!(InputComp.Input, %{})
+    assert blur(view, "#nope") == {:error, {:no_element, "#nope"}}
+  end
+
+  test "key_down (element-scoped) on nonexistent selector returns error" do
+    view = mount!(InputComp.Input, %{})
+    assert key_down(view, "#nope", "Tab") == {:error, {:no_element, "#nope"}}
+  end
+
+  test "submit delivers params to handler" do
     test_pid = self()
 
     handler = fn params ->
       send(test_pid, {:submitted, params})
     end
 
-    {:ok, view} = mount(FormComp.Form, %{on_submit: handler})
-    {:ok, _view} = submit(view, "form", %{"name" => "Alice"})
+    mount!(FormComp.Form, %{on_submit: handler}) |> submit!("form", %{"name" => "Alice"})
 
     assert_receive {:submitted, %{"name" => "Alice"}}
+  end
+
+  test "bang variants return view directly and enable pipelining" do
+    view =
+      mount!(CounterComp.Counter, %{initial: 0})
+      |> click!("button")
+      |> click!("button")
+      |> click!("button")
+
+    assert render_text(view) =~ "Count: 3"
+  end
+
+  test "bang variant raises on error" do
+    view = mount!(CounterComp.Counter, %{initial: 0})
+    assert_raise RuntimeError, ~r/click!.*failed/, fn -> click!(view, "#nope") end
   end
 end

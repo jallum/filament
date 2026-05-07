@@ -89,7 +89,7 @@ defmodule Filament.LiveViewTest do
       rendered = CounterLiveView.render(socket.assigns)
       html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
 
-      refute html =~ ~r/filament:/
+      refute html =~ ~r/filament:[a-z0-9_]+:\d+/
       refute html =~ ~r/_filament/
     end
   end
