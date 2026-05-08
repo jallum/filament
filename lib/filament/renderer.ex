@@ -153,6 +153,70 @@ defmodule Filament.Renderer do
   end
 
   @doc """
+  Like `render_component_child/3` but uses a caller-supplied key for fiber identity
+  instead of a positional index. Used by `Filament.TagEngine.component_keyed/4`.
+  """
+  @spec render_component_child_keyed(RenderContext.t(), module(), map(), term()) :: Rendered.t()
+  def render_component_child_keyed(parent_ctx, mod, props, key) do
+    parent_fiber = Map.get(parent_ctx.fiber_tree, parent_ctx.fiber_id)
+
+    child_id =
+      if parent_fiber do
+        Fiber.child_id(parent_fiber, mod, {:key, key})
+      else
+        "#{parent_ctx.fiber_id}.#{mod}[key=#{inspect(key)}]"
+      end
+
+    existing_fiber = Map.get(parent_ctx.fiber_tree, child_id)
+    hook_slots = if existing_fiber, do: existing_fiber.hook_slots, else: %{}
+
+    child_ctx = %RenderContext{
+      fiber_id: child_id,
+      fiber_tree: parent_ctx.fiber_tree,
+      owner_pid: parent_ctx.owner_pid,
+      new_fibers: %{},
+      pending_effects: [],
+      observable_stubs: parent_ctx.observable_stubs,
+      subscribe_enabled: parent_ctx.subscribe_enabled,
+      hook_index: 0,
+      new_hook_slots: %{},
+      event_handler_index: 0,
+      new_event_handlers: %{},
+      hook_slots: hook_slots
+    }
+
+    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers, child_event_handlers} =
+      render(mod, props, child_ctx)
+
+    child_fiber = %Fiber{
+      id: child_id,
+      key: key,
+      component: mod,
+      props: props,
+      hook_slots: Map.merge(hook_slots, child_new_hook_slots),
+      event_handlers: child_event_handlers,
+      children: Map.keys(grandchild_fibers),
+      parent_id: parent_ctx.fiber_id,
+      status: if(existing_fiber, do: :stable, else: :mounting)
+    }
+
+    updated_new_fibers =
+      parent_ctx.new_fibers
+      |> Map.put(child_id, child_fiber)
+      |> Map.merge(grandchild_fibers)
+
+    updated_ctx = %{
+      parent_ctx
+      | new_fibers: updated_new_fibers,
+        pending_effects: parent_ctx.pending_effects ++ child_pending_effects
+    }
+
+    Process.put(:filament_render_context, updated_ctx)
+
+    rendered_child
+  end
+
+  @doc """
   Recursively renders a vnode tree into Rendered structs.
   """
   @spec render_vnode(Filament.VNode.t(), RenderContext.t()) :: term()
@@ -230,52 +294,8 @@ defmodule Filament.Renderer do
     Enum.map(children, &render_vnode(&1, context))
   end
 
-  def render_vnode({:keyed_list, items}, context) do
-    parent_fiber = Map.get(context.fiber_tree, context.fiber_id)
-    old_children = if parent_fiber, do: parent_fiber.children, else: []
-
-    {rendered_items, new_child_ids} =
-      Enum.map_reduce(items, [], fn {key, vnode}, acc ->
-        case vnode do
-          {:component, mod, props, _key} ->
-            rendered = render_vnode({:component, mod, props, key}, context)
-            child_id = Fiber.child_id(parent_fiber, mod, {:key, key})
-            {rendered, [child_id | acc]}
-
-          _ ->
-            {render_vnode(vnode, context), acc}
-        end
-      end)
-
-    removed_children = old_children -- new_child_ids
-
-    if removed_children != [] do
-      ctx = Process.get(:filament_render_context)
-      updated_fiber_tree = mark_children_unmounting(removed_children, ctx.new_fibers, context.fiber_tree)
-      Process.put(:filament_render_context, %{ctx | new_fibers: updated_fiber_tree})
-    end
-
-    rendered_items
-  end
-
   def render_vnode(invalid, _context) do
     raise ArgumentError, "invalid vnode: #{inspect(invalid)}"
-  end
-
-  defp mark_children_unmounting(child_ids, new_fibers, fiber_tree) do
-    Enum.reduce(child_ids, new_fibers, fn child_id, acc ->
-      case Map.get(acc, child_id) do
-        nil -> mark_from_existing(acc, child_id, fiber_tree)
-        fiber -> Map.put(acc, child_id, %{fiber | status: :unmounting})
-      end
-    end)
-  end
-
-  defp mark_from_existing(acc, child_id, fiber_tree) do
-    case Map.get(fiber_tree, child_id) do
-      nil -> acc
-      existing -> Map.put(acc, child_id, %{existing | status: :unmounting})
-    end
   end
 
   defp apply_prop_defaults(component_module, props) do

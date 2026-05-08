@@ -179,20 +179,6 @@ defmodule Filament.RendererTest do
       assert html =~ "vnode"
     end
 
-    test "renders :keyed_list vnode" do
-      context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
-
-      vnode =
-        {:keyed_list,
-         [
-           {:a, {:text, "First"}},
-           {:b, {:text, "Second"}}
-         ]}
-
-      result = Renderer.render_vnode(vnode, context)
-      assert result == ["First", "Second"]
-    end
-
     test "raises on invalid vnode" do
       context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
 
@@ -308,36 +294,6 @@ defmodule Filament.RendererTest do
       assert second_child_fiber.hook_slots == first_child_fiber.hook_slots
     end
 
-    test "6. render_vnode :keyed_list with component items registers all child fibers" do
-      root_fiber = Fiber.new(id: "root", component: __MODULE__)
-
-      context = %RenderContext{
-        fiber_id: "root",
-        fiber_tree: %{"root" => root_fiber},
-        new_fibers: %{},
-        pending_effects: []
-      }
-
-      Process.put(:filament_render_context, context)
-
-      Renderer.render_vnode(
-        {:keyed_list,
-         [
-           {1, {:component, SimpleItem.SimpleItem, %{label: "a"}, 1}},
-           {2, {:component, SimpleItem.SimpleItem, %{label: "b"}, 2}}
-         ]},
-        context
-      )
-
-      final_ctx = Process.get(:filament_render_context)
-      Process.delete(:filament_render_context)
-
-      child_id_1 = Fiber.child_id(root_fiber, SimpleItem.SimpleItem, {:key, 1})
-      child_id_2 = Fiber.child_id(root_fiber, SimpleItem.SimpleItem, {:key, 2})
-
-      assert Map.has_key?(final_ctx.new_fibers, child_id_1)
-      assert Map.has_key?(final_ctx.new_fibers, child_id_2)
-    end
   end
 
   describe "current_context/0" do
@@ -376,6 +332,64 @@ defmodule Filament.RendererTest do
       assert_raise RuntimeError, ~r/hook called outside render context/, fn ->
         Renderer.next_hook_slot()
       end
+    end
+  end
+
+  describe "render_component_child_keyed/4" do
+    test "uses key-based fiber id" do
+      root_fiber = Fiber.new(id: "root", component: __MODULE__)
+
+      context = %RenderContext{
+        fiber_id: "root",
+        fiber_tree: %{"root" => root_fiber},
+        new_fibers: %{},
+        pending_effects: []
+      }
+
+      Process.put(:filament_render_context, context)
+      Renderer.render_component_child_keyed(context, SimpleItem.SimpleItem, %{label: "x"}, "my-key")
+      final_ctx = Process.get(:filament_render_context)
+      Process.delete(:filament_render_context)
+
+      expected_id = Fiber.child_id(root_fiber, SimpleItem.SimpleItem, {:key, "my-key"})
+      assert Map.has_key?(final_ctx.new_fibers, expected_id)
+      assert final_ctx.new_fibers[expected_id].key == "my-key"
+    end
+
+    test "preserves hook state across renders when key matches" do
+      root_fiber = Fiber.new(id: "root", component: __MODULE__)
+      child_id = Fiber.child_id(root_fiber, StatefulComp.StatefulComp, {:key, "stable"})
+
+      context1 = %RenderContext{
+        fiber_id: "root",
+        fiber_tree: %{"root" => root_fiber},
+        new_fibers: %{},
+        pending_effects: []
+      }
+
+      Process.put(:filament_render_context, context1)
+      Renderer.render_component_child_keyed(context1, StatefulComp.StatefulComp, %{initial: 7}, "stable")
+      ctx1 = Process.get(:filament_render_context)
+      Process.delete(:filament_render_context)
+
+      first_fiber = ctx1.new_fibers[child_id]
+      assert first_fiber
+
+      context2 = %RenderContext{
+        fiber_id: "root",
+        fiber_tree: %{"root" => root_fiber, child_id => first_fiber},
+        new_fibers: %{},
+        pending_effects: []
+      }
+
+      Process.put(:filament_render_context, context2)
+      Renderer.render_component_child_keyed(context2, StatefulComp.StatefulComp, %{initial: 7}, "stable")
+      ctx2 = Process.get(:filament_render_context)
+      Process.delete(:filament_render_context)
+
+      second_fiber = ctx2.new_fibers[child_id]
+      assert second_fiber.status == :stable
+      assert second_fiber.hook_slots == first_fiber.hook_slots
     end
   end
 

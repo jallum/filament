@@ -47,6 +47,10 @@ defmodule Filament.VNodeCompiler do
     # PLV calls those fns from its diff engine (outside our render pass), so any
     # hook call inside them crashes. Move the registrations to before the fn in
     # the for-loop body — they close over the pre-computed refs.
+    #
+    # For keyed comprehensions (:for + :key on a component tag), this pass also
+    # rewrites TagEngine.component(...) calls to component_keyed(..., key) before
+    # hoisting, so the child fiber is identified by key rather than position.
     hoist_comprehension_handlers(stripped)
   end
 
@@ -58,10 +62,46 @@ defmodule Filament.VNodeCompiler do
   # This prevents PLV's diff engine from re-calling component renders or event
   # registrations outside the Filament render context, which raises because there
   # is no active render pass.
+  #
+  # Uses prewalk so that keyed for-loops (:for + :key on a component tag) are
+  # visited before their bodies: when the generator carries keyed_comprehension: true
+  # metadata, component(...) calls in the body are rewritten to component_keyed(...)
+  # in place, so the subsequent entry-tuple hoisting picks up the keyed variant.
   defp hoist_comprehension_handlers(ast) do
-    Macro.postwalk(ast, fn
+    Macro.prewalk(ast, fn
+      {:for, for_meta, [{:<-, gen_meta, [_lhs, _rhs]} | _rest] = args} ->
+        inject_key_into_for(for_meta, gen_meta, args)
+
       {:{}, tuple_meta, [nil, map_expr, {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body]}]}] = entry_parts} ->
         hoist_entry_tuple(tuple_meta, map_expr, fn_meta, arrow_meta, fn_args, fn_body, entry_parts)
+
+      other ->
+        other
+    end)
+  end
+
+  defp inject_key_into_for(for_meta, gen_meta, args) do
+    case gen_meta[:key_expr] do
+      nil ->
+        {:for, for_meta, args}
+
+      key_expr ->
+        new_args =
+          Enum.map(args, fn
+            [do: body] -> [do: rewrite_component_calls_to_keyed(body, key_expr)]
+            other -> other
+          end)
+
+        {:for, for_meta, new_args}
+    end
+  end
+
+  defp rewrite_component_calls_to_keyed(body, key_expr) do
+    Macro.prewalk(body, fn
+      {{:., dot_meta, [{:__aliases__, alias_meta, [:Filament, :TagEngine]}, :component]}, call_meta,
+       [func, assigns, caller]} ->
+        {{:., dot_meta, [{:__aliases__, alias_meta, [:Filament, :TagEngine]}, :component_keyed]}, call_meta,
+         [func, assigns, key_expr, caller]}
 
       other ->
         other
@@ -120,7 +160,8 @@ defmodule Filament.VNodeCompiler do
 
     {new_body, {_counter, hoisted}} =
       Macro.postwalk(fn_body, {base, []}, fn
-        {{:., _, [{:__aliases__, _, [:Filament, :TagEngine]}, :component]}, _, _} = node, {counter, acc} ->
+        {{:., _, [{:__aliases__, _, [:Filament, :TagEngine]}, comp_fn]}, _, _} = node, {counter, acc}
+        when comp_fn in [:component, :component_keyed] ->
           var_name = :"fchild_#{counter}"
           var_ast = {var_name, [], nil}
           {var_ast, {counter + 1, [{var_ast, node} | acc]}}
