@@ -27,7 +27,6 @@ defmodule Filament do
     - `use_observable/1` — resolve a server reference to a pid (nil when disconnected)
     - `use_observable/2` — subscribe to an observable and return the projected value
     - `use_effect/2` — side-effect with cleanup (run after render)
-    - `use_event_ref/1` — stable wire ref for JS hooks to route `pushEvent` to this fiber
 
   **LiveView adapter** — use a Filament component tree as a LiveView:
 

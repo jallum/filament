@@ -150,8 +150,8 @@ defmodule Filament.Hooks.EventHandlerTest do
 
     {ref0, ref1} =
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->
-        r0 = Hooks.use_event_ref(fn -> :ok end)
-        r1 = Hooks.use_event_ref(fn -> :ok end)
+        r0 = Filament.Experimental.Hooks.use_event_ref(fn -> :ok end)
+        r1 = Filament.Experimental.Hooks.use_event_ref(fn -> :ok end)
         {r0, r1}
       end)
 
@@ -167,13 +167,13 @@ defmodule Filament.Hooks.EventHandlerTest do
 
     ref =
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->
-        Hooks.use_event_ref(handler)
+        Filament.Experimental.Hooks.use_event_ref(handler)
       end)
 
     # Simulate what the reconciler does — store handler in the fiber
     ctx = %RenderContext{fiber_id: "root", fiber_tree: %{"root" => fiber}, owner_pid: self()}
     Process.put(:filament_render_context, ctx)
-    Hooks.use_event_ref(handler)
+    Filament.Experimental.Hooks.use_event_ref(handler)
     new_handlers = Process.get(:filament_render_context).new_event_handlers
     Process.delete(:filament_render_context)
 
