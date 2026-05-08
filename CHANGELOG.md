@@ -19,6 +19,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.4.0] - 2026-05-08
+
+### Added
+
+- `:key` attribute on component tags inside `:for` loops in `~F` templates. Components are now
+  identified by their key rather than their position in the list, giving stable fiber identity
+  across reorders without any manual VNode construction:
+
+  ```elixir
+  # before — manual {:keyed_list, ...} VNode
+  def render(%{items: items}) do
+    keyed = Enum.map(items, fn item ->
+      {item.id, {:component, MyItem, %{item: item}, item.id}}
+    end)
+    {:keyed_list, keyed}
+  end
+
+  # after — declarative :key attribute
+  def render(%{items: items}) do
+    ~F"""
+    <MyItem :for={item <- items} :key={item.id} item={item} />
+    """
+  end
+  ```
+
+- `Filament.Experimental.Hooks.use_event_ref/1` — registers an event handler and returns a
+  stable wire ref string (e.g., `"filament:root.MyComponent[0]:0"`) that a JS hook can pass
+  directly to `pushEvent`, routing the event to the specific fiber without session IDs or
+  process-dictionary workarounds:
+
+  ```elixir
+  import Filament.Experimental.Hooks
+
+  def render(props) do
+    submit_ref = use_event_ref(fn %{"text" => t} -> ... end)
+    ~F"""
+    <textarea phx-hook="MyHook" data-ref={submit_ref} />
+    """
+  end
+  ```
+
+  Opt in with `import Filament.Experimental.Hooks`. The API is experimental and may change.
+
+### Removed
+
+- `{:keyed_list, ...}` VNode type and all related renderer/validation logic. Use `:for` + `:key`
+  on component tags in `~F` templates instead (see above).
+
 ## [0.3.0] - 2026-05-07
 
 ### Added
