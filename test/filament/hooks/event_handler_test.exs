@@ -145,6 +145,48 @@ defmodule Filament.Hooks.EventHandlerTest do
     assert FiberTree.get_event_handler(tree, "missing", 0) == nil
   end
 
+  test "use_event_ref/1 returns full filament wire ref with filament: prefix" do
+    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+
+    {ref0, ref1} =
+      with_render_ctx("root", %{"root" => fiber}, self(), fn ->
+        r0 = Hooks.use_event_ref(fn -> :ok end)
+        r1 = Hooks.use_event_ref(fn -> :ok end)
+        {r0, r1}
+      end)
+
+    assert ref0 == "filament:root:0"
+    assert ref1 == "filament:root:1"
+  end
+
+  test "use_event_ref/1 handler is dispatched via handle_event" do
+    test_pid = self()
+    handler = fn %{"x" => v} -> send(test_pid, {:called, v}) end
+
+    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+
+    ref =
+      with_render_ctx("root", %{"root" => fiber}, self(), fn ->
+        Hooks.use_event_ref(handler)
+      end)
+
+    # Simulate what the reconciler does — store handler in the fiber
+    ctx = %RenderContext{fiber_id: "root", fiber_tree: %{"root" => fiber}, owner_pid: self()}
+    Process.put(:filament_render_context, ctx)
+    Hooks.use_event_ref(handler)
+    new_handlers = Process.get(:filament_render_context).new_event_handlers
+    Process.delete(:filament_render_context)
+
+    fiber = %{fiber | event_handlers: new_handlers}
+    tree = %{"root" => fiber}
+    socket = fake_socket(tree)
+
+    # Strip "filament:" prefix, as handle_event does, then dispatch
+    "filament:" <> wire_ref = ref
+    assert {:noreply, _} = Filament.LiveView.dispatch_filament_event(wire_ref, %{"x" => 42}, socket)
+    assert_receive {:called, 42}
+  end
+
   # --- Helpers ---
 
   defp with_render_ctx(fiber_id, fiber_tree, owner_pid, fun) do
