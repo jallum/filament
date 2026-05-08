@@ -135,6 +135,12 @@ defmodule Filament.TagEngine do
     wrap_rendered(rendered, func, caller)
   end
 
+  def component_keyed(func, assigns, key, caller) when (is_function(func, 1) and is_list(assigns)) or is_map(assigns) do
+    assigns = normalize_assigns(assigns)
+    rendered = invoke_component_keyed(func, assigns, key)
+    wrap_rendered(rendered, func, caller)
+  end
+
   defp normalize_assigns(%{__changed__: _} = assigns), do: assigns
   defp normalize_assigns(assigns), do: assigns |> Map.new() |> Map.put_new(:__changed__, nil)
 
@@ -142,6 +148,16 @@ defmodule Filament.TagEngine do
     case {Process.get(:filament_render_context), Function.info(func, :module)} do
       {ctx, {:module, mod}} when not is_nil(ctx) ->
         Filament.Renderer.render_component_child(ctx, mod, assigns)
+
+      _ ->
+        func.(assigns)
+    end
+  end
+
+  defp invoke_component_keyed(func, assigns, key) do
+    case {Process.get(:filament_render_context), Function.info(func, :module)} do
+      {ctx, {:module, mod}} when not is_nil(ctx) ->
+        Filament.Renderer.render_component_child_keyed(ctx, mod, assigns, key)
 
       _ ->
         func.(assigns)

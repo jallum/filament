@@ -238,6 +238,86 @@ defmodule Filament.VNodeCompilerTest do
     end
   end
 
+  describe ":key on component tags" do
+    test "components in :for + :key loop are identified by key, not position" do
+      defmodule KeyedItemComp do
+        @moduledoc false
+        use Filament.Component
+
+        defcomponent Item do
+          prop(:label, :string, required: true)
+
+          def render(%{label: label}) do
+            ~F"<span>{label}</span>"
+          end
+        end
+
+        defcomponent KeyedList do
+          prop(:items, :list, required: true)
+
+          def render(%{items: items}) do
+            ~F"""
+            <ul>
+              <Item :for={item <- items} :key={item.id} label={item.label} />
+            </ul>
+            """
+          end
+        end
+      end
+
+      items = [%{id: "a", label: "Alpha"}, %{id: "b", label: "Beta"}]
+      {tree1, rendered1, _} = Reconciler.mount(KeyedItemComp.KeyedList, %{items: items}, owner_pid: self())
+
+      html1 = rendered1 |> Safe.to_iodata() |> IO.iodata_to_binary()
+      assert html1 =~ "Alpha"
+      assert html1 =~ "Beta"
+
+      # Find child fiber IDs from first render
+      root_fiber = tree1["root"]
+      item_child_id_a = Filament.Fiber.child_id(root_fiber, KeyedItemComp.Item, {:key, "a"})
+      item_child_id_b = Filament.Fiber.child_id(root_fiber, KeyedItemComp.Item, {:key, "b"})
+
+      assert Map.has_key?(tree1, item_child_id_a), "fiber for key 'a' should exist"
+      assert Map.has_key?(tree1, item_child_id_b), "fiber for key 'b' should exist"
+
+      # Re-render with items reordered — key-based fibers should match by key not position
+      items2 = [%{id: "b", label: "Beta"}, %{id: "a", label: "Alpha"}]
+      {tree2, rendered2, _} = Reconciler.update(tree1, "root", %{items: items2}, owner_pid: self())
+
+      html2 = rendered2 |> Safe.to_iodata() |> IO.iodata_to_binary()
+      assert html2 =~ "Beta"
+      assert html2 =~ "Alpha"
+
+      # Same fiber IDs should be reused for the same keys
+      assert Map.has_key?(tree2, item_child_id_a), "fiber for key 'a' should persist after reorder"
+      assert Map.has_key?(tree2, item_child_id_b), "fiber for key 'b' should persist after reorder"
+
+      fiber_a_after = tree2[item_child_id_a]
+      assert fiber_a_after.status == :stable
+    end
+
+    test ":key without :for raises a syntax error" do
+      n = System.unique_integer([:positive])
+
+      src = """
+      defmodule KeyWithoutFor#{n} do
+        use Filament.Component
+        defcomponent Comp do
+          def render(_assigns) do
+            ~F\"""
+            <Comp :key={"x"} />
+            \"""
+          end
+        end
+      end
+      """
+
+      assert_raise Phoenix.LiveView.Tokenizer.ParseError, ~r/:key/, fn ->
+        Code.compile_string(src)
+      end
+    end
+  end
+
   describe "comprehension memoization" do
     test "for-loop with handlers reuses result when outer-scope deps unchanged" do
       defmodule CompMemoComp do
