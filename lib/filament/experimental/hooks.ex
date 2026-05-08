@@ -10,22 +10,45 @@ defmodule Filament.Experimental.Hooks do
   """
 
   @doc """
-  Registers an event handler and returns a stable wire ref suitable for use as a
-  `data-*` attribute so JS hooks can route `pushEvent` calls directly to this fiber.
+  Registers an event handler and returns a stable wire ref for use as a `data-ref`
+  attribute. JS hooks send events to this fiber via `this.pushEvent(ref, payload)`;
+  Filament dispatches directly to the handler closure.
 
-  The returned string (e.g. `"filament:root.MyComponent[0]:0"`) is stable across
-  re-renders as long as `use_event_ref/1` is called in the same order each render.
-  Pass it to a JS hook via a `data-*` attribute; the hook calls
-  `this.pushEvent(ref, payload)` and Filament dispatches directly to the handler.
+  The ref string (e.g. `"filament:root.MyComponent[0]:0"`) is stable across re-renders
+  as long as `use_event_ref/1` is called in the same order each render.
 
-      import Filament.Experimental.Hooks
+  ## Handler arities
 
-      def render(props) do
-        submit_ref = use_event_ref(fn %{"text" => t} -> ... end)
-        ~F\"""
-        <textarea phx-hook="MyHook" data-ref={submit_ref} />
-        \"""
-      end
+  **1-arity** — receives the payload map:
+
+      submit_ref = use_event_ref(fn %{"text" => t} -> process(t) end)
+
+  **2-arity** — receives the payload map and a `push` function for sending events back
+  to the specific JS hook instance that called in:
+
+      accept_ref = use_event_ref(fn %{"value" => v}, push ->
+        result = process(v)
+        push.("picker_accept", %{value: result})
+      end)
+
+  Pushes are automatically scoped to the wire ref, so two instances of the same
+  hook on the page each only receive their own component's push.
+
+  ## JS side
+
+  Pass the ref via `data-ref` and use `filament.handleEvent` to receive scoped pushes:
+
+      ~F\"""
+      <div phx-hook="MyHook" data-ref={accept_ref} />
+      \"""
+
+      // JS hook
+      mounted() {
+        filament.handleEvent(this, "picker_accept", ({ value }) => { ... })
+      }
+
+  `filament.handleEvent` is a thin wrapper around `this.handleEvent` that prefixes
+  the event name with the component's wire ref, matching what the server pushes.
 
   Rules: call only at the top level of `render/1`. Do not call inside conditionals.
   """

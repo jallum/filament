@@ -159,6 +159,68 @@ defmodule Filament.Hooks.EventHandlerTest do
     assert ref1 == "filament:root:1"
   end
 
+  test "8. 2-arity handler receives params and push fn" do
+    test_pid = self()
+
+    handler = fn %{"value" => v}, push ->
+      send(test_pid, {:called, v})
+      push.("my_event", %{result: v * 2})
+    end
+
+    fiber =
+      Fiber.new(
+        id: "root",
+        component: nil,
+        hook_slots: %{},
+        event_handlers: %{0 => handler},
+        status: :stable
+      )
+
+    tree = %{"root" => fiber}
+    socket = fake_socket(tree)
+
+    assert {:noreply, new_socket} =
+             TestLiveView.handle_event("filament:root:0", %{"value" => 21}, socket)
+
+    assert_receive {:called, 21}
+    push_events = new_socket.private.live_temp[:push_events] || []
+    assert ["filament:root:0:my_event", %{result: 42}] in push_events
+  end
+
+  test "9. 2-arity handler push scopes to wire ref — two fibers don't cross" do
+    test_pid = self()
+
+    make_handler = fn label ->
+      fn _params, push ->
+        send(test_pid, {:push, label})
+        push.("done", %{from: label})
+      end
+    end
+
+    fiber_a =
+      Fiber.new(id: "root.A[0]", component: nil, hook_slots: %{},
+                event_handlers: %{0 => make_handler.("a")}, status: :stable)
+
+    fiber_b =
+      Fiber.new(id: "root.B[0]", component: nil, hook_slots: %{},
+                event_handlers: %{0 => make_handler.("b")}, status: :stable)
+
+    tree = %{"root.A[0]" => fiber_a, "root.B[0]" => fiber_b}
+    socket = fake_socket(tree)
+
+    {:noreply, sock_a} = TestLiveView.handle_event("filament:root.A[0]:0", %{}, socket)
+    {:noreply, sock_b} = TestLiveView.handle_event("filament:root.B[0]:0", %{}, socket)
+
+    events_a = sock_a.private.live_temp[:push_events] || []
+    events_b = sock_b.private.live_temp[:push_events] || []
+
+    assert ["filament:root.A[0]:0:done", %{from: "a"}] in events_a
+    refute ["filament:root.B[0]:0:done", %{from: "b"}] in events_a
+
+    assert ["filament:root.B[0]:0:done", %{from: "b"}] in events_b
+    refute ["filament:root.A[0]:0:done", %{from: "a"}] in events_b
+  end
+
   test "use_event_ref/1 handler is dispatched via handle_event" do
     test_pid = self()
     handler = fn %{"x" => v} -> send(test_pid, {:called, v}) end

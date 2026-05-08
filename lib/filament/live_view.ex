@@ -48,6 +48,12 @@ defmodule Filament.LiveView do
     ~H"""
     <%= @_filament_rendered %>
     <script data-phx-runtime-hook="FilamentKey">
+      window.filament = window.filament || {
+        handleEvent(hook, event, cb) {
+          const ref = hook.el.dataset.ref;
+          hook.handleEvent(ref ? ref + ":" + event : event, cb);
+        }
+      };
       window.phx_hook_FilamentKey = window.phx_hook_FilamentKey || function() {
         return {
           mounted() {
@@ -254,23 +260,37 @@ defmodule Filament.LiveView do
         handler_index = String.to_integer(index_str)
         tree = socket.assigns._filament_tree
         handler = Filament.FiberTree.get_event_handler(tree, fiber_id_str, handler_index)
-        invoke_event_handler(handler, params, socket)
+        invoke_event_handler(handler, params, socket, "filament:" <> ref)
 
       _other ->
         {:noreply, socket}
     end
   end
 
-  defp invoke_event_handler(nil, _params, socket), do: {:noreply, socket}
+  defp invoke_event_handler(nil, _params, socket, _wire_ref), do: {:noreply, socket}
 
-  defp invoke_event_handler(fun, _params, socket) when is_function(fun, 0) do
+  defp invoke_event_handler(fun, _params, socket, _wire_ref) when is_function(fun, 0) do
     fun.()
     {:noreply, socket}
   end
 
-  defp invoke_event_handler(fun, params, socket) when is_function(fun, 1) do
+  defp invoke_event_handler(fun, params, socket, _wire_ref) when is_function(fun, 1) do
     fun.(params)
     {:noreply, socket}
+  end
+
+  defp invoke_event_handler(fun, params, socket, wire_ref) when is_function(fun, 2) do
+    key = {__MODULE__, :push_socket, make_ref()}
+    Process.put(key, socket)
+
+    push = fn event, payload ->
+      s = Process.get(key)
+      Process.put(key, Phoenix.LiveView.push_event(s, "#{wire_ref}:#{event}", payload))
+      :ok
+    end
+
+    fun.(params, push)
+    {:noreply, Process.delete(key)}
   end
 
   @doc false
