@@ -1,7 +1,9 @@
 {
   "assignee": "Jason Allum",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "flm-3wr"
+  ],
   "created": "2026-05-02T12:39:45Z",
   "description": "Closes the gap between Filament's current state and the original proposal for Items 0–4. These five items must be completed in order — each blocks the next.\n\nACCEPTANCE: The todo example (examples/todo/) runs at http://localhost:4001, shows todos from the observable store, supports adding/toggling/removing todos, all interactions work in Chrome without page reload, child TodoItem components render as distinct fibers with keyed reconciliation.\n\nSCOPE (in order):\n  0. Stable use_state setters (hooks.ex + live_view.ex)\n  1a. VNodeCompiler: lexical @-variable scoping (new file + sigil_f.ex update)\n  1b. VNodeCompiler: reactive scope inference (auto-memoization)\n  2. Complete render_vnode/2 (:element HTML, :component fiber registration, :keyed_list key matching)\n  3. Reconciler child walk using new_fibers from render\n  4. TodoList rewrite using VNodeCompiler and child TodoItem components\n\nOUT OF SCOPE: defcomponent auto-binding (Item 5), inventory hold demo (Item 6), memoization validation (Item 7).\n\nREPO: /Users/j5n/Workspace/filament\nBRANCH: work off main, commit each item as a logical unit.",
   "id": "flm-40e",
@@ -10,5 +12,5 @@
   "status": "in_progress",
   "title": "Filament Gap Closure: Stable Setters, VNodeCompiler, Renderer, Reconciler, TodoList (Items 0-4)",
   "type": "task",
-  "updated_at": "2026-05-02T12:51:00Z"
+  "updated_at": "2026-05-09T20:58:09Z"
 }
