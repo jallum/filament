@@ -2,7 +2,7 @@
 
 A cell is the unit of reactivity in Filament — a versioned value with subscribers
 and a projection-equality check. Components consume cells via hooks
-(`use_observable`, `use_cell`); transports — GenServer-backed observables, in-process
+(`use_observable`); transports — GenServer-backed observables, in-process
 structs, focus trackers — provide them. The component is unaware of which transport
 delivers a cell's value, so the same component code runs against a Phoenix LiveView
 backend, an out-of-process state store, or a non-web target like a TUI.
@@ -93,20 +93,15 @@ end
 cell = {Filament.Observable.GenServer, Cart.Server}
 ```
 
-The legacy `Filament.Observable.subscribe/2` API and the
-`{:filament_observable_updates, ...}` notification format are unchanged for
-backward compatibility — Cell-style and legacy subscribers coexist on the
-same GenServer, and `notify_observers/1` fans out to both.
+## The `use_observable/2` hook
 
-## The `use_cell/2` hook
-
-`use_cell(cell, projection)` is the generic cell-subscription primitive at
+`use_observable(cell, projection)` is the generic cell-subscription primitive at
 the component level. It accepts any cell tuple and applies the projection at
 render time:
 
 ```elixir
 def render(%{cart: cart_cell}) do
-  count = use_cell(cart_cell, fn
+  count = use_observable(cart_cell, fn
     :disconnected -> 0
     state -> length(state.items)
   end)
@@ -122,16 +117,11 @@ prevents redundant DOM updates.
 
 ## When to use which hook
 
-| Hook                          | When                                                                      |
-|-------------------------------|---------------------------------------------------------------------------|
-| `use_state/1`                 | Fiber-local state. No subscription, no transport.                         |
-| `use_observable/2`            | Subscribing to a GenServer. Most application code.                        |
-| `use_cell/2`                  | Subscribing to any cell — non-GenServer transports, custom backends.      |
-
-`use_observable/2` and `use_cell/2` produce equivalent behaviour for
-GenServer-backed observables. Use `use_observable` when the cell is your own
-GenServer (it's slightly less typing); use `use_cell` when you're consuming a
-cell handed to you by a backend you don't own.
+| Hook                | When                                                              |
+|---------------------|-------------------------------------------------------------------|
+| `use_state/1`       | Fiber-local state. No subscription, no transport.                 |
+| `use_observable/1`  | Resolve a cell once for the calling fiber (factory or passthrough). |
+| `use_observable/2`  | Subscribe to any cell and project its current value.              |
 
 ## Authoring a transport
 
@@ -194,13 +184,13 @@ Then in a component:
 {:ok, agent} = MyApp.AgentCell.start_link(0)
 cell = {MyApp.AgentCell, agent}
 
-count = use_cell(cell, & &1)
+count = use_observable(cell, & &1)
 ```
 
 ## Naming: `use_state` stays
 
 `use_state/1` was a candidate to be renamed `use_local` for symmetry with
-`use_cell` (where "cell" implies external; "local" implies fiber-internal).
+`use_observable` (where "cell" implies external; "local" implies fiber-internal).
 After review the rename was rejected:
 
 - `use_state` is the established React-family name; Filament users coming
@@ -210,5 +200,5 @@ After review the rename was rejected:
 - A rename creates churn across every component in every Filament codebase
   for no behaviour change.
 
-The mental model stays: **`use_state` for fiber-local state, `use_cell` /
+The mental model stays: **`use_state` for fiber-local state, `use_observable` /
 `use_observable` for shared / transport-backed state.**

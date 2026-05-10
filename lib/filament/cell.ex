@@ -3,7 +3,7 @@ defmodule Filament.Cell do
   Reactive value with subscribers and a projection-equality check.
 
   A cell is the unit of reactivity in Filament. Components consume cells via
-  hooks (`use_observable`, `use_cell`); transports — GenServer-backed
+  hooks (`use_observable`); transports — GenServer-backed
   observables, in-process structs, focus trackers — provide them. The
   component is unaware of the transport; swapping transports is purely a
   wrapper concern.
