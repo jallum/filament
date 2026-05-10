@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-10T08:29:13Z",
+  "description": "Document the cell mechanism for backend authors. Decide whether to rename `use_state` to `use_local` and apply consistently (or keep `use_state`). Update guides/observables.md to cover the new cell abstraction.\n\n## Files\n- guides/cells.md (new)\n- guides/observables.md (update)\n- (possibly) lib/filament/hooks.ex if rename happens",
+  "id": "flm-3wr.2.4",
+  "labels": [],
+  "parent": "flm-3wr.2",
+  "priority": 2,
+  "status": "open",
+  "title": "Phase 2.4: Cell guide + use_state naming decision",
+  "type": "task",
+  "updated_at": "2026-05-10T08:29:13Z"
+}
