@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "flm-3wr.3.3"
+  ],
   "blocks": [],
   "created": "2026-05-10T08:43:57Z",
   "description": "Document the capture/bubble event model for backend authors and component developers. Cover the phase API, stop_propagation, and how a backend (web or otherwise) feeds events into Core.\n\n## Files\n- guides/events.md (new)",
