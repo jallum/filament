@@ -25,6 +25,7 @@ defmodule Filament.TagEngine do
       |> Keyword.validate!([
         :caller,
         :tag_handler,
+        :subengine,
         line: 1,
         indentation: 0,
         file: "nofile"
@@ -243,11 +244,20 @@ defmodule Filament.TagEngine do
     {subengine, opts} = Keyword.pop(opts, :subengine, Phoenix.LiveView.Engine)
     tag_handler = Keyword.fetch!(opts, :tag_handler)
 
+    # Subengines may implement an optional `handle_tag/3` callback to receive
+    # structured tag-open/close events instead of HTML markup interleaved into
+    # `handle_text`. Used by `Filament.VNodeEngine` to recover element
+    # boundaries without re-parsing the emitted text. Phoenix.LiveView.Engine
+    # does not implement it, so the default path stays text-based.
+    Code.ensure_loaded(subengine)
+    structured? = function_exported?(subengine, :handle_tag, 3)
+
     %{
       cont: {:text, :enabled},
       tokens: [],
       subengine: subengine,
       substate: subengine.init(opts),
+      structured?: structured?,
       file: Keyword.get(opts, :file, "nofile"),
       indentation: Keyword.get(opts, :indentation, 0),
       caller: Keyword.fetch!(opts, :caller),
@@ -339,7 +349,8 @@ defmodule Filament.TagEngine do
            caller: caller,
            source: source,
            indentation: indentation,
-           tag_handler: tag_handler
+           tag_handler: tag_handler,
+           structured?: structured?
          },
          root
        ) do
@@ -354,7 +365,8 @@ defmodule Filament.TagEngine do
       caller: caller,
       root: root,
       indentation: indentation,
-      tag_handler: tag_handler
+      tag_handler: tag_handler,
+      structured?: structured?
     }
   end
 
@@ -955,7 +967,7 @@ defmodule Filament.TagEngine do
       {false, tag_meta, attrs} ->
         state
         |> set_root_on_tag()
-        |> handle_tag_and_attrs(name, attrs, suffix, to_location(tag_meta))
+        |> handle_tag_and_attrs(name, attrs, suffix, to_location(tag_meta), true)
         |> continue(tokens)
 
       {true, new_meta, new_attrs} ->
@@ -963,7 +975,7 @@ defmodule Filament.TagEngine do
         |> push_substate_to_stack()
         |> update_subengine(:handle_begin, [])
         |> set_root_on_not_tag()
-        |> handle_tag_and_attrs(name, new_attrs, suffix, to_location(new_meta))
+        |> handle_tag_and_attrs(name, new_attrs, suffix, to_location(new_meta), true)
         |> handle_special_expr(new_meta)
         |> continue(tokens)
     end
@@ -1005,8 +1017,14 @@ defmodule Filament.TagEngine do
   defp handle_token([{:close, :tag, name, tag_meta} = token | tokens], state) do
     {{:tag, _name, _attrs, tag_open_meta}, state} = pop_tag!(state, token)
 
+    state =
+      if state.structured? do
+        update_subengine(state, :handle_tag, [{:close, name}, to_location(tag_meta)])
+      else
+        update_subengine(state, :handle_text, [to_location(tag_meta), "</#{name}>"])
+      end
+
     state
-    |> update_subengine(:handle_text, [to_location(tag_meta), "</#{name}>"])
     |> handle_special_expr(tag_open_meta)
     |> continue(tokens)
   end
@@ -1215,7 +1233,18 @@ defmodule Filament.TagEngine do
 
   ## handle_tag_and_attrs
 
-  defp handle_tag_and_attrs(state, name, attrs, suffix, meta) do
+  # `terminal?` distinguishes "this tag has no separate close coming" (void
+  # like `<br>` and self-closing like `<br/>`) from "open tag whose close is a
+  # separate token". Suffix alone can't tell us — both `<br>` and `<div>`
+  # carry suffix `">"` — so the call sites pass it explicitly.
+  defp handle_tag_and_attrs(state, name, attrs, suffix, meta, terminal? \\ false)
+
+  defp handle_tag_and_attrs(%{structured?: true} = state, name, attrs, _suffix, meta, terminal?) do
+    structured_attrs = collect_structured_attrs(attrs, state)
+    update_subengine(state, :handle_tag, [{:open, name, structured_attrs, terminal?}, meta])
+  end
+
+  defp handle_tag_and_attrs(state, name, attrs, suffix, meta, _terminal?) do
     text =
       if Application.get_env(:phoenix_live_view, :debug_attributes, false) do
         "<#{name} data-phx-loc=\"#{meta[:line]}\""
@@ -1227,6 +1256,22 @@ defmodule Filament.TagEngine do
     |> update_subengine(:handle_text, [meta, text])
     |> handle_tag_attrs(meta, attrs)
     |> update_subengine(:handle_text, [meta, suffix])
+  end
+
+  defp collect_structured_attrs(attrs, state) do
+    Enum.flat_map(attrs, fn
+      {:root, {:expr, _, _} = expr, _attr_meta} ->
+        [{:__root__, parse_expr!(expr, state.file)}]
+
+      {name, {:expr, _, _} = expr, _attr_meta} ->
+        [{name, parse_expr!(expr, state.file)}]
+
+      {name, {:string, value, _meta}, _attr_meta} ->
+        [{name, value}]
+
+      {name, nil, _attr_meta} ->
+        [{name, nil}]
+    end)
   end
 
   defp assign?({:@, _, [_]}), do: true
