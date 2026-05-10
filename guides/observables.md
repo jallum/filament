@@ -207,13 +207,10 @@ directly:
 test "projection suppresses update when count is unchanged" do
   {:ok, stub} = Filament.Test.Stub.start(fn -> %Cart.State{} end)
 
-  sub = %Filament.Observable.Subscriber{
-    pid: self(),
-    fiber_id: :badge_test_fiber,
-    slot_index: 0
-  }
+  cell = {Filament.Observable.GenServer, stub}
+  subscriber = {self(), :badge_test_fiber, 0}
 
-  {:ok, _initial} = Filament.Observable.subscribe(stub, sub)
+  {:ok, _initial} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
 
   # Push a state with count 0 → 1
   state1 =
@@ -223,11 +220,11 @@ test "projection suppresses update when count is unchanged" do
     )
 
   Filament.Test.Stub.push(stub, state1)
-  assert_receive {:filament_observable_updates, [_]}, 500
+  assert_receive {:cell_update, ^subscriber, ^state1}, 500
 
-  # Push the same state again — raw state unchanged, no notification
+  # Push the same state again — projected value unchanged, no notification
   Filament.Test.Stub.push(stub, state1)
-  refute_receive {:filament_observable_updates, _}, 100
+  refute_receive {:cell_update, _, _}, 100
 end
 ```
 
@@ -370,4 +367,4 @@ See `Filament.Observable` for the full `@callback` specifications including the
   backend you don't own.
 - **API reference** — see `Filament.Observable`, `Filament.Observable.GenServer`,
   `Filament.Cell`, and `Filament.Hooks` (`use_observable/1`, `use_observable/2`,
-  `use_cell/2`) for full signatures.
+  `use_observable/2`) for full signatures.
