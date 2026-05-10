@@ -44,7 +44,7 @@ defmodule B0RenderedIRSpikeTest do
     }
 
     # Verify it's valid by converting to iodata
-    iodata = Safe.to_iodata(rendered)
+    iodata = Filament.Web.to_iodata(rendered)
     assert iodata == ["<div class=\"box\">hello</div>"]
 
     # The dynamic function receives a boolean indicating if we should track changes
@@ -97,7 +97,7 @@ defmodule B0RenderedIRSpikeTest do
     }
 
     # Verify conversion to HTML
-    iodata = Safe.to_iodata(rendered)
+    iodata = Filament.Web.to_iodata(rendered)
     # The renderer interleaves static and dynamic parts
     assert iodata == ["<p>", "Hello, World!", "</p>"]
 
@@ -184,7 +184,7 @@ defmodule B0RenderedIRSpikeTest do
       root: true
     }
 
-    iodata = Safe.to_iodata(rendered)
+    iodata = Filament.Web.to_iodata(rendered)
     assert iodata == ["<div class=\"", "alert-box", "\">", "Warning message", "</div>"]
   end
 
@@ -267,7 +267,7 @@ defmodule B0RenderedIRSpikeTest do
       root: true
     }
 
-    iodata = Safe.to_iodata(rendered)
+    iodata = Filament.Web.to_iodata(rendered)
     # The comprehension is rendered as nested lists with recursive processing
     assert iodata == [
              "",

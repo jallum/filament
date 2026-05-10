@@ -18,7 +18,7 @@ defmodule Filament.Renderer do
   6. Return {Rendered, new_hook_slots, pending_effects, new_fibers}
   """
   @spec render(module(), map(), RenderContext.t()) ::
-          {Rendered.t(), %{non_neg_integer() => term()}, list(), %{String.t() => Fiber.t()},
+          {term(), %{non_neg_integer() => term()}, list(), %{String.t() => Fiber.t()},
            %{non_neg_integer() => function()}}
   def render(component_module, props, %RenderContext{} = context) do
     # Apply prop defaults for any props not supplied.
@@ -53,23 +53,31 @@ defmodule Filament.Renderer do
       # Call render/1
       result = component_module.render(props)
 
-      # If render returns a vnode instead of Rendered, recursively render it
+      # Normalize the component's render output to a walked vnode tree.
+      #
+      # `~F` returns a `%Rendered{}` struct: force-eval its dynamics so side
+      # effects like `register_event_handler` run while the render context is
+      # active, then wrap as `{:rendered_struct, r}` — a transitional vnode
+      # shape that `Filament.Web.to_iodata/1` understands. Phase 1.4 will
+      # switch `~F` codegen to emit walked vnode trees directly, eliminating
+      # this wrapper.
+      #
+      # A vnode tuple is walked: child fibers are registered as a side effect
+      # and the tree is returned in walked form (`:component` nodes carry
+      # captured child render output).
       rendered =
         case result do
           %Rendered{} ->
-            result
+            _ = Safe.to_iodata(result)
+            {:rendered_struct, result}
 
           vnode when is_tuple(vnode) ->
-            render_vnode(vnode, context)
+            walk_vnode(vnode, context)
 
           _ ->
             raise ArgumentError,
                   "render/1 must return %Phoenix.LiveView.Rendered{} or vnode, got: #{inspect(result)}"
         end
-
-      # Force evaluation of dynamic expressions so side effects like
-      # register_event_handler run while the render context is active.
-      _ = Safe.to_iodata(rendered)
 
       # Harvest context fields
       final_ctx = Process.get(:filament_render_context)
@@ -149,7 +157,7 @@ defmodule Filament.Renderer do
 
     Process.put(:filament_render_context, updated_ctx)
 
-    rendered_child
+    unwrap_for_embedding(rendered_child)
   end
 
   @doc """
@@ -213,7 +221,78 @@ defmodule Filament.Renderer do
 
     Process.put(:filament_render_context, updated_ctx)
 
-    rendered_child
+    unwrap_for_embedding(rendered_child)
+  end
+
+  # Phase 1.2 transitional shim: TagEngine.component embeds the result of
+  # `render_component_child*` directly into the parent `~F` template's
+  # Rendered struct, where it expects either a `%Rendered{}` or iodata. Until
+  # Phase 1.4 switches `~F` codegen, peel back the `{:rendered_struct, r}`
+  # wrapper introduced by `render/3` so callers get the bare Rendered struct
+  # they expect. Walked vnode trees are converted via the web converter.
+  defp unwrap_for_embedding({:rendered_struct, %Phoenix.LiveView.Rendered{} = r}), do: r
+
+  defp unwrap_for_embedding(other) when is_tuple(other) do
+    {:safe, Filament.Web.to_iodata(other)}
+  end
+
+  defp unwrap_for_embedding(other), do: other
+
+  @doc """
+  Substrate-only walk of a vnode tree.
+
+  Visits each node, recurses into `:element` and `:fragment` children, and for
+  `:component` nodes runs the substrate side effect (child fiber registration
+  via `render_component_child/3` or `render_component_child_keyed/4`).
+
+  Returns a *walked* vnode tree: same shape as the input except `:component`
+  nodes are rewritten to a 5-tuple `{:component, mod, props, key, child_render}`
+  carrying the child component's render output. The web-bound conversion to
+  HTML iodata is the converter's job (Phase 1.3); this walker emits no HTML,
+  no `phx-event` strings, no escapes.
+  """
+  @spec walk_vnode(Filament.VNode.t(), RenderContext.t()) :: term()
+  def walk_vnode({:text, _content} = node, _context), do: node
+
+  def walk_vnode({:element, tag, attrs, children}, context) do
+    resolved_attrs = Enum.map(attrs, &resolve_event_attr/1)
+    walked = Enum.map(children, &walk_vnode(&1, context))
+    {:element, tag, resolved_attrs, walked}
+  end
+
+  def walk_vnode({:component, mod, props, key}, _context) do
+    parent_ctx = Process.get(:filament_render_context)
+
+    child_render =
+      if key do
+        render_component_child_keyed(parent_ctx, mod, props, key)
+      else
+        render_component_child(parent_ctx, mod, props)
+      end
+
+    {:component, mod, props, key, child_render}
+  end
+
+  def walk_vnode({:fragment, children}, context) do
+    walked = Enum.map(children, &walk_vnode(&1, context))
+    {:fragment, walked}
+  end
+
+  def walk_vnode(invalid, _context) do
+    raise ArgumentError, "invalid vnode: #{inspect(invalid)}"
+  end
+
+  # Substrate-side resolution of `on_*` attribute handlers: registers the
+  # closure as an event handler under the active fiber and replaces the
+  # function value with a `{:wire_ref, ref_string}` marker. The web converter
+  # consumes the marker and emits the corresponding `phx-*` attribute.
+  defp resolve_event_attr({key, value} = attr) do
+    if is_function(value) and String.starts_with?(to_string(key), "on_") do
+      wire_ref = Filament.Hooks.register_event_handler(value)
+      {key, {:wire_ref, wire_ref}}
+    else
+      attr
+    end
   end
 
   @doc """

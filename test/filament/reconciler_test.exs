@@ -5,7 +5,6 @@ defmodule Filament.ReconcilerTest do
   alias Filament.Fixtures.CounterComponent
   alias Filament.Reconciler
   alias Filament.ReconcilerError
-  alias Phoenix.HTML.Safe
 
   defmodule StubObservable do
     @moduledoc false
@@ -32,7 +31,7 @@ defmodule Filament.ReconcilerTest do
       assert tree["root"].status == :stable
       assert tree["root"].id == "root"
 
-      assert %Phoenix.LiveView.Rendered{} = rendered
+      assert {:rendered_struct, %Phoenix.LiveView.Rendered{}} = rendered
       assert pending_effects == []
     end
 
@@ -40,7 +39,7 @@ defmodule Filament.ReconcilerTest do
       {_tree, rendered, _pending_effects} =
         Reconciler.mount(CounterComponent, %{count: 42})
 
-      iodata = Safe.to_iodata(rendered)
+      iodata = Filament.Web.to_iodata(rendered)
       html = IO.iodata_to_binary(iodata)
 
       assert html =~ "42"
@@ -66,7 +65,7 @@ defmodule Filament.ReconcilerTest do
       assert new_tree["root"].status == :stable
 
       # Check rendered output
-      iodata = Safe.to_iodata(new_rendered)
+      iodata = Filament.Web.to_iodata(new_rendered)
       html = IO.iodata_to_binary(iodata)
       assert html =~ "1"
     end
@@ -78,8 +77,8 @@ defmodule Filament.ReconcilerTest do
       {new_tree, rendered2, _pending_effects2} = Reconciler.update(tree, "root", %{count: 5})
 
       # Rendered should be equivalent
-      html1 = rendered1 |> Safe.to_iodata() |> IO.iodata_to_binary()
-      html2 = rendered2 |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html1 = rendered1 |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
+      html2 = rendered2 |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html1 == html2
 
       # Tree should be updated

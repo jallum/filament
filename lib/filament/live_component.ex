@@ -69,7 +69,7 @@ defmodule Filament.LiveComponent do
         {:ok,
          socket
          |> Phoenix.Component.assign(:_filament_tree, new_tree)
-         |> Phoenix.Component.assign(:_filament_rendered, new_rendered)
+         |> Phoenix.Component.assign(:_filament_rendered, Filament.LiveView.to_safe(new_rendered))
          |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
 
       :ignore ->
@@ -90,7 +90,7 @@ defmodule Filament.LiveComponent do
         {:ok,
          socket
          |> Phoenix.Component.assign(:_filament_tree, tree)
-         |> Phoenix.Component.assign(:_filament_rendered, rendered)
+         |> Phoenix.Component.assign(:_filament_rendered, Filament.LiveView.to_safe(rendered))
          |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)
          |> Phoenix.Component.assign(:_filament_component, component)}
 
@@ -101,7 +101,7 @@ defmodule Filament.LiveComponent do
         {:ok,
          socket
          |> Phoenix.Component.assign(:_filament_tree, new_tree)
-         |> Phoenix.Component.assign(:_filament_rendered, rendered)
+         |> Phoenix.Component.assign(:_filament_rendered, Filament.LiveView.to_safe(rendered))
          |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
     end
   end

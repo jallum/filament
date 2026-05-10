@@ -5,9 +5,9 @@ defmodule Filament.Reconciler do
   alias Filament.ReconcilerError
   alias Filament.RenderContext
   alias Filament.Renderer
-  alias Phoenix.LiveView.Rendered
 
   @type fiber_tree() :: %{String.t() => Fiber.t()}
+  @type walked_vnode() :: term()
 
   @doc """
   Mounts the root component and creates the initial fiber tree.
@@ -16,7 +16,7 @@ defmodule Filament.Reconciler do
     * `:owner_pid` - the LiveView process that owns this render tree (default: nil)
   """
   @spec mount(module(), map(), keyword()) ::
-          {fiber_tree(), Rendered.t(), list()}
+          {fiber_tree(), walked_vnode(), list()}
   def mount(root_component, props, opts \\ []) do
     owner_pid = Keyword.get(opts, :owner_pid)
 
@@ -63,7 +63,7 @@ defmodule Filament.Reconciler do
     * `:owner_pid` - the LiveView process that owns this render tree (default: nil)
   """
   @spec update(fiber_tree(), String.t(), map(), keyword()) ::
-          {fiber_tree(), Rendered.t(), list()}
+          {fiber_tree(), walked_vnode(), list()}
   def update(tree, fiber_id, new_props, opts \\ []) do
     owner_pid = Keyword.get(opts, :owner_pid)
 
