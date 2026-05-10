@@ -3,7 +3,9 @@
   "blocked_by": [
     "flm-3wr.1.4.1"
   ],
-  "blocks": [],
+  "blocks": [
+    "flm-3wr.1.4.7"
+  ],
   "created": "2026-05-10T02:28:26Z",
   "description": "JSX-block conditionals ({if cond do} ... {else} ... {end}) compile to a regular Elixir if expression that returns a vnode (or {:fragment, [...]}). Slots via inner_block emit a closure that returns a vnode, integrated with parent-element vnode children.\n\n## Files\n- lib/filament/vnode_engine.ex\n- lib/filament/tag_engine.ex (jsx_else, jsx_end, slot handle_token branches, inner_block macro)\n\n## Acceptance\n- {if active do}\u003cdiv\u003eon\u003c/div\u003e{else}\u003cdiv\u003eoff\u003c/div\u003e{end} emits a conditional vnode at runtime.\n- Slot examples (existing tests) still render correctly.\n- :if attribute on elements/components emits a conditional vnode wrapping the element/component.",
   "id": "flm-3wr.1.4.4",
