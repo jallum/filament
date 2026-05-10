@@ -332,4 +332,155 @@ defmodule Filament.LiveViewTest do
       assert html_after =~ "cell-count: 1"
     end
   end
+
+  describe "handle_info/2 :cell_resubscribe" do
+    alias Filament.LiveViewTest.CellCounter
+    alias Filament.LiveViewTest.CellLiveView
+
+    test "marks the slot :needs_resubscribe and re-renders" do
+      {:ok, server} = CellCounter.start_link(0)
+      cell = {Filament.Observable.GenServer, server}
+
+      socket = test_socket(%{cell: cell})
+      {:ok, socket} = CellLiveView.mount(%{}, %{}, socket)
+
+      # Find the subscriber tuple (one slot exists on root after mount).
+      [{slot_index, _}] =
+        socket.assigns._filament_tree["root"].hook_slots |> Enum.to_list()
+
+      subscriber = {self(), "root", slot_index}
+
+      {:noreply, socket} =
+        CellLiveView.handle_info({:cell_resubscribe, subscriber}, socket)
+
+      # After resubscribe, the slot should hold a fresh :cell_subscribed value
+      # (set by the re-render which calls cell_subscribe_fresh).
+      assert {:cell_subscribed, _} =
+               Map.fetch!(socket.assigns._filament_tree["root"].hook_slots, slot_index)
+    end
+
+    test "no matching fiber returns unchanged socket" do
+      socket = %Socket{
+        assigns: %{
+          count: 0,
+          _filament_tree: %{},
+          _filament_rendered: {:safe, []},
+          __changed__: %{}
+        },
+        private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}
+      }
+
+      assert {:noreply, _socket} =
+               CellLiveView.handle_info(
+                 {:cell_resubscribe, {self(), "missing", 0}},
+                 socket
+               )
+    end
+
+    test "malformed subscriber tuple returns unchanged socket" do
+      socket = %Socket{
+        assigns: %{
+          count: 0,
+          _filament_tree: %{},
+          _filament_rendered: {:safe, []},
+          __changed__: %{}
+        },
+        private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}
+      }
+
+      assert {:noreply, ^socket} =
+               CellLiveView.handle_info({:cell_resubscribe, :not_a_tuple}, socket)
+    end
+
+    test "saturated mailbox triggers cell_resubscribe end-to-end" do
+      {:ok, server} = CellCounter.start_link(0)
+      cell = {Filament.Observable.GenServer, server}
+
+      # Use a sleeping decoy pid as the subscriber so we can flood its mailbox.
+      decoy = spawn(fn -> Process.sleep(:infinity) end)
+
+      subscriber = {decoy, "root", 0}
+      {:ok, _} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
+
+      # Flood past @max_mailbox_depth (default 100).
+      for _ <- 1..110, do: send(decoy, :__flood__)
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        CellCounter.bump(server)
+        Logger.flush()
+      end)
+
+      {:messages, msgs} = Process.info(decoy, :messages)
+      assert Enum.any?(msgs, &match?({:cell_resubscribe, ^subscriber}, &1))
+
+      Process.exit(decoy, :kill)
+    end
+  end
+
+  describe "cell server restart" do
+    alias Filament.LiveViewTest.CellCounter
+    alias Filament.LiveViewTest.CellLiveView
+
+    test "after server death, resubscribe yields :disconnected; restart resumes updates" do
+      Process.flag(:trap_exit, true)
+      {:ok, server} = CellCounter.start_link(0)
+      cell = {Filament.Observable.GenServer, server}
+
+      socket = test_socket(%{cell: cell})
+      {:ok, socket} = CellLiveView.mount(%{}, %{}, socket)
+
+      [{slot_index, _}] =
+        socket.assigns._filament_tree["root"].hook_slots |> Enum.to_list()
+
+      # Kill the server. The cell is now unreachable.
+      ref = Process.monitor(server)
+      Process.exit(server, :kill)
+      assert_receive {:DOWN, ^ref, _, _, _}, 200
+
+      subscriber = {self(), "root", slot_index}
+
+      # Manually deliver the resubscribe (the dead transport can't send it).
+      {:noreply, socket} =
+        CellLiveView.handle_info({:cell_resubscribe, subscriber}, socket)
+
+      html_disconnected =
+        socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+
+      # The cell can't reach its (dead) source, so use_cell yields :disconnected.
+      assert html_disconnected =~ "cell-count: disconnected"
+
+      # Restart the cell against a fresh server. Component re-render via a
+      # subsequent resubscribe should pick it up.
+      {:ok, server2} = CellCounter.start_link(7)
+      cell2 = {Filament.Observable.GenServer, server2}
+
+      socket =
+        socket
+        |> Phoenix.Component.assign(:cell, cell2)
+        |> then(fn s ->
+          tree = s.assigns._filament_tree
+          new_slots = Map.put(tree["root"].hook_slots, slot_index, :needs_resubscribe)
+          new_tree = Map.put(tree, "root", %{tree["root"] | hook_slots: new_slots})
+
+          {final_tree, rendered, _} =
+            Filament.Reconciler.update(new_tree, "root", %{cell: cell2}, owner_pid: self())
+
+          s
+          |> Phoenix.Component.assign(:_filament_tree, final_tree)
+          |> Phoenix.Component.assign(
+            :_filament_rendered,
+            Filament.Web.to_rendered(rendered)
+          )
+        end)
+
+      html_after =
+        socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+
+      assert html_after =~ "cell-count: 7"
+
+      # And subsequent bumps are delivered.
+      CellCounter.bump(server2)
+      assert_receive {:cell_update, _sub, 8}, 200
+    end
+  end
 end

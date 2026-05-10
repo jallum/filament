@@ -229,6 +229,17 @@ defmodule Filament.LiveView do
         Filament.LiveView.handle_cell_update(tree, subscriber, value, socket, &rerender_from_root/2)
       end
 
+      @doc """
+      Phoenix LiveView info handler for `Filament.Cell` resubscribe signals.
+      Sent by a cell transport when it can't deliver an update — typically because
+      the subscriber's mailbox is saturated, or because the cell source restarted.
+      Marks the slot `:needs_resubscribe`; the next render fetches a fresh value.
+      """
+      def handle_info({:cell_resubscribe, subscriber}, socket) do
+        tree = socket.assigns._filament_tree
+        Filament.LiveView.handle_cell_resubscribe(tree, subscriber, socket, &rerender_from_root/2)
+      end
+
       # Re-render from the root fiber so _filament_rendered always contains the full
       # page output regardless of which child fiber triggered the update.
       defp rerender_from_root(socket, tree) do
@@ -383,6 +394,25 @@ defmodule Filament.LiveView do
 
           fiber ->
             new_slots = Map.put(fiber.hook_slots, slot_index, {:cell_subscribed, value})
+            new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
+            {:noreply, rerender_fn.(socket, new_tree)}
+        end
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  @doc false
+  def handle_cell_resubscribe(tree, subscriber, socket, rerender_fn) do
+    case subscriber do
+      {_owner_pid, fiber_id, slot_index} ->
+        case Map.get(tree, fiber_id) do
+          nil ->
+            {:noreply, socket}
+
+          fiber ->
+            new_slots = Map.put(fiber.hook_slots, slot_index, :needs_resubscribe)
             new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
             {:noreply, rerender_fn.(socket, new_tree)}
         end
