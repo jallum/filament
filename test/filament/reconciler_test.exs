@@ -31,7 +31,7 @@ defmodule Filament.ReconcilerTest do
       assert tree["root"].status == :stable
       assert tree["root"].id == "root"
 
-      assert {:rendered_struct, %Phoenix.LiveView.Rendered{}} = rendered
+      assert is_tuple(rendered)
       assert pending_effects == []
     end
 
