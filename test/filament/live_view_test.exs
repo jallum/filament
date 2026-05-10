@@ -219,21 +219,6 @@ defmodule Filament.LiveViewTest do
   end
 
   describe "handle_info/2" do
-    test "handles filament_observable_updates messages" do
-      socket = %Socket{
-        assigns: %{
-          count: 0,
-          _filament_tree: %{},
-          _filament_rendered: {:safe, []},
-          __changed__: %{}
-        },
-        private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}
-      }
-
-      assert {:noreply, _socket} =
-               CounterLiveView.handle_info({:filament_observable_updates, [{"root", 0, 42}]}, socket)
-    end
-
     test "handles cell_update messages with no matching fiber" do
       socket = %Socket{
         assigns: %{

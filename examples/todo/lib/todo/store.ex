@@ -5,8 +5,6 @@ defmodule Todo.Store do
   """
   use Filament.Observable.GenServer
 
-  alias Filament.Observable.Subscriber
-
   # Client API
 
   def start_link(opts) do

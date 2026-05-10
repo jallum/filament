@@ -51,13 +51,19 @@ defmodule Collaboration.DocumentServer do
     {:ok, initial_view, new_state}
   end
 
-  # Handle unsubscribe when a subscriber process dies.
-  # The first arg is a %Filament.Observable.Subscriber{} struct — extract .pid for lock comparison.
+  # Handle unsubscribe when a subscriber process dies. Cell subscribers are
+  # tuples `{owner_pid, fiber_id, slot_index}`; pull the pid for lock comparison.
   @impl Filament.Observable
   def handle_unsubscribe(subscriber, state) do
+    pid =
+      case subscriber do
+        {p, _, _} when is_pid(p) -> p
+        _ -> nil
+      end
+
     new_state =
       state
-      |> maybe_release_lock(subscriber.pid)
+      |> maybe_release_lock(pid)
       |> decrement_presence()
 
     notify_observers(observable_view(new_state))

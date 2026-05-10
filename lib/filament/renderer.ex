@@ -91,7 +91,6 @@ defmodule Filament.Renderer do
       fiber_id: child_id,
       fiber_tree: parent_ctx.fiber_tree,
       owner_pid: parent_ctx.owner_pid,
-      observable_stubs: parent_ctx.observable_stubs,
       subscribe_enabled: parent_ctx.subscribe_enabled,
       hook_slots: hook_slots
     }

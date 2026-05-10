@@ -62,12 +62,9 @@ defmodule Collaboration.Test do
           id: make_ref()
         )
 
-      sub = %Filament.Observable.Subscriber{
-        pid: self(),
-        proj_keys: %{{"presence_test", 0} => true}
-      }
-
-      {:ok, view1} = Filament.Observable.subscribe(server, sub)
+      cell = {Filament.Observable.GenServer, server}
+      subscriber = {self(), "presence_test", 0}
+      {:ok, view1} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
       assert view1.presence == 1
     end
   end

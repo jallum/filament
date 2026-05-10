@@ -6,18 +6,37 @@ defmodule Filament.ReconcilerTest do
   alias Filament.Reconciler
   alias Filament.ReconcilerError
 
-  defmodule StubObservable do
+  defmodule StubCellTransport do
     @moduledoc false
     use GenServer
 
+    @behaviour Filament.Cell
+
     def start_link, do: GenServer.start_link(__MODULE__, [])
+
+    @impl GenServer
     def init(_), do: {:ok, []}
     def unsubscribe_calls(pid), do: GenServer.call(pid, :calls)
 
-    def handle_cast({:filament_remove_projection, owner_pid, {fiber_id, slot_index}}, calls),
-      do: {:noreply, [{owner_pid, fiber_id, slot_index} | calls]}
+    @impl Filament.Cell
+    def subscribe(server, _subscriber, _projection), do: {:ok, GenServer.call(server, :get_initial)}
 
+    @impl Filament.Cell
+    def unsubscribe(server, subscriber) do
+      GenServer.cast(server, {:unsubscribed, subscriber})
+      :ok
+    end
+
+    @impl Filament.Cell
+    def current(_server, _projection), do: nil
+
+    @impl GenServer
+    def handle_call(:get_initial, _from, calls), do: {:reply, nil, calls}
     def handle_call(:calls, _from, calls), do: {:reply, calls, calls}
+
+    @impl GenServer
+    def handle_cast({:unsubscribed, {owner_pid, fiber_id, slot_index}}, calls),
+      do: {:noreply, [{owner_pid, fiber_id, slot_index} | calls]}
   end
 
   describe "mount/2" do
@@ -199,9 +218,10 @@ defmodule Filament.ReconcilerTest do
       assert :grandchild in calls
     end
 
-    test "observable is unsubscribed when fiber is removed" do
-      server = start_supervised!(%{id: StubObservable, start: {StubObservable, :start_link, []}})
+    test "cell is unsubscribed when fiber is removed" do
+      server = start_supervised!(%{id: StubCellTransport, start: {StubCellTransport, :start_link, []}})
       owner = self()
+      cell = {StubCellTransport, server}
 
       {tree, _, _} = Reconciler.mount(CounterComponent, %{count: 0})
 
@@ -212,7 +232,7 @@ defmodule Filament.ReconcilerTest do
           props: %{count: 1},
           status: :stable,
           parent_id: "root",
-          hook_slots: %{0 => {:subscribed, server, 42}}
+          hook_slots: %{0 => {:cell_subscribed, cell, 42}}
         )
 
       tree =
@@ -225,7 +245,7 @@ defmodule Filament.ReconcilerTest do
       refute Map.has_key?(new_tree, "root.child")
       # Allow the cast to be processed
       :timer.sleep(10)
-      assert StubObservable.unsubscribe_calls(server) == [{owner, "root.child", 0}]
+      assert StubCellTransport.unsubscribe_calls(server) == [{owner, "root.child", 0}]
     end
 
     test "parent fiber children list is updated to match new render" do

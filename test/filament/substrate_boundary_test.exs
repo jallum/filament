@@ -33,7 +33,6 @@ defmodule Filament.SubstrateBoundaryTest do
     Filament.KeyModifiers,
     Filament.Observable,
     Filament.Observable.GenServer,
-    Filament.Observable.Subscriber,
     Filament.RenderContext,
     Filament.SigilF,
     Filament.VNode,
