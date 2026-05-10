@@ -217,6 +217,18 @@ defmodule Filament.LiveView do
         Filament.LiveView.handle_observable_resubscribe(tree, fiber_id, slot_index, socket, &rerender_from_root/2)
       end
 
+      @doc """
+      Phoenix LiveView info handler for `Filament.Cell` updates.
+      The subscriber tuple is `{owner_pid, fiber_id, slot_index}` (see
+      `Filament.Hooks.cell_subscribe_fresh/3`); the value is whatever the cell
+      transport sent — for the GenServer transport this is the raw observable
+      state (identity-projected), so the user projection runs at render time.
+      """
+      def handle_info({:cell_update, subscriber, value}, socket) do
+        tree = socket.assigns._filament_tree
+        Filament.LiveView.handle_cell_update(tree, subscriber, value, socket, &rerender_from_root/2)
+      end
+
       # Re-render from the root fiber so _filament_rendered always contains the full
       # page output regardless of which child fiber triggered the update.
       defp rerender_from_root(socket, tree) do
@@ -359,6 +371,25 @@ defmodule Filament.LiveView do
 
     new_slots = Map.put(fiber.hook_slots, slot_index, new_slot)
     Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
+  end
+
+  @doc false
+  def handle_cell_update(tree, subscriber, value, socket, rerender_fn) do
+    case subscriber do
+      {_owner_pid, fiber_id, slot_index} ->
+        case Map.get(tree, fiber_id) do
+          nil ->
+            {:noreply, socket}
+
+          fiber ->
+            new_slots = Map.put(fiber.hook_slots, slot_index, {:cell_subscribed, value})
+            new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
+            {:noreply, rerender_fn.(socket, new_tree)}
+        end
+
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   @doc false

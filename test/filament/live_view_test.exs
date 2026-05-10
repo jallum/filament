@@ -231,5 +231,105 @@ defmodule Filament.LiveViewTest do
       assert {:noreply, _socket} =
                CounterLiveView.handle_info({:filament_observable_updates, [{"root", 0, 42}]}, socket)
     end
+
+    test "handles cell_update messages with no matching fiber" do
+      socket = %Socket{
+        assigns: %{
+          count: 0,
+          _filament_tree: %{},
+          _filament_rendered: {:safe, []},
+          __changed__: %{}
+        },
+        private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}
+      }
+
+      assert {:noreply, _socket} =
+               CounterLiveView.handle_info(
+                 {:cell_update, {self(), "missing", 0}, 7},
+                 socket
+               )
+    end
+
+    test "handles cell_update messages with malformed subscriber tuple" do
+      socket = %Socket{
+        assigns: %{
+          count: 0,
+          _filament_tree: %{},
+          _filament_rendered: {:safe, []},
+          __changed__: %{}
+        },
+        private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}
+      }
+
+      assert {:noreply, ^socket} =
+               CounterLiveView.handle_info({:cell_update, :not_a_tuple, 7}, socket)
+    end
+  end
+
+  describe "handle_info/2 :cell_update end-to-end" do
+    defmodule CellCounter do
+      @moduledoc false
+      use Filament.Observable.GenServer
+
+      def start_link(initial \\ 0), do: GenServer.start_link(__MODULE__, initial, [])
+      def bump(server), do: GenServer.call(server, :bump)
+
+      @impl GenServer
+      def init(n), do: {:ok, n}
+
+      @impl GenServer
+      def handle_call(:bump, _from, n) do
+        new = n + 1
+        notify_observers(new)
+        {:reply, new, new}
+      end
+    end
+
+    defmodule CellViewComponent do
+      @moduledoc false
+      use Filament.Component
+
+      defcomponent do
+        prop(:cell, :any, required: true)
+
+        def render(%{cell: cell}) do
+          count = use_cell(cell, & &1)
+          ~F"<p>cell-count: {count}</p>"
+        end
+      end
+    end
+
+    defmodule CellLiveView do
+      use Filament.LiveView
+
+      def root_component, do: CellViewComponent
+    end
+
+    test "cell_update message updates the slot and re-renders" do
+      {:ok, server} = CellCounter.start_link(0)
+      cell = {Filament.Observable.GenServer, server}
+
+      socket = test_socket(%{cell: cell})
+      {:ok, socket} = CellLiveView.mount(%{}, %{}, socket)
+
+      html_before =
+        socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+
+      assert html_before =~ "cell-count: 0"
+
+      # Bumping the server fires notify_cell_each, which sends `:cell_update`
+      # to the subscriber pid (this test process). We capture the message and
+      # then feed it back through the LiveView's handle_info to prove the
+      # whole loop re-renders.
+      CellCounter.bump(server)
+      assert_receive {:cell_update, subscriber, 1}, 200
+
+      {:noreply, socket} = CellLiveView.handle_info({:cell_update, subscriber, 1}, socket)
+
+      html_after =
+        socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+
+      assert html_after =~ "cell-count: 1"
+    end
   end
 end
