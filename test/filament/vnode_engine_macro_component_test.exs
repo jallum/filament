@@ -19,7 +19,14 @@ defmodule Filament.VNodeEngineMacroComponentTest do
     import Filament.Test.VNodeEngineHelper
 
     def template do
-      vnode_template("<div>\n<span phx-hook=\".VNodeHook\" id=\"vnode-el\"></span>\n<script :type={Phoenix.LiveView.ColocatedHook} name=\".VNodeHook\">\nexport default { mounted() {} }\n</script>\n</div>\n")
+      vnode_template("""
+      <div>
+        <span phx-hook=".VNodeHook" id="vnode-el"></span>
+        <script :type={Phoenix.LiveView.ColocatedHook} name=".VNodeHook">
+          export default { mounted() {} }
+        </script>
+      </div>
+      """)
     end
   end
 

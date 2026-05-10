@@ -62,9 +62,15 @@ defmodule Filament.VNodeEngine do
 
   def handle_expr(state, "", expr) do
     # `<% expr %>` (no `=` marker) — side-effect expression, no value emitted.
-    # We still need to evaluate it at runtime, so prepend it to the next child
-    # in a block. For simplicity, we attach a `_ = expr` to the children list.
-    push_child(state, quote(do: (_ = unquote(expr); {:text, ""})))
+    # Wrap in a fn-call so the side effect runs at render time but produces
+    # an empty text leaf; nothing actually appears in the rendered output.
+    side_effect_ast =
+      quote do
+        unquote(expr)
+        {:text, ""}
+      end
+
+    push_child(state, side_effect_ast)
   end
 
   def handle_expr(state, _marker, _expr), do: state
