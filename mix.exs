@@ -76,6 +76,7 @@ defmodule Filament.MixProject do
         "CONTRIBUTING.md",
         "guides/getting-started.md",
         "guides/observables.md",
+        "guides/cells.md",
         "guides/hooks.md",
         "guides/testing.md",
         "guides/migration-guide.md"
@@ -84,6 +85,7 @@ defmodule Filament.MixProject do
         Components: [Filament.Component, Filament.Defcomponent, Filament.SigilF],
         Hooks: [Filament.Hooks],
         Observables: [Filament.Observable, Filament.Observable.GenServer],
+        Cells: [Filament.Cell],
         LiveView: [Filament.LiveView]
       ]
     ]
