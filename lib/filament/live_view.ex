@@ -43,13 +43,8 @@ defmodule Filament.LiveView do
 
   @callback root_component() :: module()
 
-  # TODO(flm-3wr.1.5): drop this shim once `~F` codegen emits walked vnode
-  # trees directly (Phase 1.4) and there is no remaining need to coerce a
-  # Rendered struct into the assign. Until then we wrap the converter output
-  # in `{:safe, iodata}` so EEx (`<%= @_filament_rendered %>`) embeds without
-  # re-escaping.
   @doc false
-  def to_safe(walked_vnode), do: {:safe, Filament.Web.to_iodata(walked_vnode)}
+  def to_safe(walked_vnode), do: Filament.Web.to_rendered(walked_vnode)
 
   @doc false
   def render(assigns) do

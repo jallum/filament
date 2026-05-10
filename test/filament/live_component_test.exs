@@ -86,7 +86,7 @@ defmodule Filament.LiveComponentTest do
 
       assert socket.assigns._filament_tree
       rendered = socket.assigns._filament_rendered
-      assert {:safe, _iodata} = rendered
+      assert %Phoenix.LiveView.Rendered{} = rendered
 
       html = rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "World"
