@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-40e"
   ],
@@ -9,8 +9,8 @@
   "id": "flm-3wr",
   "labels": [],
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "[EPIC] Filament Core: target-agnostic substrate for non-web backends",
   "type": "epic",
-  "updated_at": "2026-05-09T20:58:09Z"
+  "updated_at": "2026-05-10T03:01:33Z"
 }
