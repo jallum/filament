@@ -3,7 +3,9 @@
   "blocked_by": [
     "flm-xbb.8"
   ],
-  "blocks": [],
+  "blocks": [
+    "flm-xbb.10"
+  ],
   "created": "2026-05-10T10:55:46Z",
   "description": "With everything migrated to Cell and renamed, remove the Subscriber world:\n\n- Module: `lib/filament/observable/subscriber.ex`\n- In `lib/filament/observable/gen_server.ex`: the `handle_call({:filament_subscribe, %Subscriber{}}, ...)`, `handle_cast({:filament_remove_projection, ...}, ...)` clauses; the module-level helpers `handle_legacy_subscribe`, `legacy_subscribe_handoff`, `legacy_subscribe_merge`, `handle_legacy_remove_projection`, `legacy_remove_projection_for`; the Subscriber-keyed branch of `notify_observers/1`; the `alias Filament.Observable.Subscriber`.\n- In `lib/filament/observable.ex`: the `subscribe`/`remove_projection` wrappers that send `{:filament_subscribe, ...}` and `{:filament_remove_projection, ...}`.\n- In `lib/filament/hooks.ex`: any remaining `do_subscribe` / `resolve_value` paths that the new `use_observable` (post-rename, was `use_cell`) doesn't use.\n- In `lib/filament/live_view.ex`: the `handle_info` clauses for `:filament_observable_updates` and `:filament_observable_resubscribe` (the new `:cell_update` / `:cell_resubscribe` clauses replace them).\n- In `lib/filament/live_component.ex`: same — drop the matching branches in `process_filament_msg/3`.\n- Tests: drop `test/filament/observable_test.exs`, `test/filament/observable/backpressure_test.exs`, the Subscriber sections of `test/filament/reconciler_test.exs` and `test/filament/test/stub_test.exs`. Anything that still needs coverage (backpressure, reconnect handoff) should already have been moved to Cell-side tests in T2/T3.\n\nDrop the word \"legacy\" from any remaining names.",
   "id": "flm-xbb.9",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Delete Subscriber model and legacy helpers",
   "type": "task",
-  "updated_at": "2026-05-10T10:55:47Z"
+  "updated_at": "2026-05-10T10:55:48Z"
 }
