@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-10T10:55:46Z",
+  "description": "The Subscriber notify path detects mailbox saturation and sends `:filament_observable_resubscribe` instead of dropping updates (see `gen_server.ex` lines ~366-390). The Cell path in `notify_cell_each/2` (~line 329) currently just calls `send(entry.pid, {:cell_update, sub, new_projected})` unconditionally.\n\nBring the same saturation check to `notify_cell_each/2`: read `:message_queue_len` via `Process.info/2`, and on saturation skip the send and trigger a Cell-style resubscribe (see T3).\n\nAdd a backpressure test analogous to `test/filament/observable/backpressure_test.exs` but for the Cell path.",
+  "id": "flm-xbb.2",
+  "labels": [],
+  "parent": "flm-xbb",
+  "priority": 2,
+  "status": "open",
+  "title": "Add backpressure to Cell notify path",
+  "type": "task",
+  "updated_at": "2026-05-10T10:55:46Z"
+}
