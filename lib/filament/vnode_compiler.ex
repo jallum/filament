@@ -560,6 +560,88 @@ defmodule Filament.VNodeCompiler do
     MapSet.to_list(vars)
   end
 
+  # ─── Vnode IR memoisation pass (Phase 1.4.5) ──────────────────────────────
+  #
+  # Walks the AST emitted by `Filament.VNodeEngine` looking for element vnodes
+  # of the form `{:{}, _, [:element, name, attrs, children]}`. For attrs whose
+  # name starts with `"on_"` and whose value is a fn literal, wraps the fn with
+  # `Filament.Hooks.memo_at({:t, idx}, deps, fn -> closure end)` so re-renders
+  # return the same fn object when the closure's reactive deps haven't
+  # changed. Substrate walker's `resolve_event_attr` then registers the
+  # memoised closure normally — wire-ref indexing is unchanged.
+  #
+  # Reactive-value memoisation for non-handler interpolations is a perf win
+  # but not behavioural; deferred until profiling shows it's needed.
+  @doc false
+  @spec assign_memos_vnode(Macro.t(), [atom()]) :: Macro.t()
+  def assign_memos_vnode(ast, in_scope) do
+    {result, _counter} = walk_vnode_ast(ast, in_scope, 0)
+    result
+  end
+
+  # Stop at fn literals — they're component closures and own their own scope.
+  defp walk_vnode_ast({:fn, _, _} = node, _in_scope, counter), do: {node, counter}
+
+  # Element vnode constructor: `{:{}, [], [:element, name, attrs, children]}`.
+  # Rewrite the attrs list, then keep walking the children.
+  defp walk_vnode_ast(
+         {:{}, meta, [:element, name, attrs_list, children]},
+         in_scope,
+         counter
+       ) do
+    {new_attrs, counter} = walk_element_attrs(attrs_list, in_scope, counter)
+    {new_children, counter} = walk_vnode_ast(children, in_scope, counter)
+    {{:{}, meta, [:element, name, new_attrs, new_children]}, counter}
+  end
+
+  defp walk_vnode_ast(list, in_scope, counter) when is_list(list) do
+    Enum.map_reduce(list, counter, fn node, c -> walk_vnode_ast(node, in_scope, c) end)
+  end
+
+  defp walk_vnode_ast({a, b}, in_scope, counter) do
+    {new_a, counter} = walk_vnode_ast(a, in_scope, counter)
+    {new_b, counter} = walk_vnode_ast(b, in_scope, counter)
+    {{new_a, new_b}, counter}
+  end
+
+  defp walk_vnode_ast({tag, meta, args}, in_scope, counter) when is_list(args) do
+    {new_args, counter} = walk_vnode_ast(args, in_scope, counter)
+    {{tag, meta, new_args}, counter}
+  end
+
+  defp walk_vnode_ast(other, _in_scope, counter), do: {other, counter}
+
+  defp walk_element_attrs(attrs_list, in_scope, counter) when is_list(attrs_list) do
+    Enum.map_reduce(attrs_list, counter, fn attr, c ->
+      maybe_memoise_event_attr(attr, in_scope, c)
+    end)
+  end
+
+  defp walk_element_attrs(other, in_scope, counter), do: walk_vnode_ast(other, in_scope, counter)
+
+  defp maybe_memoise_event_attr({name, {:fn, _, _} = fn_ast} = _attr, in_scope, counter)
+       when is_binary(name) do
+    if String.starts_with?(name, "on_") do
+      deps = compute_closure_deps(fn_ast, in_scope)
+      dep_vars = names_to_var_ast(deps)
+
+      memoised =
+        quote do
+          Filament.Hooks.memo_at(
+            {:t, unquote(counter)},
+            unquote(dep_vars),
+            fn -> unquote(fn_ast) end
+          )
+        end
+
+      {{name, memoised}, counter + 1}
+    else
+      {{name, fn_ast}, counter}
+    end
+  end
+
+  defp maybe_memoise_event_attr(attr, _in_scope, counter), do: {attr, counter}
+
   defp valid_variable_name?(name) when is_atom(name) do
     name not in ~w[
       fn do end after else catch rescue and or not in when
