@@ -44,9 +44,6 @@ defmodule Filament.LiveView do
   @callback root_component() :: module()
 
   @doc false
-  def to_safe(walked_vnode), do: Filament.Web.to_rendered(walked_vnode)
-
-  @doc false
   def render(assigns) do
     ~H"""
     <%= @_filament_rendered %>
@@ -143,7 +140,7 @@ defmodule Filament.LiveView do
         socket =
           socket
           |> Phoenix.Component.assign(:_filament_tree, tree)
-          |> Phoenix.Component.assign(:_filament_rendered, Filament.LiveView.to_safe(rendered))
+          |> Phoenix.Component.assign(:_filament_rendered, Filament.Web.to_rendered(rendered))
           |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)
 
         socket =
@@ -230,7 +227,7 @@ defmodule Filament.LiveView do
 
         socket
         |> Phoenix.Component.assign(:_filament_tree, new_tree)
-        |> Phoenix.Component.assign(:_filament_rendered, Filament.LiveView.to_safe(rendered))
+        |> Phoenix.Component.assign(:_filament_rendered, Filament.Web.to_rendered(rendered))
         |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)
       end
 
