@@ -388,27 +388,43 @@ defmodule Filament.Hooks do
         projection.(:disconnected)
 
       raw ->
-        commit_slot(slot_index, {:cell_subscribed, raw})
+        commit_slot(slot_index, {:cell_subscribed, cell, raw})
         projection.(raw)
     end
   end
 
   # Read the cell's raw value: prefer the fresher value from `new_hook_slots`
   # (set by an in-flight `:cell_update`), fall back to the previously cached
-  # value, or subscribe fresh on first render.
+  # value, or subscribe fresh on first render. The slot tag carries the cell
+  # identity so a cell swap across renders triggers an unsubscribe + fresh
+  # subscribe rather than silently feeding values from the old transport.
   defp resolve_cell_value(cell, slot_index, previous, ctx) do
     case Map.get(ctx.new_hook_slots, slot_index) do
-      {:cell_subscribed, raw} ->
+      {:cell_subscribed, ^cell, raw} ->
         raw
+
+      {:cell_subscribed, _other, _raw} ->
+        cell_subscribe_fresh(cell, slot_index, ctx)
 
       _ ->
         case previous do
-          {:cell_subscribed, raw} ->
+          {:cell_subscribed, ^cell, raw} ->
             raw
+
+          {:cell_subscribed, old_cell, _raw} ->
+            maybe_unsubscribe_cell(ctx, old_cell, slot_index)
+            cell_subscribe_fresh(cell, slot_index, ctx)
 
           _ ->
             cell_subscribe_fresh(cell, slot_index, ctx)
         end
+    end
+  end
+
+  defp maybe_unsubscribe_cell(ctx, old_cell, slot_index) do
+    if is_map_key(ctx.fiber_tree, ctx.fiber_id) do
+      subscriber = {ctx.owner_pid, ctx.fiber_id, slot_index}
+      Filament.Cell.unsubscribe(old_cell, subscriber)
     end
   end
 
