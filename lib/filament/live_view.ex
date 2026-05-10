@@ -45,28 +45,52 @@ defmodule Filament.LiveView do
 
   @doc false
   def render(assigns) do
+    ~H"<%= @_filament_rendered %>"
+  end
+
+  @runtime_assets_js File.read!(Path.join(:code.priv_dir(:filament), "static/filament.js"))
+  @external_resource Path.join(:code.priv_dir(:filament), "static/filament.js")
+
+  @doc """
+  Renders the Filament runtime JS — the `window.filament.handleEvent`
+  helper and the `FilamentKey` window-keydown hook.
+
+  Drop this once into your root layout, before the `LiveSocket`
+  initialization:
+
+      <Filament.LiveView.runtime_assets />
+      <script>
+        let liveSocket = new LiveSocket("/live", Socket, {...})
+        liveSocket.connect()
+      </script>
+
+  The injected script is idempotent — safe to render multiple times if
+  the layout changes between mounts.
+
+  ## What it provides
+
+    * `window.filament.handleEvent(hook, event, cb)` — used by JS hooks
+      that pair with `Filament.Experimental.Hooks.use_event_ref/1` 2-arity
+      handlers; scopes events to the wire ref so multiple instances of
+      the same hook on a page never cross-talk.
+
+    * The `FilamentKey` LiveView hook — registered via
+      `data-phx-runtime-hook` so consumers don't need to thread it into
+      their `LiveSocket` `hooks:` object. Drives the `on_key` template
+      attribute by listening to `window` keydown events and pushing
+      them at the right fiber.
+
+  ## Background
+
+  Earlier versions inlined this JS in every `Filament.LiveView` render,
+  which shipped the same script on every WebSocket diff. Moving it to a
+  one-time layout component keeps it out of the per-render diff stream.
+  """
+  def runtime_assets(assigns) do
+    assigns = Phoenix.Component.assign(assigns, :__filament_js__, @runtime_assets_js)
+
     ~H"""
-    <%= @_filament_rendered %>
-    <script data-phx-runtime-hook="FilamentKey">
-      window.filament = window.filament || {
-        handleEvent(hook, event, cb) {
-          const ref = hook.el.dataset.ref;
-          hook.handleEvent(ref ? ref + ":" + event : event, cb);
-        }
-      };
-      window.phx_hook_FilamentKey = window.phx_hook_FilamentKey || function() {
-        return {
-          mounted() {
-            this._handler = (e) => this.pushEvent(
-              "filament:" + this.el.dataset.filamentWire,
-              { key: e.key, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey }
-            );
-            window.addEventListener("keydown", this._handler);
-          },
-          destroyed() { window.removeEventListener("keydown", this._handler); }
-        };
-      };
-    </script>
+    <script data-phx-runtime-hook="FilamentKey"><%= Phoenix.HTML.raw(@__filament_js__) %></script>
     """
   end
 
