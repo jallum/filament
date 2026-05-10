@@ -43,7 +43,7 @@ defmodule Inventory.Test do
 
       holder =
         spawn(fn ->
-          cell = {Filament.Observable.GenServer, server}
+          cell = Filament.Source.new(Filament.Observable.GenServer, server)
           subscriber = {self(), :holder_fiber, 0}
           {:ok, _} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
           :ok = GenServer.call(server, {:filament_hold, "item-a", 1, self()})
@@ -65,7 +65,7 @@ defmodule Inventory.Test do
 
       for i <- [1, 2] do
         spawn(fn ->
-          cell = {Filament.Observable.GenServer, server}
+          cell = Filament.Source.new(Filament.Observable.GenServer, server)
           subscriber = {self(), :"holder_#{i}", 0}
           {:ok, _} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
           :ok = GenServer.call(server, {:filament_hold, "item-a", 1, self()})
@@ -140,7 +140,7 @@ defmodule Inventory.Test do
       # Spawn a subscriber that acquires the hold, then waits
       holder =
         spawn(fn ->
-          cell = {Filament.Observable.GenServer, server}
+          cell = Filament.Source.new(Filament.Observable.GenServer, server)
           subscriber = {self(), :holder, 0}
           {:ok, _} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
           :ok = GenServer.call(server, {:filament_hold, "last", 1, self()})

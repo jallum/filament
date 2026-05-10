@@ -38,6 +38,7 @@ defmodule Filament.SubstrateBoundaryTest do
     Filament.Observable.GenServer,
     Filament.RenderContext,
     Filament.SigilF,
+    Filament.Source,
     Filament.VNode,
     Filament.VNodeCompiler,
     Filament.VNodeEngine

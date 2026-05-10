@@ -64,7 +64,7 @@ defmodule Cart.Test do
   describe "CartBadge (rung-2)" do
     test "renders item count from stub observable" do
       {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
-      view = mount!(CartBadge, %{source: {Filament.Observable.GenServer, stub}})
+      view = mount!(CartBadge, %{source: Filament.Source.new(Filament.Observable.GenServer, stub)})
 
       assert view.rendered_html =~ "cart-badge"
       refute view.rendered_html =~ "data-count=\"1\""
@@ -72,7 +72,7 @@ defmodule Cart.Test do
 
     test "badge updates when count changes" do
       {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
-      view = mount!(CartBadge, %{source: {Filament.Observable.GenServer, stub}})
+      view = mount!(CartBadge, %{source: Filament.Source.new(Filament.Observable.GenServer, stub)})
       assert view.rendered_html =~ "data-count=\"0\""
 
       new_state =
@@ -88,7 +88,7 @@ defmodule Cart.Test do
 
     test "no update sent when projected value is unchanged (change-or-bust)" do
       {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
-      cell = {Filament.Observable.GenServer, stub}
+      cell = Filament.Source.new(Filament.Observable.GenServer, stub)
       subscriber = {self(), :badge_test_fiber, 0}
 
       {:ok, _initial} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
@@ -113,7 +113,7 @@ defmodule Cart.Test do
   describe "CartItems (rung-3)" do
     setup do
       server = start_supervised!(%{id: Cart.Server, start: {Cart.Server, :start_link, [[name: nil]]}})
-      view = mount!(CartWeb.Components.CartItems, %{source: {Filament.Observable.GenServer, server}})
+      view = mount!(CartWeb.Components.CartItems, %{source: Filament.Source.new(Filament.Observable.GenServer, server)})
       %{server: server, view: view}
     end
 

@@ -26,7 +26,7 @@ defmodule Filament.Test.Rung3Test do
       prop(:server, :term, required: true)
 
       def render(%{server: server}) do
-        cell = {Filament.Observable.GenServer, server}
+        cell = Filament.Source.new(Filament.Observable.GenServer, server)
 
         count =
           use_value(cell, fn

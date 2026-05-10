@@ -10,8 +10,6 @@ defmodule CollaborationWeb.Components.DocumentEditor do
     def render(%{doc_id: doc_id}) do
       source = use_source(DocumentServer.cell(doc_id))
 
-      server = DocumentServer.via_registry(doc_id)
-
       # NOTE: This LiveView uses static_subscribe: false (see CollaborationLive).
       # With the default (static_subscribe: true), the HTTP render process would
       # call handle_subscribe and increment presence before the old WebSocket tears
@@ -45,7 +43,7 @@ defmodule CollaborationWeb.Components.DocumentEditor do
             {if doc_view.lock_holder == self() do}
               <span class="lock-badge locked">Editing</span>
               <span class="lock-holder">held by you</span>
-              <button class="btn btn-release" on_click={fn -> DocumentServer.release_lock(server, self()) end}>Release</button>
+              <button class="btn btn-release" on_click={fn -> DocumentServer.release_lock(source.data, self()) end}>Release</button>
             {else}
               <span class="lock-badge locked">Locked</span>
               <span class="lock-holder">held by {format_holder(doc_view.lock_holder)}</span>
@@ -53,7 +51,7 @@ defmodule CollaborationWeb.Components.DocumentEditor do
             {end}
           {else}
             <span class="lock-badge unlocked">Available</span>
-            <button class="btn btn-primary" on_click={fn -> DocumentServer.acquire_lock(server, self()) end}>Edit</button>
+            <button class="btn btn-primary" on_click={fn -> DocumentServer.acquire_lock(source.data, self()) end}>Edit</button>
           {end}
         </div>
       </div>

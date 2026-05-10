@@ -187,12 +187,13 @@ defmodule Filament.Hooks do
   defp extract_cleanup(_), do: nil
 
   @doc """
-  Bind a reactive source once for the calling fiber and return a stable handle.
+  Bind a reactive source once for the calling fiber and return a stable
+  `%Filament.Source{}` struct.
 
-  Accepts a source tuple `{transport, data}` or a 0-arity factory fn that
-  returns one. Parents bind the source once (e.g. via a session-keyed
-  `ensure_started/1`) and pass the handle down to children that read their
-  own projections via `use_value/2`.
+  Accepts an existing source or a 0-arity factory fn that returns one.
+  Parents bind the source once (e.g. via a session-keyed
+  `ensure_started/1`) and pass the struct down to children that read
+  their own projections via `use_value/2`.
 
       # Parent
       source = use_source(fn -> CartServer.cell(session_id) end)
@@ -210,40 +211,41 @@ defmodule Filament.Hooks do
   reachable; calls the factory again otherwise (e.g. the GenServer behind
   the source crashed).
 
-  The handle is a `Filament.Cell.t()` — see `Filament.Cell` for the transport
-  contract; "source" is the user-facing name for the same value.
+  The struct exposes the underlying transport data via `source.data` for
+  components that need to invoke server actions in event handlers:
+
+      on_click={fn -> CartServer.add_item(source.data, item) end}
+
+  See `Filament.Source` for the struct shape and `Filament.Cell` for the
+  transport behaviour.
 
   Must be called at the top level of `render/1` in consistent order.
   """
-  @spec use_source(Filament.Cell.t() | (-> Filament.Cell.t())) :: Filament.Cell.t() | nil
-  def use_source(cell_or_fn) when is_function(cell_or_fn, 0) or is_tuple(cell_or_fn) do
+  @spec use_source(Filament.Source.t() | (-> Filament.Source.t())) :: Filament.Source.t() | nil
+  def use_source(source_or_fn) when is_function(source_or_fn, 0) or is_struct(source_or_fn, Filament.Source) do
     {slot_index, previous, ctx} = use_slot(:uninitialized)
 
     if ctx.subscribe_enabled do
-      cell = resolve_observable_factory(cell_or_fn, previous)
-      commit_slot(slot_index, {:cell_resolved, cell})
-      cell
+      source = resolve_source_factory(source_or_fn, previous)
+      commit_slot(slot_index, {:cell_resolved, source})
+      source
     else
       commit_slot(slot_index, :uninitialized)
       nil
     end
   end
 
-  defp resolve_observable_factory(factory_fn, previous) when is_function(factory_fn, 0) do
+  defp resolve_source_factory(factory_fn, previous) when is_function(factory_fn, 0) do
     case previous do
-      {:cell_resolved, cached} ->
-        if observable_reachable?(cached), do: cached, else: factory_fn.()
+      {:cell_resolved, %Filament.Source{} = cached} ->
+        if Filament.Cell.reachable?(cached), do: cached, else: factory_fn.()
 
       _ ->
         factory_fn.()
     end
   end
 
-  defp resolve_observable_factory(cell, _previous) when is_tuple(cell), do: cell
-
-  defp observable_reachable?({Filament.Observable.GenServer, pid}) when is_pid(pid), do: Process.alive?(pid)
-
-  defp observable_reachable?(_), do: true
+  defp resolve_source_factory(%Filament.Source{} = source, _previous), do: source
 
   @doc """
   Read a projected value from a source and subscribe to its updates.
@@ -280,7 +282,7 @@ defmodule Filament.Hooks do
 
   Must be called at the top level of `render/1` in consistent order.
   """
-  @spec use_value(Filament.Cell.t() | nil, (term() | :disconnected -> term())) :: term()
+  @spec use_value(Filament.Source.t() | nil, (term() | :disconnected -> term())) :: term()
   def use_value(cell, projection) when is_function(projection, 1) do
     {slot_index, previous, ctx} = use_slot(:uninitialized)
 

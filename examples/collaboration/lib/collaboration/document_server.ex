@@ -123,6 +123,6 @@ defmodule Collaboration.DocumentServer do
   # Override the default cell/1 from `use Filament.Observable.GenServer`
   # so components can pass a doc_id directly.
   def cell(doc_id) when is_binary(doc_id) do
-    {Filament.Observable.GenServer, via_registry(doc_id)}
+    Filament.Source.new(Filament.Observable.GenServer, via_registry(doc_id))
   end
 end
