@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "flm-xbb.9"
   ],
@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "flm-xbb",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Collapse Observable module and finalize gates",
   "type": "task",
-  "updated_at": "2026-05-10T10:55:48Z"
+  "updated_at": "2026-05-10T11:38:33Z"
 }
