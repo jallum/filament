@@ -5,7 +5,6 @@ defmodule Filament.FilterItemTest do
 
   alias Filament.FiberTree
   alias Filament.Reconciler
-  alias Phoenix.HTML.Safe
   alias TodoWeb.Components.FilterBar
 
   @filters [all: "All", active: "Active", completed: "Done"]

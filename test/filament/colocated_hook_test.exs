@@ -1,8 +1,6 @@
 defmodule Filament.ColocatedHookTest do
   use ExUnit.Case, async: true
 
-  alias Phoenix.HTML.Safe
-
   describe "colocated hook support in ~F templates" do
     test "compiles without error when module uses Filament.Component" do
       # This is the failing case from the ticket:

@@ -39,7 +39,7 @@ defmodule Filament.VNodeEngineForTest do
     )
   end
 
-  defp eval(ast, bindings \\ []) do
+  defp eval(ast, bindings) do
     {result, _} = Code.eval_quoted(ast, bindings, __ENV__)
     result
   end
