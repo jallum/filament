@@ -4,14 +4,15 @@
   "blocks": [
     "flm-3wr.3.2"
   ],
+  "closed_at": "2026-05-10T08:50:50Z",
   "created": "2026-05-10T08:43:56Z",
   "description": "Define the event handle returned by `event_at` and the phase-aware registration API. Today's `event_at(slot, handler)` registers a single handler at a flat slot. The new API needs:\n\n- A 1-arg or 2-arg form that takes a phase tag (`:bubble` default for backward compat, `:capture` opt-in).\n- A handle type that's opaque enough that the web backend can stringify it to a wire ref (`\"fiber:slot\"`) but the TUI backend can use it directly as a map key.\n- Storage on the fiber for both phases (today event_handlers stores one map indexed by slot; needs to also distinguish phase).\n\nLikely signatures:\n\n    event_at(slot, handler, phase \\ :bubble) :: handle\n    Filament.Event.handle(fiber_id, slot_index) :: %Filament.Event.Handle{}\n\n## Acceptance\n- New tests assert phase distinguishability (capture handler at slot N is different from bubble handler at slot N).\n- Existing `event_at(slot, handler)` calls continue to work (default phase = bubble preserves today's semantics).",
   "id": "flm-3wr.3.1",
   "labels": [],
   "parent": "flm-3wr.3",
   "priority": 1,
-  "status": "open",
+  "status": "closed",
   "title": "Phase 3.1: phase-aware event handle + registration API",
   "type": "task",
-  "updated_at": "2026-05-10T08:43:57Z"
+  "updated_at": "2026-05-10T08:50:50Z"
 }
