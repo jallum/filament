@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-10T01:41:03Z",
+  "description": "Wire everything together and validate.\n\n## Work\n\n- `Filament.LiveView.render/1` calls `Filament.Web.RenderToRendered.convert/3` on the vnode-tree assign and feeds the resulting `%Rendered{}` to PLV's diff engine.\n- Remove the transitional shim from flm-3wr.1.2.\n- Migrate examples (todo, cart, collaboration, inventory) to confirm they still render correctly. `~F` templates should work unchanged after the codegen switch; only adapter-level wiring may need touching.\n- Audit substrate modules for residual `Phoenix.LiveView.*` references; remove any that remain.\n\n## Validation\n\n- `mix test` — all 329+ tests pass.\n- `mix credo --strict` — clean.\n- `mix dialyzer` — clean (no new warnings).\n- Each example boots in Chrome; representative interaction flows verified:\n  - **todo**: add, toggle, remove, filter\n  - **cart**: add multiple, remove, multiple item types\n  - **collaboration**: cross-tab lock takeover, presence count, lock auto-release on tab close\n  - **inventory**: per-tab holds, depletion, disconnect auto-release\n- WebSocket frames: keyed comprehensions still emit `\"k\"`/`\"kc\"`; fiber-id wire refs (`root.Mod[key=N]:slot`) unchanged from baseline.\n- `grep -r \"Phoenix.LiveView\" lib/filament/{reconciler,renderer,hooks,fiber,fiber_tree,render_context,vnode}.ex` returns nothing.\n\n## Files\n\n- `lib/filament/live_view.ex`\n- Possibly examples (only if adapter-level changes need them; templates should stay clean).\n\n## Acceptance\n\n- All five validation criteria above hold.\n- Substrate grep-clean of `Phoenix.LiveView`.\n- Wire format unchanged from pre-epic baseline for representative cases.",
+  "id": "flm-3wr.1.5",
+  "labels": [],
+  "parent": "flm-3wr.1",
+  "priority": 1,
+  "status": "open",
+  "title": "Phase 1.5: LiveView wiring + examples + Chrome validation",
+  "type": "task",
+  "updated_at": "2026-05-10T01:41:03Z"
+}
