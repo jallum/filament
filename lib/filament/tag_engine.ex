@@ -836,23 +836,14 @@ defmodule Filament.TagEngine do
   defp build_filament_component_ast(_state, mod_ast, fun, assigns, key_ast, line) do
     if fun != :render do
       raise CompileError,
-        description:
-          "Filament VNode emission supports `<Module />` (fun=:render) only; got #{inspect(fun)}",
+        description: "Filament VNode emission supports `<Module />` (fun=:render) only; got #{inspect(fun)}",
         line: line
     end
 
     {:{}, [line: line], [:component, mod_ast, assigns, key_ast]}
   end
 
-  defp build_filament_local_component_ast(
-         _state,
-         mod_ast,
-         _fun,
-         _call,
-         assigns,
-         key_ast,
-         line
-       ) do
+  defp build_filament_local_component_ast(_state, mod_ast, _fun, _call, assigns, key_ast, line) do
     {:{}, [line: line], [:component, mod_ast, assigns, key_ast]}
   end
 
@@ -862,7 +853,8 @@ defmodule Filament.TagEngine do
   defp build_self_close_component_with_special(_state, new_meta, _tag_meta, base_ast_fn) do
     key_ast = Map.get(new_meta, :key, nil)
 
-    base_ast_fn.(key_ast)
+    key_ast
+    |> base_ast_fn.()
     |> maybe_wrap_for(new_meta)
     |> maybe_wrap_if(new_meta)
   end
@@ -960,8 +952,7 @@ defmodule Filament.TagEngine do
 
   defp transform_event_attr_for_vnode({"on_" <> event, v}) do
     [
-      {"phx-" <> event,
-       quote(do: "filament:" <> Filament.Hooks.register_event_handler(unquote(v)))}
+      {"phx-" <> event, quote(do: "filament:" <> Filament.Hooks.register_event_handler(unquote(v)))}
     ]
   end
 

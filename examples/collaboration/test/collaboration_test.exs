@@ -98,7 +98,7 @@ defmodule Collaboration.Test do
 
       assert_receive {:locked, {:ok, :lock_token}}, 1000
 
-      view = mount!(DocumentEditor, %{server: server, doc_id: doc_id}) |> Filament.Test.update()
+      view = DocumentEditor |> mount!(%{server: server, doc_id: doc_id}) |> Filament.Test.update()
       assert render_text(view) =~ "Locked"
 
       Process.exit(other_holder, :kill)
@@ -120,7 +120,7 @@ defmodule Collaboration.Test do
       assert render_text(view) =~ "Edit"
       refute render_text(view) =~ "Release"
 
-      view = click!(view, ".btn-primary") |> Filament.Test.update()
+      view = view |> click!(".btn-primary") |> Filament.Test.update()
 
       assert render_text(view) =~ "Release"
       assert render_text(view) =~ "Editing"
@@ -131,10 +131,10 @@ defmodule Collaboration.Test do
       server = start_supervised!({Collaboration.DocumentServer, [doc_id: doc_id]}, id: make_ref())
 
       view = mount!(DocumentEditor, %{server: server, doc_id: doc_id})
-      view = click!(view, ".btn-primary") |> Filament.Test.update()
+      view = view |> click!(".btn-primary") |> Filament.Test.update()
       assert render_text(view) =~ "Release"
 
-      view = click!(view, ".btn-release") |> Filament.Test.update()
+      view = view |> click!(".btn-release") |> Filament.Test.update()
 
       assert render_text(view) =~ "Edit"
       refute render_text(view) =~ "Release"

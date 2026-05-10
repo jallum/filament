@@ -59,7 +59,7 @@ defmodule Filament.WebTest do
 
     test "fragment is a flat list of converted children" do
       walked = {:fragment, [{:text, "a"}, {:text, "b"}]}
-      assert Web.to_iodata(walked) |> IO.iodata_to_binary() == "ab"
+      assert walked |> Web.to_iodata() |> IO.iodata_to_binary() == "ab"
     end
 
     test "component embeds child Rendered output" do

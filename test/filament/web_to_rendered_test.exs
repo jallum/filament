@@ -127,8 +127,7 @@ defmodule Filament.WebToRenderedTest do
 
     test "nested elements with dynamic content" do
       walked =
-        {:element, "ul", [],
-         [{:element, "li", [{"class", "active"}], ["item-1"]}]}
+        {:element, "ul", [], [{:element, "li", [{"class", "active"}], ["item-1"]}]}
 
       assert html(walked) == walked |> Web.to_iodata() |> IO.iodata_to_binary()
     end

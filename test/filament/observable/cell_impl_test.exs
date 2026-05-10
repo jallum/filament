@@ -116,5 +116,4 @@ defmodule Filament.Observable.CellImplTest do
       refute_receive {:cell_update, {_, :unsub_test}, _}, 100
     end
   end
-
 end

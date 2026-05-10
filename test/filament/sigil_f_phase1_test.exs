@@ -80,10 +80,14 @@ defmodule Filament.SigilFPhase1Test do
         defcomponent OnKey do
           def render(_assigns) do
             ~F"""
-            <div on_key={fn
-              "Escape", _ -> :close
-              _, _ -> :ignore
-            end}>modal</div>
+            <div on_key={
+              fn
+                "Escape", _ -> :close
+                _, _ -> :ignore
+              end
+            }>
+              modal
+            </div>
             """
           end
         end
@@ -107,8 +111,11 @@ defmodule Filament.SigilFPhase1Test do
       handler = FiberTree.get_event_handler(tree, "root", 0)
       assert is_function(handler, 1), "handler must be arity-1"
 
-      assert handler.(%{"key" => "Escape", "ctrl" => false, "shift" => false, "alt" => false, "meta" => false}) == :close
-      assert handler.(%{"key" => "Enter", "ctrl" => false, "shift" => false, "alt" => false, "meta" => false}) == :ignore
+      assert handler.(%{"key" => "Escape", "ctrl" => false, "shift" => false, "alt" => false, "meta" => false}) ==
+               :close
+
+      assert handler.(%{"key" => "Enter", "ctrl" => false, "shift" => false, "alt" => false, "meta" => false}) ==
+               :ignore
     end
 
     test "on_key handler receives key string and %Filament.KeyModifiers{} with modifier fields" do

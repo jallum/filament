@@ -11,8 +11,7 @@ defmodule Filament.FiberTree do
   @spec get_event_handler(t(), String.t(), non_neg_integer()) :: function() | nil
   @spec get_event_handler(t(), String.t(), non_neg_integer(), :bubble | :capture) ::
           function() | nil
-  def get_event_handler(tree, fiber_id, handler_index, phase \\ :bubble)
-      when phase in [:bubble, :capture] do
+  def get_event_handler(tree, fiber_id, handler_index, phase \\ :bubble) when phase in [:bubble, :capture] do
     case Map.get(tree, fiber_id) do
       nil -> nil
       fiber -> Map.get(handler_map_for(fiber, phase), handler_index)
