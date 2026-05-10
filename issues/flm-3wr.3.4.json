@@ -4,14 +4,15 @@
     "flm-3wr.3.3"
   ],
   "blocks": [],
+  "closed_at": "2026-05-10T08:59:09Z",
   "created": "2026-05-10T08:43:57Z",
   "description": "Document the capture/bubble event model for backend authors and component developers. Cover the phase API, stop_propagation, and how a backend (web or otherwise) feeds events into Core.\n\n## Files\n- guides/events.md (new)",
   "id": "flm-3wr.3.4",
   "labels": [],
   "parent": "flm-3wr.3",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Phase 3.4: Events guide",
   "type": "task",
-  "updated_at": "2026-05-10T08:43:57Z"
+  "updated_at": "2026-05-10T08:59:09Z"
 }
