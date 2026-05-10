@@ -334,6 +334,66 @@ defmodule Filament.Hooks do
   end
 
   @doc """
+  Resolve a cell once for the calling fiber and return it.
+
+  Accepts a cell tuple `{transport, data}` or a 0-arity factory fn that
+  returns one. The factory variant is the cell-side equivalent of
+  `use_observable/1`: parents resolve the cell once (e.g. via a session-keyed
+  `ensure_started/1`) and pass it down to children that apply their own
+  projections via `use_cell/2`.
+
+      # Parent
+      cell = use_cell(fn ->
+        {Filament.Observable.GenServer, CartServer.ensure_started(session_id)}
+      end)
+
+      <Child cell={cell} />
+
+      # Child
+      count = use_cell(cell, fn
+        :disconnected -> 0
+        state         -> state.count
+      end)
+
+  Returns `nil` during disconnected (static HTTP) renders. On subsequent
+  renders, reuses the cached cell if its underlying transport is still
+  reachable; calls the factory again otherwise (e.g. the GenServer behind
+  the cell crashed).
+
+  Must be called at the top level of `render/1` in consistent order.
+  """
+  @spec use_cell(Filament.Cell.t() | (-> Filament.Cell.t())) :: Filament.Cell.t() | nil
+  def use_cell(cell_or_fn) when is_function(cell_or_fn, 0) or is_tuple(cell_or_fn) do
+    {slot_index, previous, ctx} = use_slot(:uninitialized)
+
+    if ctx.subscribe_enabled do
+      cell = resolve_cell_factory(cell_or_fn, previous)
+      commit_slot(slot_index, {:cell_resolved, cell})
+      cell
+    else
+      commit_slot(slot_index, :uninitialized)
+      nil
+    end
+  end
+
+  defp resolve_cell_factory(factory_fn, previous) when is_function(factory_fn, 0) do
+    case previous do
+      {:cell_resolved, cached} ->
+        if cell_reachable?(cached), do: cached, else: factory_fn.()
+
+      _ ->
+        factory_fn.()
+    end
+  end
+
+  defp resolve_cell_factory(cell, _previous) when is_tuple(cell), do: cell
+
+  defp cell_reachable?({Filament.Observable.GenServer, pid}) when is_pid(pid),
+    do: Process.alive?(pid)
+
+  defp cell_reachable?(_), do: true
+
+  @doc """
   Subscribe the current fiber to a `Filament.Cell` and apply a projection.
 
   Generic over the cell's transport — works against any module that implements

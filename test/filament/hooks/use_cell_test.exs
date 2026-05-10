@@ -206,6 +206,140 @@ defmodule Filament.Hooks.UseCellTest do
     end
   end
 
+  describe "use_cell/1 (factory form)" do
+    defmodule FactoryCellComp do
+      @moduledoc false
+      use Filament.Component
+
+      defcomponent FactoryCellComp do
+        prop(:server, :any, required: true)
+
+        def render(%{server: server}) do
+          cell = use_cell(fn -> {Filament.Observable.GenServer, server} end)
+          count = use_cell(cell, & &1)
+          ~F"<p>{count}</p>"
+        end
+      end
+    end
+
+    test "factory fn resolves to a cell tuple and feeds use_cell/2" do
+      {:ok, server} = Counter.start_link(3)
+
+      {_tree, walked, _} =
+        Reconciler.mount(FactoryCellComp.FactoryCellComp, %{server: server},
+          owner_pid: self()
+        )
+
+      assert walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>3</p>"
+    end
+
+    test "subsequent renders reuse the cached cell when the transport is alive" do
+      {:ok, server} = Counter.start_link(0)
+
+      counter = :counters.new(1, [])
+      factory = fn ->
+        :counters.add(counter, 1, 1)
+        {Filament.Observable.GenServer, server}
+      end
+
+      defmodule SpyComp do
+        use Filament.Component
+
+        defcomponent SpyComp do
+          prop(:factory, :any, required: true)
+
+          def render(%{factory: factory}) do
+            cell = use_cell(factory)
+            count = use_cell(cell, & &1)
+            ~F"<p>{count}</p>"
+          end
+        end
+      end
+
+      {tree1, _, _} =
+        Reconciler.mount(SpyComp.SpyComp, %{factory: factory}, owner_pid: self())
+
+      {_tree2, _, _} =
+        Reconciler.update(tree1, "root", %{factory: factory}, owner_pid: self())
+
+      # Factory called only once across the two renders.
+      assert :counters.get(counter, 1) == 1
+    end
+
+    test "factory is re-called when the cached transport pid is dead" do
+      {:ok, server1} = Counter.start_link(0)
+
+      counter = :counters.new(1, [])
+
+      pid_ref = :persistent_term.put({__MODULE__, :pid_ref}, server1)
+      _ = pid_ref
+
+      factory = fn ->
+        :counters.add(counter, 1, 1)
+        pid = :persistent_term.get({__MODULE__, :pid_ref})
+        {Filament.Observable.GenServer, pid}
+      end
+
+      defmodule LiveSpyComp do
+        use Filament.Component
+
+        defcomponent LiveSpyComp do
+          prop(:factory, :any, required: true)
+
+          def render(%{factory: factory}) do
+            cell = use_cell(factory)
+            count = use_cell(cell, & &1)
+            ~F"<p>{count}</p>"
+          end
+        end
+      end
+
+      {tree1, _, _} =
+        Reconciler.mount(LiveSpyComp.LiveSpyComp, %{factory: factory}, owner_pid: self())
+
+      assert :counters.get(counter, 1) == 1
+
+      # Kill the original server, then swap in a fresh one for the factory to find.
+      Process.flag(:trap_exit, true)
+      Process.exit(server1, :kill)
+      Process.sleep(20)
+
+      {:ok, server2} = Counter.start_link(99)
+      :persistent_term.put({__MODULE__, :pid_ref}, server2)
+
+      {_tree2, walked, _} =
+        Reconciler.update(tree1, "root", %{factory: factory}, owner_pid: self())
+
+      # Factory called a second time because cached pid was dead.
+      assert :counters.get(counter, 1) == 2
+      assert walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>99</p>"
+    end
+
+    test "passing a cell tuple directly returns it unchanged" do
+      {:ok, server} = Counter.start_link(42)
+      cell = {Filament.Observable.GenServer, server}
+
+      defmodule PassthroughComp do
+        use Filament.Component
+
+        defcomponent PassthroughComp do
+          prop(:cell, :any, required: true)
+
+          def render(%{cell: cell}) do
+            resolved = use_cell(cell)
+            value = use_cell(resolved, & &1)
+            ~F"<p>{value}</p>"
+          end
+        end
+      end
+
+      {_tree, walked, _} =
+        Reconciler.mount(PassthroughComp.PassthroughComp, %{cell: cell}, owner_pid: self())
+
+      assert walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>42</p>"
+    end
+  end
+
   defp cell_subscribers_in(server) do
     {:dictionary, dict} = Process.info(server, :dictionary)
     Keyword.get(dict, :__filament_cell_subscribers__, %{})
