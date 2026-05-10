@@ -179,7 +179,7 @@ defmodule Filament.LiveView do
 
       # Converts socket assigns to props map for the root component.
       defp build_props(socket) do
-        Filament.LiveView.extract_props(socket.assigns)
+        Filament.LiveView.extract_props(socket.assigns, root_component())
       end
 
       @doc """
@@ -263,21 +263,26 @@ defmodule Filament.LiveView do
     end
   end
 
-  @doc false
-  def extract_props(assigns) do
-    excludes = [
-      :_filament_tree,
-      :_filament_rendered,
-      :_filament_pending_effects,
-      :flash,
-      :live_action,
-      :socket,
-      :__changed__
-    ]
+  @doc """
+  Build the prop map for `component` from a LiveView socket's assigns.
 
-    assigns
-    |> Map.reject(fn {k, _v} -> k in excludes end)
-    |> Map.new()
+  Selects only assigns whose keys appear in `component.__props__()`. This
+  is an allowlist — assigns Phoenix LiveView injects (`:flash`,
+  `:live_action`, `:__changed__`, etc.) are not props and never reach
+  the component, regardless of what new internal assigns Phoenix adds
+  in future releases.
+
+  Components without a `__props__/0` (i.e. not defined via `defcomponent`)
+  receive an empty prop map.
+  """
+  @spec extract_props(map(), module()) :: map()
+  def extract_props(assigns, component) when is_atom(component) do
+    if function_exported?(component, :__props__, 0) do
+      allowed = component.__props__() |> Enum.map(fn {name, _meta} -> name end)
+      Map.take(assigns, allowed)
+    else
+      %{}
+    end
   end
 
   @doc false

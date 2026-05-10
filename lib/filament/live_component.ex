@@ -79,8 +79,7 @@ defmodule Filament.LiveComponent do
 
   def update(assigns, socket) do
     component = Map.fetch!(assigns, :component)
-    excluded = [:id, :component, :filament_msg]
-    props = assigns |> Map.drop(excluded) |> Map.new()
+    props = Filament.LiveView.extract_props(assigns, component)
 
     case socket.assigns._filament_tree do
       nil ->
