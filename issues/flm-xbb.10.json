@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-10T10:55:47Z",
+  "description": "After T9, `Filament.Observable` reduces to the public callback behaviour (`handle_subscribe/2`, `handle_unsubscribe/2`) that `Filament.Observable.GenServer`'s Cell transport invokes. Verify nothing else is left in the namespace and the moduledoc reflects the new reality.\n\nUpdate guides:\n- `guides/cells.md` (if present) — describe `use_observable` (post-rename) as the only hook, with `Filament.Cell` as the underlying behaviour.\n- Remove or update any guide that still mentions `%Subscriber{}`, `session_token`, `via_registry` as observable-layer concerns.\n\nFinal gates:\n- `mix compile --warnings-as-errors`\n- `mix test` (all tests)\n- `mix credo --strict`\n- `mix dialyzer`\n- All four example apps verified in Chrome end-to-end.\n\nAdd a CHANGELOG entry under `## [Unreleased]` capturing the breaking change: `use_observable` semantics now go through `Filament.Cell`; `Filament.Observable.Subscriber` is removed.",
+  "id": "flm-xbb.10",
+  "labels": [],
+  "parent": "flm-xbb",
+  "priority": 2,
+  "status": "open",
+  "title": "Collapse Observable module and finalize gates",
+  "type": "task",
+  "updated_at": "2026-05-10T10:55:47Z"
+}
