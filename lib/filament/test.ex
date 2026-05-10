@@ -475,9 +475,34 @@ defmodule Filament.Test do
       {:filament_observable_resubscribe, fiber_id, slot_index} ->
         view = apply_hook_slot_update(view, fiber_id, slot_index, :needs_resubscribe)
         flush_messages(view)
+
+      {:cell_update, {_owner_pid, fiber_id, slot_index}, value} ->
+        view = apply_cell_slot_update(view, fiber_id, slot_index, value)
+        flush_messages(view)
+
+      {:cell_resubscribe, {_owner_pid, fiber_id, slot_index}} ->
+        view = apply_hook_slot_update(view, fiber_id, slot_index, :needs_resubscribe)
+        flush_messages(view)
     after
       0 -> rerender(view)
     end
+  end
+
+  defp apply_cell_slot_update(view, fiber_id, slot_index, value) do
+    tree =
+      Filament.FiberTree.update_hook_slot(
+        view.fiber_tree,
+        fiber_id,
+        slot_index,
+        fn existing ->
+          case existing do
+            {:cell_subscribed, cell, _} -> {:cell_subscribed, cell, value}
+            _ -> {:cell_subscribed, nil, value}
+          end
+        end
+      )
+
+    %{view | fiber_tree: tree}
   end
 
   defp apply_hook_slot_update(view, fiber_id, slot_index, new_value) do
