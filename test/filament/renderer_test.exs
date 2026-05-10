@@ -64,7 +64,7 @@ defmodule Filament.RendererTest do
       {result, hook_slots, pending_effects, new_fibers, event_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "world"}, context)
 
-      assert {:rendered_struct, %Rendered{}} = result
+      assert is_tuple(result)
       assert hook_slots == %{}
       assert pending_effects == []
       assert new_fibers == %{}
@@ -173,7 +173,7 @@ defmodule Filament.RendererTest do
       {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "vnode"}, context)
 
-      assert {:rendered_struct, %Rendered{}} = result
+      assert is_tuple(result)
       html = result |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "vnode"
     end

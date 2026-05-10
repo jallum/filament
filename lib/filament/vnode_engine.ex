@@ -124,18 +124,21 @@ defmodule Filament.VNodeEngine do
     {:{}, [], [:element, name, attrs_ast(attrs), children]}
   end
 
+  # Build attrs AST. If any attr is an `:__attr_group__` marker (introduced by
+  # multi-attr `on_*` codegen — e.g. `on_key` expands into 3 attrs sharing a
+  # runtime wire-ref binding), emit a runtime-flattening expression. Otherwise
+  # return a literal list of pairs.
   defp attrs_ast(attrs) do
-    Enum.map(attrs, &attr_ast/1)
-  end
+    if Enum.any?(attrs, &match?({:__attr_group__, _}, &1)) do
+      parts =
+        Enum.map(attrs, fn
+          {:__attr_group__, group_ast} -> group_ast
+          pair -> [pair]
+        end)
 
-  # An attr is `{name_string, value}` where value is one of:
-  #   - a literal string (from `attr="x"`)
-  #   - `nil` (from a bare boolean `disabled`)
-  #   - an expression AST (from `attr={...}`)
-  #
-  # For literals/nil, the 2-tuple is its own AST. For expr ASTs, we still want
-  # a 2-tuple where the value position holds the AST that evaluates to the
-  # value at runtime — and Elixir's 2-tuple `{a, b}` IS the AST for that, so
-  # we just emit it directly.
-  defp attr_ast({name, value}), do: {name, value}
+      quote do: Enum.concat(unquote(parts))
+    else
+      attrs
+    end
+  end
 end

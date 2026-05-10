@@ -58,14 +58,6 @@ defmodule Filament.Web do
     Enum.map(walked_children, &child_to_iodata/1)
   end
 
-  # Transitional shape (Phase 1.2): wraps a `Phoenix.LiveView.Rendered` struct
-  # produced by `~F` until Phase 1.4 switches `~F` codegen to emit walked
-  # vnodes directly. Side effects (event registration) already ran during
-  # `Renderer.render/3`, so this is purely a serialization step.
-  def to_iodata({:rendered_struct, %Phoenix.LiveView.Rendered{} = r}) do
-    Safe.to_iodata(r)
-  end
-
   # Idempotent: an already-converted `{:safe, iodata}` value passes through.
   def to_iodata({:safe, iodata}), do: iodata
 
@@ -117,7 +109,7 @@ defmodule Filament.Web do
       case value do
         {:wire_ref, ref} ->
           attr_key = "phx-" <> String.slice(key_str, 3..-1//1)
-          [" ", attr_key, "=\"", ref, "\""]
+          [" ", attr_key, "=\"filament:", ref, "\""]
 
         _ ->
           render_attr_value(key_str, value)

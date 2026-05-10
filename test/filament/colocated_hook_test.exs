@@ -57,7 +57,7 @@ defmodule Filament.ColocatedHookTest do
       """
 
       [{mod, _}] = Code.compile_string(code)
-      html = mod.render(%{}) |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = mod.render(%{}) |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       refute html =~ "<script"
       assert html =~ "phx-hook="
     end

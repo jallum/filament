@@ -54,7 +54,7 @@ defmodule Filament.WebTest do
       walked = {:element, "button", [on_click: {:wire_ref, "root:0"}], [{:text, "x"}]}
       html = walked |> Web.to_iodata() |> IO.iodata_to_binary()
 
-      assert html =~ ~s(phx-click="root:0")
+      assert html =~ ~s(phx-click="filament:root:0")
     end
 
     test "fragment is a flat list of converted children" do

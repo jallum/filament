@@ -2,76 +2,13 @@ defmodule Filament.SigilFPhase1Test do
   use ExUnit.Case, async: true
 
   import Filament.SigilF
-  import Phoenix.Component
 
-  alias Phoenix.HTML.Safe
-  alias Phoenix.LiveView.Rendered
+  alias Filament.FiberTree
+  alias Filament.Reconciler
 
   describe "~F sigil Phase 1: basic functionality" do
-    test "static template produces Rendered struct" do
-      result = ~F"""
-      <div>hello</div>
-      """
-
-      assert %Rendered{} = result
-      assert is_list(result.static)
-      assert result.static == ["<div>hello</div>"]
-      assert is_function(result.dynamic)
-    end
-
-    test "template with one interpolation" do
-      text = "world"
-
-      result = ~F"""
-      <p>{text}</p>
-      """
-
-      assert %Rendered{} = result
-      assert is_function(result.dynamic)
-    end
-
-    test "fingerprint is generated" do
-      text = "test"
-
-      result = ~F"""
-      <div>Stable {text}</div>
-      """
-
-      assert is_integer(result.fingerprint)
-      assert result.fingerprint > 0
-    end
-
-    test "different templates have different fingerprints" do
-      result1 = ~F"""
-      <div>Template 1</div>
-      """
-
-      result2 = ~F"""
-      <div>Template 2</div>
-      """
-
-      assert result1.fingerprint != result2.fingerprint
-    end
-
-    test "template with multiple interpolations" do
-      name = "Alice"
-      count = 42
-
-      result = ~F"""
-      <div>
-        <h1>Hello {name}</h1>
-        <p>You have {count} items</p>
-      </div>
-      """
-
-      assert %Rendered{} = result
-      dynamic_result = result.dynamic.(false)
-      assert is_list(dynamic_result)
-      assert length(dynamic_result) == 2
-    end
-
     test "element with event handler attribute compiles" do
-      # on_click triggers event_at, which requires a fiber context.
+      # on_click triggers event handler registration via the substrate walker.
       # Templates with event handlers must run inside a render pass.
       defmodule EventHandlerComp do
         @moduledoc false
@@ -88,12 +25,11 @@ defmodule Filament.SigilFPhase1Test do
         end
       end
 
-      {tree, rendered, _} =
-        Filament.Reconciler.mount(EventHandlerComp.EventHandler, %{}, owner_pid: self())
+      {tree, walked, _} =
+        Reconciler.mount(EventHandlerComp.EventHandler, %{}, owner_pid: self())
 
-      assert {:rendered_struct, %Rendered{dynamic: dyn}} = rendered
-      assert is_function(dyn)
-      assert Filament.FiberTree.get_event_handler(tree, "root", 0)
+      assert is_tuple(walked), "expected mount to return a walked vnode tree"
+      assert FiberTree.get_event_handler(tree, "root", 0)
     end
 
     test "on_change wires to phx-change" do
@@ -110,9 +46,11 @@ defmodule Filament.SigilFPhase1Test do
         end
       end
 
-      {tree, {:rendered_struct, rendered}, _} = Filament.Reconciler.mount(OnChangeComp.OnChange, %{}, owner_pid: self())
-      assert Enum.any?(rendered.static, &String.contains?(&1, "phx-change"))
-      assert Filament.FiberTree.get_event_handler(tree, "root", 0)
+      {tree, walked, _} = Reconciler.mount(OnChangeComp.OnChange, %{}, owner_pid: self())
+      html = walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
+
+      assert html =~ "phx-change=\"filament:root:0\""
+      assert FiberTree.get_event_handler(tree, "root", 0)
     end
 
     test "on_blur wires to phx-blur" do
@@ -129,9 +67,11 @@ defmodule Filament.SigilFPhase1Test do
         end
       end
 
-      {tree, {:rendered_struct, rendered}, _} = Filament.Reconciler.mount(OnBlurComp.OnBlur, %{}, owner_pid: self())
-      assert Enum.any?(rendered.static, &String.contains?(&1, "phx-blur"))
-      assert Filament.FiberTree.get_event_handler(tree, "root", 0)
+      {tree, walked, _} = Reconciler.mount(OnBlurComp.OnBlur, %{}, owner_pid: self())
+      html = walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
+
+      assert html =~ "phx-blur=\"filament:root:0\""
+      assert FiberTree.get_event_handler(tree, "root", 0)
     end
 
     test "on_key wires to phx-hook FilamentKey with data-filament-wire and id" do
@@ -151,8 +91,8 @@ defmodule Filament.SigilFPhase1Test do
         end
       end
 
-      {tree, {:rendered_struct, rendered}, _} = Filament.Reconciler.mount(OnKeyComp.OnKey, %{}, owner_pid: self())
-      html = rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
+      {tree, walked, _} = Reconciler.mount(OnKeyComp.OnKey, %{}, owner_pid: self())
+      html = walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
 
       assert html =~ ~s(phx-hook="FilamentKey"),
              "on_key must emit phx-hook=\"FilamentKey\""
@@ -166,11 +106,11 @@ defmodule Filament.SigilFPhase1Test do
       assert html =~ ~r/id="[^"]+"/,
              "on_key element must have an id for the hook"
 
-      handler = Filament.FiberTree.get_event_handler(tree, "root", 0)
+      handler = FiberTree.get_event_handler(tree, "root", 0)
       assert is_function(handler, 1), "handler must be arity-1"
 
       assert handler.(%{"key" => "Escape", "ctrl" => false, "shift" => false, "alt" => false, "meta" => false}) == :close
-      assert handler.(%{"key" => "Enter",  "ctrl" => false, "shift" => false, "alt" => false, "meta" => false}) == :ignore
+      assert handler.(%{"key" => "Enter", "ctrl" => false, "shift" => false, "alt" => false, "meta" => false}) == :ignore
     end
 
     test "on_key handler receives key string and %Filament.KeyModifiers{} with modifier fields" do
@@ -189,9 +129,9 @@ defmodule Filament.SigilFPhase1Test do
         end
       end
 
-      {tree, _rendered, _} = Filament.Reconciler.mount(OnKeyModComp.OnKeyMod, %{}, owner_pid: self())
+      {tree, _walked, _} = Reconciler.mount(OnKeyModComp.OnKeyMod, %{}, owner_pid: self())
 
-      handler = Filament.FiberTree.get_event_handler(tree, "root", 0)
+      handler = FiberTree.get_event_handler(tree, "root", 0)
       handler.(%{"key" => "s", "ctrl" => true, "shift" => false, "alt" => false, "meta" => false})
 
       assert_received {:filament_set_state, _, _, {"s", %Filament.KeyModifiers{ctrl: true, shift: false}}}
@@ -211,26 +151,11 @@ defmodule Filament.SigilFPhase1Test do
         end
       end
 
-      {tree, {:rendered_struct, rendered}, _} = Filament.Reconciler.mount(OnKeydownComp.OnKeydown, %{}, owner_pid: self())
-      assert Enum.any?(rendered.static, &String.contains?(&1, "phx-keydown"))
-      assert Filament.FiberTree.get_event_handler(tree, "root", 0)
-    end
+      {tree, walked, _} = Reconciler.mount(OnKeydownComp.OnKeydown, %{}, owner_pid: self())
+      html = walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
 
-    test "wire output matches ~H for static HTML" do
-      assigns = %{}
-
-      filament_result = ~F"""
-      <div class="test"><span>Content</span></div>
-      """
-
-      heex_result = ~H"""
-      <div class="test"><span>Content</span></div>
-      """
-
-      filament_iodata = Safe.to_iodata(filament_result)
-      heex_iodata = Safe.to_iodata(heex_result)
-
-      assert filament_iodata == heex_iodata
+      assert html =~ "phx-keydown=\"filament:root:0\""
+      assert FiberTree.get_event_handler(tree, "root", 0)
     end
   end
 end

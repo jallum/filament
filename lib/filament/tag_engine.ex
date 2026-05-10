@@ -249,7 +249,12 @@ defmodule Filament.TagEngine do
     # `handle_text`. Used by `Filament.VNodeEngine` to recover element
     # boundaries without re-parsing the emitted text. Phoenix.LiveView.Engine
     # does not implement it, so the default path stays text-based.
-    Code.ensure_loaded(subengine)
+    # Use `ensure_compiled` (not `ensure_loaded`) so that during compile-time
+    # template evaluation we block until the subengine module's beam is fully
+    # written and queryable. Otherwise, on a clean build, the first ~F
+    # template encountered would see `function_exported?/3` return false and
+    # silently fall back to the legacy text-emission path.
+    {:module, _} = Code.ensure_compiled(subengine)
     structured? = function_exported?(subengine, :handle_tag, 3)
 
     %{
@@ -1382,7 +1387,8 @@ defmodule Filament.TagEngine do
   end
 
   defp collect_structured_attrs(attrs, state) do
-    Enum.flat_map(attrs, fn
+    attrs
+    |> Enum.flat_map(fn
       {:root, {:expr, _, _} = expr, _attr_meta} ->
         [{:__root__, parse_expr!(expr, state.file)}]
 
@@ -1395,7 +1401,64 @@ defmodule Filament.TagEngine do
       {name, nil, _attr_meta} ->
         [{name, nil}]
     end)
+    |> Enum.flat_map(&transform_event_attr_for_vnode/1)
   end
+
+  # Compile-time `on_*` → `phx-*` + `register_event_handler` rewrite for the
+  # vnode codegen path. Mirrors `Filament.HTMLEngine.transform_event_pair/1`'s
+  # logic so VNodeEngine-emitted attrs match the wire format the LiveView
+  # adapter dispatches through. Closure memoisation (Phase 1.4.5) then
+  # detects the `register_event_handler(fn)` call sites and wraps them with
+  # `memo_at` for stable closures across renders.
+  defp transform_event_attr_for_vnode({"on_key", v}) do
+    wrapped =
+      quote do
+        fn params ->
+          mods = %Filament.KeyModifiers{
+            ctrl: params["ctrl"] || false,
+            shift: params["shift"] || false,
+            alt: params["alt"] || false,
+            meta: params["meta"] || false
+          }
+
+          unquote(v).(params["key"], mods)
+        end
+      end
+
+    # `on_key` expands into THREE attrs (`phx-hook`, `data-filament-wire`,
+    # `id`) that all need to share the same wire-ref string. Each attr in the
+    # vnode's attrs list compiles to an independent expression context, so a
+    # `wire_var = ...` binding in one attr's value isn't visible from the
+    # next. Emit them as a single `:__attr_group__` whose AST evaluates to a
+    # list of attr pairs — VNodeEngine flattens these back into the attrs
+    # list at element-build time.
+    # Match legacy HTMLEngine convention: `data-filament-wire` carries the
+    # raw `fiber_id:slot` ref without the `filament:` prefix. The Filament
+    # JS hook on the client side prepends it before calling pushEvent;
+    # `Filament.Test.key_down/2` does the same. The `id` attr is the same
+    # raw ref so the hook and element id stay aligned.
+    group_ast =
+      quote do
+        wire = Filament.Hooks.register_event_handler(unquote(wrapped))
+
+        [
+          {"phx-hook", "FilamentKey"},
+          {"data-filament-wire", wire},
+          {"id", wire}
+        ]
+      end
+
+    [{:__attr_group__, group_ast}]
+  end
+
+  defp transform_event_attr_for_vnode({"on_" <> event, v}) do
+    [
+      {"phx-" <> event,
+       quote(do: "filament:" <> Filament.Hooks.register_event_handler(unquote(v)))}
+    ]
+  end
+
+  defp transform_event_attr_for_vnode(pair), do: [pair]
 
   defp assign?({:@, _, [_]}), do: true
   defp assign?({{:., _, [lhs, _rhs]}, _, []}), do: assign?(lhs)
@@ -1491,17 +1554,23 @@ defmodule Filament.TagEngine do
   defp build_special_expr_ast(state, %{for: _for_expr, if: if_expr} = tag_meta) do
     for_expr = maybe_keyed(tag_meta)
 
-    quote do
-      for unquote(for_expr), unquote(if_expr), do: unquote(invoke_subengine(state, :handle_end, []))
-    end
+    for_ast =
+      quote do
+        for unquote(for_expr), unquote(if_expr), do: unquote(invoke_subengine(state, :handle_end, []))
+      end
+
+    if state.structured?, do: {:fragment, for_ast}, else: for_ast
   end
 
   defp build_special_expr_ast(state, %{for: _for_expr} = tag_meta) do
     for_expr = maybe_keyed(tag_meta)
 
-    quote do
-      for unquote(for_expr), do: unquote(invoke_subengine(state, :handle_end, []))
-    end
+    for_ast =
+      quote do
+        for unquote(for_expr), do: unquote(invoke_subengine(state, :handle_end, []))
+      end
+
+    if state.structured?, do: {:fragment, for_ast}, else: for_ast
   end
 
   defp build_special_expr_ast(state, %{if: if_expr}) do

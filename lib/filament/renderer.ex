@@ -53,30 +53,24 @@ defmodule Filament.Renderer do
       # Call render/1
       result = component_module.render(props)
 
-      # Normalize the component's render output to a walked vnode tree.
-      #
-      # `~F` returns a `%Rendered{}` struct: force-eval its dynamics so side
-      # effects like `register_event_handler` run while the render context is
-      # active, then wrap as `{:rendered_struct, r}` — a transitional vnode
-      # shape that `Filament.Web.to_iodata/1` understands. Phase 1.4 will
-      # switch `~F` codegen to emit walked vnode trees directly, eliminating
-      # this wrapper.
-      #
-      # A vnode tuple is walked: child fibers are registered as a side effect
-      # and the tree is returned in walked form (`:component` nodes carry
-      # captured child render output).
+      # `~F` emits walked vnode trees via `Filament.VNodeEngine`. A component's
+      # render/1 returns either a vnode tuple (the common case) or — rarely —
+      # a `%Rendered{}` from an inner-content component on the legacy path,
+      # which the surrounding embedder handles as an opaque leaf via
+      # `Phoenix.HTML.Safe`.
       rendered =
         case result do
           %Rendered{} ->
             _ = Safe.to_iodata(result)
-            {:rendered_struct, result}
+            result
 
           vnode when is_tuple(vnode) ->
             walk_vnode(vnode, context)
 
-          _ ->
-            raise ArgumentError,
-                  "render/1 must return %Phoenix.LiveView.Rendered{} or vnode, got: #{inspect(result)}"
+          # Scalar/string returns from `~F"{x}"` etc.: substrate doesn't
+          # need to walk; surface as-is for the embedder/web converter.
+          other ->
+            other
         end
 
       # Harvest context fields
@@ -224,18 +218,9 @@ defmodule Filament.Renderer do
     unwrap_for_embedding(rendered_child)
   end
 
-  # Phase 1.2 transitional shim: TagEngine.component embeds the result of
-  # `render_component_child*` directly into the parent `~F` template's
-  # Rendered struct, where it expects either a `%Rendered{}` or iodata. Until
-  # Phase 1.4 switches `~F` codegen, peel back the `{:rendered_struct, r}`
-  # wrapper introduced by `render/3` so callers get the bare Rendered struct
-  # they expect. Walked vnode trees are converted via the web converter.
-  defp unwrap_for_embedding({:rendered_struct, %Phoenix.LiveView.Rendered{} = r}), do: r
-
-  defp unwrap_for_embedding(other) when is_tuple(other) do
-    {:safe, Filament.Web.to_iodata(other)}
-  end
-
+  # `render_component_child*` returns the child's render output for embedding
+  # in the parent's vnode tree. Walker captures it on the rewritten
+  # `:component` 5-tuple where the web converter handles it via `embed_child`.
   defp unwrap_for_embedding(other), do: other
 
   @doc """
