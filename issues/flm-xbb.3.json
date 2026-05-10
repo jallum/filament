@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-10T10:55:46Z",
+  "description": "Define a Cell-side resubscribe message (e.g. `{:cell_resubscribe, subscriber}`) and matching `handle_info` in LV/LiveComponent that re-runs `Filament.Cell.subscribe` for the affected slot.\n\nMirror the Subscriber path's resubscribe wiring (search for `:filament_observable_resubscribe` in `lib/filament/live_view.ex` ~215, `lib/filament/observable/gen_server.ex`, and `lib/filament/hooks.ex` for `:needs_resubscribe`).\n\nCoverage: a test that simulates server death + restart and asserts the component re-subscribes and resumes receiving updates.",
+  "id": "flm-xbb.3",
+  "labels": [],
+  "parent": "flm-xbb",
+  "priority": 2,
+  "status": "open",
+  "title": "Add Cell resubscribe semantics",
+  "type": "task",
+  "updated_at": "2026-05-10T10:55:46Z"
+}
