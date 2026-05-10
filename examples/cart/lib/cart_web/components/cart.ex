@@ -22,7 +22,7 @@ defmodule CartWeb.Components.Cart do
 
     def render(%{session_id: session_id}) do
       cell =
-        use_cell(fn ->
+        use_observable(fn ->
           {Filament.Observable.GenServer, Cart.Server.ensure_started(session_id)}
         end)
 

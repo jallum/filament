@@ -1,8 +1,8 @@
 defmodule InventoryWeb.Hooks do
   @moduledoc """
   Custom hooks for the Inventory example — demonstrates how to build
-  domain-specific hooks on top of `Filament.Hooks.use_cell/1` and
-  `Filament.Hooks.use_cell/2`.
+  domain-specific hooks on top of `Filament.Hooks.use_observable/1` and
+  `Filament.Hooks.use_observable/2`.
   """
 
   import Filament.Hooks
@@ -26,10 +26,10 @@ defmodule InventoryWeb.Hooks do
     disconnected_val = Keyword.get(opts, :disconnected, :disconnected)
     sentinel = :__hold_disconnected__
 
-    cell = use_cell({Filament.Observable.GenServer, server})
+    cell = use_observable({Filament.Observable.GenServer, server})
 
     item =
-      use_cell(cell, fn
+      use_observable(cell, fn
         :disconnected -> sentinel
         state -> Map.get(state, item_id)
       end)

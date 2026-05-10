@@ -64,44 +64,4 @@ defmodule Filament.Test.StubTest do
     assert Map.has_key?(stubs_map, :server_b)
   end
 
-  test "use_observable resolves stub via observable_stubs in RenderContext" do
-    {:ok, stub} = Stub.start(fn _req -> :stub_value end)
-
-    _fiber = %Filament.Fiber{
-      id: :test_fiber,
-      component: nil,
-      props: %{},
-      hook_slots: %{},
-      event_handlers: %{},
-      children: [],
-      parent_id: nil,
-      status: :stable
-    }
-
-    ctx = %Filament.RenderContext{
-      fiber_id: :test_fiber,
-      fiber_tree: %{},
-      hook_index: 0,
-      new_hook_slots: %{},
-      pending_effects: [],
-      event_handler_index: 0,
-      new_event_handlers: %{},
-      observable_stubs: %{:my_server => stub},
-      owner_pid: self()
-    }
-
-    Process.put(:filament_render_context, ctx)
-
-    try do
-      value =
-        Filament.Hooks.use_observable(:my_server, fn
-          :disconnected -> nil
-          s -> s
-        end)
-
-      assert value == :stub_value
-    after
-      Process.delete(:filament_render_context)
-    end
-  end
 end

@@ -128,7 +128,13 @@ defmodule Filament.Reconciler do
         {index, {:subscribed, server, _raw}} ->
           Filament.Observable.remove_projection(server, owner_pid, fiber.id, index)
 
+        {index, {:cell_subscribed, cell, _raw}} when not is_nil(cell) ->
+          Filament.Cell.unsubscribe(cell, {owner_pid, fiber.id, index})
+
         {_index, {:resolved, _server}} ->
+          :ok
+
+        {_index, {:cell_resolved, _cell}} ->
           :ok
 
         _ ->
@@ -179,7 +185,13 @@ defmodule Filament.Reconciler do
           {index, {:subscribed, server, _raw}} ->
             Filament.Observable.remove_projection(server, owner_pid, fiber.id, index)
 
+          {index, {:cell_subscribed, cell, _raw}} when not is_nil(cell) ->
+            Filament.Cell.unsubscribe(cell, {owner_pid, fiber.id, index})
+
           {_index, {:resolved, _server}} ->
+            :ok
+
+          {_index, {:cell_resolved, _cell}} ->
             :ok
 
           _ ->

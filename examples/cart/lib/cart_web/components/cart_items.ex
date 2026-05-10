@@ -11,7 +11,7 @@ defmodule CartWeb.Components.CartItems do
 
     def render(%{cell: cell}) do
       cart =
-        use_cell(cell, fn
+        use_observable(cell, fn
           :disconnected -> nil
           s -> s
         end)

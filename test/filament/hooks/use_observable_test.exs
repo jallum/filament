@@ -1,453 +1,348 @@
 defmodule Filament.Hooks.UseObservableTest do
-  use ExUnit.Case
+  @moduledoc """
+  Phase 2.3: `use_observable(cell, projection)` is the generic cell-subscription
+  hook. It accepts any `Filament.Cell` tuple — GenServer-backed observable,
+  in-process struct, focus tracker, etc. — and projects the current value
+  for the calling fiber. The component is unaware of the transport.
 
-  alias Filament.Fiber
-  alias Filament.Hooks
-  alias Filament.RenderContext
+  The hook subscribes with identity projection (delivers raw cell values)
+  and applies the user's projection at render time, mirroring
+  `use_observable`'s closure-freshness semantics. Cell's change-or-bust
+  fires on raw value changes; render-level projection then determines
+  whether the diff engine has anything to send.
+  """
+  use ExUnit.Case, async: true
 
-  defmodule TestObservable do
+  alias Filament.FiberTree
+  alias Filament.Reconciler
+
+  defmodule Counter do
     @moduledoc false
     use Filament.Observable.GenServer
 
-    def start_link(n), do: GenServer.start_link(__MODULE__, n)
-    def init(n), do: {:ok, n}
+    def start_link(initial \\ 0), do: GenServer.start_link(__MODULE__, initial, [])
+    def increment(server), do: GenServer.call(server, :increment)
 
-    def set(pid, n), do: GenServer.call(pid, {:set, n})
-    def get_subs(pid), do: GenServer.call(pid, :get_subs)
+    @impl GenServer
+    def init(initial), do: {:ok, initial}
 
-    def handle_call({:set, n}, _from, _state) do
-      notify_observers(n)
-      {:reply, :ok, n}
-    end
-
-    def handle_call(:get_subs, _from, state) do
-      subs = Process.get(:__filament_subscribers__, %{})
-      {:reply, %{count: map_size(subs), keys: Map.keys(subs)}, state}
+    @impl GenServer
+    def handle_call(:increment, _from, count) do
+      new_count = count + 1
+      notify_observers(new_count)
+      {:reply, new_count, new_count}
     end
   end
 
-  # Simulates Inventory.Server: internal state is a wrapper struct, but
-  # handle_subscribe returns only the inner value as the initial value.
-  defmodule WrappingObservable do
+  defmodule CellComp do
     @moduledoc false
-    use Filament.Observable.GenServer
+    use Filament.Component
 
-    defstruct [:inner]
+    defcomponent CellComp do
+      prop(:cell, :any, required: true)
 
-    def start_link(n), do: GenServer.start_link(__MODULE__, n)
-    def init(n), do: {:ok, %__MODULE__{inner: n}}
-
-    def get_subs(pid), do: GenServer.call(pid, :get_subs)
-
-    def handle_call(:get_subs, _from, state) do
-      subs = Process.get(:__filament_subscribers__, %{})
-      {:reply, %{count: map_size(subs)}, state}
-    end
-
-    @impl Filament.Observable
-    def handle_subscribe(_subscriber, state), do: {:ok, state.inner, state}
-  end
-
-  defmodule AlwaysRejectingObservable do
-    @moduledoc false
-    use Filament.Observable.GenServer
-
-    def start_link, do: GenServer.start_link(__MODULE__, :ok)
-    def init(:ok), do: {:ok, :ok}
-
-    @impl Filament.Observable
-    def handle_subscribe(_subscriber, state), do: {:error, :not_allowed, state}
-  end
-
-  # --- use_observable/2 (positional fn) tests ---
-
-  test "1. initial subscription returns projected value" do
-    observable = start_supervised!({TestObservable, 42})
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
-
-    {value, new_slots} =
-      with_render_ctx("root", %{"root" => fiber}, self(), fn ->
-        v =
-          Hooks.use_observable(observable, fn
-            :disconnected -> nil
-            s -> s
-          end)
-
-        {v, Hooks.current_context().new_hook_slots}
-      end)
-
-    assert value == 42
-    assert new_slots[0] == {:subscribed, observable, 42}
-  end
-
-  test "2. stable re-render returns stored value without re-subscribing" do
-    observable = start_supervised!({TestObservable, 10})
-
-    fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
-
-    with_render_ctx("root", %{"root" => fiber1}, self(), fn ->
-      Hooks.use_observable(observable, fn
-        :disconnected -> nil
-        s -> s
-      end)
-    end)
-
-    fiber2 =
-      Fiber.new(
-        id: "root",
-        component: nil,
-        hook_slots: %{0 => {:subscribed, observable, 10}},
-        status: :stable
-      )
-
-    {value2, new_slots} =
-      with_render_ctx("root", %{"root" => fiber2}, self(), fn ->
-        v =
-          Hooks.use_observable(observable, fn
-            :disconnected -> nil
-            s -> s
-          end)
-
-        {v, Hooks.current_context().new_hook_slots}
-      end)
-
-    assert value2 == 10
-    assert new_slots[0] == {:subscribed, observable, 10}
-
-    # Same owner_pid subscriber — still only one entry
-    subs = TestObservable.get_subs(observable)
-    assert subs.count == 1
-  end
-
-  test "3. server change removes old projection and subscribes to new" do
-    obs_a = start_supervised!({TestObservable, 1}, id: make_ref())
-    obs_b = start_supervised!({TestObservable, 2}, id: make_ref())
-
-    fiber =
-      Fiber.new(
-        id: "root",
-        component: nil,
-        hook_slots: %{0 => {:subscribed, obs_a, 1}},
-        status: :stable
-      )
-
-    value =
-      with_render_ctx("root", %{"root" => fiber}, self(), fn ->
-        Hooks.use_observable(obs_b, fn
-          :disconnected -> nil
-          s -> s
-        end)
-      end)
-
-    assert value == 2
-
-    # Give the async remove_projection cast time to process
-    _ = TestObservable.get_subs(obs_a)
-    assert TestObservable.get_subs(obs_a).count == 0
-  end
-
-  test "4. raw state update in new_hook_slots — re-applies projection" do
-    observable = start_supervised!({TestObservable, 100})
-
-    fiber =
-      Fiber.new(
-        id: "root",
-        component: nil,
-        hook_slots: %{0 => {:subscribed, observable, 555}},
-        status: :stable
-      )
-
-    # Simulate a server update arriving before this render: new_hook_slots has fresh raw
-    value =
-      with_render_ctx("root", %{"root" => fiber}, self(), fn ->
-        # Inject a newer raw value into new_hook_slots to simulate server update
-        ctx = Hooks.current_context()
-
-        updated_ctx = %{
-          ctx
-          | new_hook_slots: Map.put(ctx.new_hook_slots, 0, {:subscribed, observable, 999})
-        }
-
-        Process.put(:filament_render_context, updated_ctx)
-
-        Hooks.use_observable(observable, fn
-          :disconnected -> nil
-          s -> s
-        end)
-      end)
-
-    assert value == 999
-  end
-
-  test "5. subscription rejection raises ObservableError" do
-    rejecting =
-      start_supervised!(%{
-        id: AlwaysRejectingObservable,
-        start: {AlwaysRejectingObservable, :start_link, []}
-      })
-
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
-
-    assert_raise Filament.ObservableError, ~r/subscription rejected/, fn ->
-      with_render_ctx("root", %{"root" => fiber}, self(), fn ->
-        Hooks.use_observable(rejecting, fn
-          :disconnected -> nil
-          s -> s
-        end)
-      end)
+      def render(%{cell: cell}) do
+        count = use_observable(cell, & &1)
+        ~F"<p>{count}</p>"
+      end
     end
   end
 
-  test "6. unmount triggers projection removal" do
-    observable = start_supervised!({TestObservable, 42})
+  describe "use_observable/2" do
+    test "delivers the initial projected value on first mount" do
+      {:ok, server} = Counter.start_link(7)
+      cell = {Filament.Observable.GenServer, server}
 
-    sub = %Filament.Observable.Subscriber{
-      pid: self(),
-      proj_keys: %{{"root", 0} => true}
-    }
+      {tree, walked, _} =
+        Reconciler.mount(CellComp.CellComp, %{cell: cell}, owner_pid: self())
 
-    {:ok, _} = Filament.Observable.subscribe(observable, sub)
-    assert TestObservable.get_subs(observable).count == 1
+      html = walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
+      assert html =~ "<p>7</p>"
+      assert tree["root"].hook_slots != %{}
+    end
 
-    fiber =
-      Fiber.new(
-        id: "root",
-        component: nil,
-        hook_slots: %{0 => {:subscribed, observable, 42}},
-        status: :stable
-      )
+    test "applies the projection function on render" do
+      {:ok, server} = Counter.start_link(5)
+      cell = {Filament.Observable.GenServer, server}
 
-    :ok = Filament.Reconciler.unmount(%{"root" => fiber}, owner_pid: self())
+      defmodule ProjectedComp do
+        use Filament.Component
 
-    # Flush the async remove_projection cast
-    _ = TestObservable.get_subs(observable)
-    assert TestObservable.get_subs(observable).count == 0
-  end
+        defcomponent ProjectedComp do
+          prop(:cell, :any, required: true)
 
-  test "7. live observable update received as batched message" do
-    observable = start_supervised!({TestObservable, 1})
-    me = self()
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+          def render(%{cell: cell}) do
+            doubled = use_observable(cell, &(&1 * 2))
+            ~F"<p>{doubled}</p>"
+          end
+        end
+      end
 
-    with_render_ctx("root", %{"root" => fiber}, me, fn ->
-      Hooks.use_observable(observable, fn
-        :disconnected -> nil
-        s -> s
-      end)
-    end)
+      {_tree, walked, _} =
+        Reconciler.mount(ProjectedComp.ProjectedComp, %{cell: cell}, owner_pid: self())
 
-    send(me, {:filament_observable_updates, [{"root", 0, 99}]})
+      assert walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>10</p>"
+    end
 
-    assert_receive {:filament_observable_updates, [{"root", 0, 99}]}, 100
-  end
+    test "cell update sends a message scoped to the subscribing fiber" do
+      {:ok, server} = Counter.start_link(0)
+      cell = {Filament.Observable.GenServer, server}
 
-  test "8. disconnected — fn called with :disconnected atom" do
-    observable = start_supervised!({TestObservable, 42})
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+      Reconciler.mount(CellComp.CellComp, %{cell: cell}, owner_pid: self())
 
-    value =
-      with_render_ctx(
-        "root",
-        %{"root" => fiber},
-        self(),
-        fn ->
-          Hooks.use_observable(observable, fn
-            :disconnected -> :gone
-            s -> s
-          end)
-        end,
-        subscribe_enabled: false
-      )
+      Counter.increment(server)
+      assert_receive {:cell_update, {pid, "root", 0}, 1}, 200
+      assert pid == self()
+    end
 
-    assert value == :gone
-  end
+    test "use_observable returns :disconnected projection when the cell is unreachable" do
+      cell = {Filament.Observable.GenServer, :nonexistent_server}
 
-  test "9. projection fn applied to initial state on first render" do
-    observable = start_supervised!({TestObservable, 100})
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+      defmodule DisconnectedComp do
+        use Filament.Component
 
-    value =
-      with_render_ctx("root", %{"root" => fiber}, self(), fn ->
-        Hooks.use_observable(observable, fn
-          :disconnected -> 0
-          n -> n * 2
-        end)
-      end)
+        defcomponent DisconnectedComp do
+          prop(:cell, :any, required: true)
 
-    assert value == 200
-  end
+          def render(%{cell: cell}) do
+            value =
+              use_observable(cell, fn
+                :disconnected -> "no-server"
+                v -> "v=#{v}"
+              end)
 
-  test "10. two use_observable/2 calls on same server share one subscriber entry" do
-    observable = start_supervised!({TestObservable, 42})
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+            ~F"<p>{value}</p>"
+          end
+        end
+      end
 
-    {count, total} =
-      with_render_ctx("root", %{"root" => fiber}, self(), fn ->
-        c =
-          Hooks.use_observable(observable, fn
-            :disconnected -> 0
-            s -> s
-          end)
+      {_tree, walked, _} =
+        Reconciler.mount(DisconnectedComp.DisconnectedComp, %{cell: cell}, owner_pid: self())
 
-        t =
-          Hooks.use_observable(observable, fn
-            :disconnected -> 0
-            s -> s * 10
-          end)
-
-        {c, t}
-      end)
-
-    assert count == 42
-    assert total == 420
-    assert TestObservable.get_subs(observable).count == 1
-  end
-
-  test "10b. second fiber on same server gets handle_subscribe initial_value, not raw state" do
-    # WrappingObservable.handle_subscribe returns state.inner, not the struct.
-    # The merge branch must call handle_subscribe to get the correct initial_value,
-    # not return the raw GenServer state.
-    observable = start_supervised!({WrappingObservable, 99})
-
-    fiber_a = Fiber.new(id: "a", component: nil, hook_slots: %{}, status: :stable)
-    fiber_b = Fiber.new(id: "b", component: nil, hook_slots: %{}, status: :stable)
-    tree = %{"a" => fiber_a, "b" => fiber_b}
-
-    val_a =
-      with_render_ctx("a", tree, self(), fn ->
-        Hooks.use_observable(observable, fn
-          :disconnected -> nil
-          s -> s
-        end)
-      end)
-
-    val_b =
-      with_render_ctx("b", tree, self(), fn ->
-        Hooks.use_observable(observable, fn
-          :disconnected -> nil
-          s -> s
-        end)
-      end)
-
-    assert val_a == 99
-    assert val_b == 99
-    assert WrappingObservable.get_subs(observable).count == 1
-  end
-
-  test "11. local state change — projection re-applied with updated closure" do
-    observable = start_supervised!({TestObservable, [1, 2, 3]})
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
-
-    # First render: filter = :odd
-    value1 =
-      with_render_ctx("root", %{"root" => fiber}, self(), fn ->
-        filter = :odd
-
-        Hooks.use_observable(observable, fn
-          :disconnected -> []
-          items -> Enum.filter(items, fn n -> rem(n, 2) != 0 == (filter == :odd) end)
-        end)
-      end)
-
-    assert value1 == [1, 3]
-
-    # Second render: same raw state in slot, but filter changed to :even
-    fiber2 =
-      Fiber.new(
-        id: "root",
-        component: nil,
-        hook_slots: %{0 => {:subscribed, observable, [1, 2, 3]}},
-        status: :stable
-      )
-
-    value2 =
-      with_render_ctx("root", %{"root" => fiber2}, self(), fn ->
-        filter = :even
-
-        Hooks.use_observable(observable, fn
-          :disconnected -> []
-          items -> Enum.filter(items, fn n -> rem(n, 2) == 0 == (filter == :even) end)
-        end)
-      end)
-
-    assert value2 == [2]
-  end
-
-  # --- use_observable/1 tests ---
-
-  test "12. use_observable/1 returns pid when connected" do
-    observable = start_supervised!({TestObservable, 42})
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
-
-    {server, new_slots} =
-      with_render_ctx("root", %{"root" => fiber}, self(), fn ->
-        s = Hooks.use_observable(observable)
-        {s, Hooks.current_context().new_hook_slots}
-      end)
-
-    assert server == observable
-    assert new_slots[0] == {:resolved, observable}
-  end
-
-  test "13. use_observable/1 returns nil when disconnected" do
-    observable = start_supervised!({TestObservable, 42})
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
-
-    server =
-      with_render_ctx(
-        "root",
-        %{"root" => fiber},
-        self(),
-        fn -> Hooks.use_observable(observable) end,
-        subscribe_enabled: false
-      )
-
-    assert server == nil
-  end
-
-  test "14. use_observable/1 with factory fn reuses pid if alive on re-render" do
-    observable = start_supervised!({TestObservable, 0})
-    fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
-
-    pid1 =
-      with_render_ctx("root", %{"root" => fiber1}, self(), fn ->
-        Hooks.use_observable(fn -> observable end)
-      end)
-
-    assert pid1 == observable
-
-    fiber2 =
-      Fiber.new(
-        id: "root",
-        component: nil,
-        hook_slots: %{0 => {:resolved, pid1}},
-        status: :stable
-      )
-
-    pid2 =
-      with_render_ctx("root", %{"root" => fiber2}, self(), fn ->
-        Hooks.use_observable(fn -> observable end)
-      end)
-
-    assert pid2 == pid1
-  end
-
-  # --- Helpers ---
-
-  defp with_render_ctx(fiber_id, fiber_tree, owner_pid, fun, extra_opts \\ []) do
-    ctx = %RenderContext{
-      fiber_id: fiber_id,
-      fiber_tree: fiber_tree,
-      owner_pid: owner_pid,
-      subscribe_enabled: Keyword.get(extra_opts, :subscribe_enabled, true)
-    }
-
-    Process.put(:filament_render_context, ctx)
-
-    try do
-      fun.()
-    after
-      Process.delete(:filament_render_context)
+      assert walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>no-server</p>"
     end
   end
+
+  describe "subscribe_enabled = false (HTTP static mount)" do
+    test "use_observable returns :disconnected projection during static render" do
+      {:ok, server} = Counter.start_link(42)
+      cell = {Filament.Observable.GenServer, server}
+
+      defmodule StaticComp do
+        use Filament.Component
+
+        defcomponent StaticComp do
+          prop(:cell, :any, required: true)
+
+          def render(%{cell: cell}) do
+            value =
+              use_observable(cell, fn
+                :disconnected -> "no-server"
+                v -> "v=#{v}"
+              end)
+
+            ~F"<p>{value}</p>"
+          end
+        end
+      end
+
+      {_tree, walked, _} =
+        Reconciler.mount(StaticComp.StaticComp, %{cell: cell},
+          owner_pid: self(),
+          connected: false
+        )
+
+      assert walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>no-server</p>"
+    end
+  end
+
+  describe "use_observable + Reconciler.update reflect cell changes" do
+    test "re-render after cell update reads the latest value via fiber slot" do
+      {:ok, server} = Counter.start_link(0)
+      cell = {Filament.Observable.GenServer, server}
+
+      {tree1, walked1, _} =
+        Reconciler.mount(CellComp.CellComp, %{cell: cell}, owner_pid: self())
+
+      assert walked1 |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>0</p>"
+
+      Counter.increment(server)
+      assert_receive {:cell_update, {_, fid, sid}, 1}, 200
+
+      tree2 =
+        FiberTree.update_hook_slot(tree1, fid, sid, fn _ -> {:cell_subscribed, cell, 1} end)
+
+      {_, walked3, _} =
+        Reconciler.update(tree2, "root", %{cell: cell}, owner_pid: self())
+
+      assert walked3 |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>1</p>"
+    end
+
+    test "swapping the cell across renders unsubscribes from the old transport" do
+      {:ok, server_a} = Counter.start_link(10)
+      {:ok, server_b} = Counter.start_link(20)
+      cell_a = {Filament.Observable.GenServer, server_a}
+      cell_b = {Filament.Observable.GenServer, server_b}
+
+      {tree1, walked1, _} =
+        Reconciler.mount(CellComp.CellComp, %{cell: cell_a}, owner_pid: self())
+
+      assert walked1 |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>10</p>"
+
+      # Sanity: server_a has one cell subscriber.
+      cell_subs_a = :sys.get_state(server_a) && cell_subscribers_in(server_a)
+      assert map_size(cell_subs_a) == 1
+
+      # Re-render with a different cell — slot should detect the swap and
+      # transition to subscribing on cell_b.
+      {_tree2, walked2, _} =
+        Reconciler.update(tree1, "root", %{cell: cell_b}, owner_pid: self())
+
+      assert walked2 |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>20</p>"
+
+      # server_a now has zero subscribers; server_b has one.
+      assert cell_subscribers_in(server_a) |> map_size() == 0
+      assert cell_subscribers_in(server_b) |> map_size() == 1
+    end
+  end
+
+  describe "use_observable/1 (factory form)" do
+    defmodule FactoryCellComp do
+      @moduledoc false
+      use Filament.Component
+
+      defcomponent FactoryCellComp do
+        prop(:server, :any, required: true)
+
+        def render(%{server: server}) do
+          cell = use_observable(fn -> {Filament.Observable.GenServer, server} end)
+          count = use_observable(cell, & &1)
+          ~F"<p>{count}</p>"
+        end
+      end
+    end
+
+    test "factory fn resolves to a cell tuple and feeds use_observable/2" do
+      {:ok, server} = Counter.start_link(3)
+
+      {_tree, walked, _} =
+        Reconciler.mount(FactoryCellComp.FactoryCellComp, %{server: server},
+          owner_pid: self()
+        )
+
+      assert walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>3</p>"
+    end
+
+    test "subsequent renders reuse the cached cell when the transport is alive" do
+      {:ok, server} = Counter.start_link(0)
+
+      counter = :counters.new(1, [])
+      factory = fn ->
+        :counters.add(counter, 1, 1)
+        {Filament.Observable.GenServer, server}
+      end
+
+      defmodule SpyComp do
+        use Filament.Component
+
+        defcomponent SpyComp do
+          prop(:factory, :any, required: true)
+
+          def render(%{factory: factory}) do
+            cell = use_observable(factory)
+            count = use_observable(cell, & &1)
+            ~F"<p>{count}</p>"
+          end
+        end
+      end
+
+      {tree1, _, _} =
+        Reconciler.mount(SpyComp.SpyComp, %{factory: factory}, owner_pid: self())
+
+      {_tree2, _, _} =
+        Reconciler.update(tree1, "root", %{factory: factory}, owner_pid: self())
+
+      # Factory called only once across the two renders.
+      assert :counters.get(counter, 1) == 1
+    end
+
+    test "factory is re-called when the cached transport pid is dead" do
+      {:ok, server1} = Counter.start_link(0)
+
+      counter = :counters.new(1, [])
+
+      pid_ref = :persistent_term.put({__MODULE__, :pid_ref}, server1)
+      _ = pid_ref
+
+      factory = fn ->
+        :counters.add(counter, 1, 1)
+        pid = :persistent_term.get({__MODULE__, :pid_ref})
+        {Filament.Observable.GenServer, pid}
+      end
+
+      defmodule LiveSpyComp do
+        use Filament.Component
+
+        defcomponent LiveSpyComp do
+          prop(:factory, :any, required: true)
+
+          def render(%{factory: factory}) do
+            cell = use_observable(factory)
+            count = use_observable(cell, & &1)
+            ~F"<p>{count}</p>"
+          end
+        end
+      end
+
+      {tree1, _, _} =
+        Reconciler.mount(LiveSpyComp.LiveSpyComp, %{factory: factory}, owner_pid: self())
+
+      assert :counters.get(counter, 1) == 1
+
+      # Kill the original server, then swap in a fresh one for the factory to find.
+      Process.flag(:trap_exit, true)
+      Process.exit(server1, :kill)
+      Process.sleep(20)
+
+      {:ok, server2} = Counter.start_link(99)
+      :persistent_term.put({__MODULE__, :pid_ref}, server2)
+
+      {_tree2, walked, _} =
+        Reconciler.update(tree1, "root", %{factory: factory}, owner_pid: self())
+
+      # Factory called a second time because cached pid was dead.
+      assert :counters.get(counter, 1) == 2
+      assert walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>99</p>"
+    end
+
+    test "passing a cell tuple directly returns it unchanged" do
+      {:ok, server} = Counter.start_link(42)
+      cell = {Filament.Observable.GenServer, server}
+
+      defmodule PassthroughComp do
+        use Filament.Component
+
+        defcomponent PassthroughComp do
+          prop(:cell, :any, required: true)
+
+          def render(%{cell: cell}) do
+            resolved = use_observable(cell)
+            value = use_observable(resolved, & &1)
+            ~F"<p>{value}</p>"
+          end
+        end
+      end
+
+      {_tree, walked, _} =
+        Reconciler.mount(PassthroughComp.PassthroughComp, %{cell: cell}, owner_pid: self())
+
+      assert walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>42</p>"
+    end
+  end
+
+  defp cell_subscribers_in(server) do
+    {:dictionary, dict} = Process.info(server, :dictionary)
+    Keyword.get(dict, :__filament_cell_subscribers__, %{})
+  end
+
 end

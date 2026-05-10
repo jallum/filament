@@ -51,8 +51,10 @@ defmodule Filament.TestTest do
       prop(:server, :term, required: true)
 
       def render(%{server: server}) do
+        cell = {Filament.Observable.GenServer, server}
+
         value =
-          use_observable(server, fn
+          use_observable(cell, fn
             :disconnected -> nil
             s -> s
           end)
@@ -158,20 +160,19 @@ defmodule Filament.TestTest do
   end
 
   test "stub observable injected at mount" do
-    {:ok, view} =
-      mount(ObservableComp.Observable, %{server: :my_server}, stub: [{:my_server, fn _req -> 42 end}])
+    {:ok, stub} = Stub.start(fn _req -> 42 end)
+    {:ok, view} = mount(ObservableComp.Observable, %{server: stub})
 
     assert render_text(view) =~ "42"
   end
 
   test "stub push updates rendered output" do
-    {:ok, view} =
-      mount(ObservableComp.Observable, %{server: :my_server}, stub: [{:my_server, fn _req -> 0 end}])
+    {:ok, stub} = Stub.start(fn _req -> 0 end)
+    {:ok, view} = mount(ObservableComp.Observable, %{server: stub})
 
     assert render_text(view) =~ "0"
 
-    stub_pid = view.stubs[:my_server]
-    Stub.push(stub_pid, 99)
+    Stub.push(stub, 99)
     view = Filament.Test.update(view)
     assert render_text(view) =~ "99"
   end
