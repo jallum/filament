@@ -718,43 +718,17 @@ defmodule Filament.TagEngine do
         |> continue(tokens)
 
       {true, new_meta, _new_attrs} ->
-        if state.structured? and structured_special_unsupported?(new_meta) do
-          raise_structured_special_unsupported!(new_meta, tag_meta, state)
-        end
-
-        key_ast = if state.structured?, do: Map.get(new_meta, :key, nil), else: nil
-        ast = build_filament_component_ast(state, mod_ast, fun, assigns, key_ast, tag_meta.line)
-
         ast =
-          if state.structured? and Map.has_key?(new_meta, :for) do
-            wrap_for_with_fragment(ast, new_meta.for)
-          else
-            ast
-          end
+          build_self_close_component_with_special(
+            state,
+            new_meta,
+            tag_meta,
+            fn key_ast ->
+              build_filament_component_ast(state, mod_ast, fun, assigns, key_ast, tag_meta.line)
+            end
+          )
 
-        ast =
-          if state.structured? and Map.has_key?(new_meta, :if) do
-            quote do: if(unquote(new_meta.if), do: unquote(ast))
-          else
-            ast
-          end
-
-        if state.structured? do
-          state
-          |> set_root_on_not_tag()
-          |> maybe_anno_caller(meta, state.file, line)
-          |> update_subengine(:handle_expr, ["=", ast])
-          |> continue(tokens)
-        else
-          state
-          |> push_substate_to_stack()
-          |> update_subengine(:handle_begin, [])
-          |> set_root_on_not_tag()
-          |> maybe_anno_caller(meta, state.file, line)
-          |> update_subengine(:handle_expr, ["=", ast])
-          |> handle_special_expr(new_meta)
-          |> continue(tokens)
-        end
+        emit_self_close_component(state, ast, new_meta, meta, line, tokens)
     end
   end
 
@@ -911,43 +885,17 @@ defmodule Filament.TagEngine do
         |> continue(tokens)
 
       {true, new_meta, _new_attrs} ->
-        if state.structured? and structured_special_unsupported?(new_meta) do
-          raise_structured_special_unsupported!(new_meta, tag_meta, state)
-        end
-
-        key_ast = if state.structured?, do: Map.get(new_meta, :key, nil), else: nil
-        ast = build_filament_local_component_ast(state, mod_ast, fun, call, assigns, key_ast, line)
-
         ast =
-          if state.structured? and Map.has_key?(new_meta, :for) do
-            wrap_for_with_fragment(ast, new_meta.for)
-          else
-            ast
-          end
+          build_self_close_component_with_special(
+            state,
+            new_meta,
+            tag_meta,
+            fn key_ast ->
+              build_filament_local_component_ast(state, mod_ast, fun, call, assigns, key_ast, line)
+            end
+          )
 
-        ast =
-          if state.structured? and Map.has_key?(new_meta, :if) do
-            quote do: if(unquote(new_meta.if), do: unquote(ast))
-          else
-            ast
-          end
-
-        if state.structured? do
-          state
-          |> set_root_on_not_tag()
-          |> maybe_anno_caller(meta, state.file, line)
-          |> update_subengine(:handle_expr, ["=", ast])
-          |> continue(tokens)
-        else
-          state
-          |> push_substate_to_stack()
-          |> update_subengine(:handle_begin, [])
-          |> set_root_on_not_tag()
-          |> maybe_anno_caller(meta, state.file, line)
-          |> update_subengine(:handle_expr, ["=", ast])
-          |> handle_special_expr(new_meta)
-          |> continue(tokens)
-        end
+        emit_self_close_component(state, ast, new_meta, meta, line, tokens)
     end
   end
 
@@ -1373,6 +1321,56 @@ defmodule Filament.TagEngine do
   # paths. Kept as a hook for any future special attr that needs gating.
   defp structured_special_unsupported?(_meta), do: false
   defp raise_structured_special_unsupported!(_meta, _tag_meta, state), do: state
+
+  # Build the AST for a self-close component when special attrs (`:if`,
+  # `:for`, `:key`) are present. Builds the base component AST via the
+  # caller-provided fn, then wraps with `:for` / `:if` if requested.
+  defp build_self_close_component_with_special(state, new_meta, tag_meta, base_ast_fn) do
+    if state.structured? and structured_special_unsupported?(new_meta) do
+      raise_structured_special_unsupported!(new_meta, tag_meta, state)
+    end
+
+    key_ast = if state.structured?, do: Map.get(new_meta, :key, nil), else: nil
+    base_ast = base_ast_fn.(key_ast)
+
+    base_ast
+    |> maybe_wrap_for(state, new_meta)
+    |> maybe_wrap_if(state, new_meta)
+  end
+
+  defp maybe_wrap_for(ast, %{structured?: true}, %{for: for_expr}) do
+    wrap_for_with_fragment(ast, for_expr)
+  end
+
+  defp maybe_wrap_for(ast, _state, _meta), do: ast
+
+  defp maybe_wrap_if(ast, %{structured?: true}, %{if: if_expr}) do
+    quote do: if(unquote(if_expr), do: unquote(ast))
+  end
+
+  defp maybe_wrap_if(ast, _state, _meta), do: ast
+
+  # Emit a self-close component AST: structured path emits directly via
+  # `handle_expr`; legacy path uses the standard substate-and-special-expr
+  # dance so the surrounding `~F` builds the right Rendered shape.
+  defp emit_self_close_component(%{structured?: true} = state, ast, _new_meta, meta, line, tokens) do
+    state
+    |> set_root_on_not_tag()
+    |> maybe_anno_caller(meta, state.file, line)
+    |> update_subengine(:handle_expr, ["=", ast])
+    |> continue(tokens)
+  end
+
+  defp emit_self_close_component(state, ast, new_meta, meta, line, tokens) do
+    state
+    |> push_substate_to_stack()
+    |> update_subengine(:handle_begin, [])
+    |> set_root_on_not_tag()
+    |> maybe_anno_caller(meta, state.file, line)
+    |> update_subengine(:handle_expr, ["=", ast])
+    |> handle_special_expr(new_meta)
+    |> continue(tokens)
+  end
 
   # Wrap a single component vnode AST in `for ..., do: vnode_ast` and then in
   # `{:fragment, list}` so the surrounding vnode tree treats the iteration

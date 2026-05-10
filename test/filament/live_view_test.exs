@@ -77,7 +77,7 @@ defmodule Filament.LiveViewTest do
       assert %Rendered{} = rendered
 
       # Convert to HTML and verify
-      html = rendered |> Phoenix.HTML.Safe.to_iodata() |> IO.iodata_to_binary()
+      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "Counter: 5"
     end
 
