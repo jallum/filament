@@ -1,7 +1,8 @@
 {
   "assignee": "",
   "blocked_by": [
-    "flm-3wr.1.2"
+    "flm-3wr.1.2",
+    "flm-3wr.1.3"
   ],
   "blocks": [],
   "created": "2026-05-10T01:41:03Z",
@@ -13,5 +14,5 @@
   "status": "open",
   "title": "Phase 1.5: LiveView wiring + examples + Chrome validation",
   "type": "task",
-  "updated_at": "2026-05-10T01:41:29Z"
+  "updated_at": "2026-05-10T01:41:30Z"
 }
