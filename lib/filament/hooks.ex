@@ -514,16 +514,25 @@ defmodule Filament.Hooks do
   end
 
   @doc false
-  @spec event_at(slot :: non_neg_integer(), handler :: function()) :: wire_ref :: String.t()
-  def event_at(slot, handler) when is_function(handler) do
+  @spec event_at(non_neg_integer(), function()) :: String.t()
+  @spec event_at(non_neg_integer(), function(), :bubble | :capture) :: String.t()
+  def event_at(slot, handler, phase \\ :bubble) when is_function(handler) and phase in [:bubble, :capture] do
     ctx =
       Process.get(:filament_render_context) ||
         raise ArgumentError, "hook called outside a render pass — hooks may only be called from render/1"
 
     fiber_id_str = to_string(ctx.fiber_id)
-    new_handlers = Map.put(ctx.new_event_handlers, slot, handler)
-    Process.put(:filament_render_context, %{ctx | new_event_handlers: new_handlers})
+    new_ctx = put_handler(ctx, phase, slot, handler)
+    Process.put(:filament_render_context, new_ctx)
     "#{fiber_id_str}:#{slot}"
+  end
+
+  defp put_handler(ctx, :bubble, slot, handler) do
+    %{ctx | new_event_handlers: Map.put(ctx.new_event_handlers, slot, handler)}
+  end
+
+  defp put_handler(ctx, :capture, slot, handler) do
+    %{ctx | new_capture_handlers: Map.put(ctx.new_capture_handlers, slot, handler)}
   end
 
   @doc false
@@ -537,14 +546,21 @@ defmodule Filament.Hooks do
   end
 
   @doc false
-  @spec register_event_handler(handler :: function()) :: wire_ref :: String.t()
-  def register_event_handler(handler) when is_function(handler) do
+  @spec register_event_handler(function()) :: String.t()
+  @spec register_event_handler(function(), :bubble | :capture) :: String.t()
+  def register_event_handler(handler, phase \\ :bubble) when is_function(handler) and phase in [:bubble, :capture] do
     ctx =
       Process.get(:filament_render_context) ||
         raise ArgumentError, "hook called outside a render pass — hooks may only be called from render/1"
 
-    idx = ctx.event_handler_index
     fiber_id_str = to_string(ctx.fiber_id)
+    {idx, new_ctx} = advance_handler_index(ctx, phase, handler)
+    Process.put(:filament_render_context, new_ctx)
+    "#{fiber_id_str}:#{idx}"
+  end
+
+  defp advance_handler_index(ctx, :bubble, handler) do
+    idx = ctx.event_handler_index
 
     new_ctx = %{
       ctx
@@ -552,7 +568,18 @@ defmodule Filament.Hooks do
         new_event_handlers: Map.put(ctx.new_event_handlers, idx, handler)
     }
 
-    Process.put(:filament_render_context, new_ctx)
-    "#{fiber_id_str}:#{idx}"
+    {idx, new_ctx}
+  end
+
+  defp advance_handler_index(ctx, :capture, handler) do
+    idx = ctx.capture_handler_index
+
+    new_ctx = %{
+      ctx
+      | capture_handler_index: idx + 1,
+        new_capture_handlers: Map.put(ctx.new_capture_handlers, idx, handler)
+    }
+
+    {idx, new_ctx}
   end
 end
