@@ -80,6 +80,7 @@ defmodule Filament.MixProject do
         "guides/events.md",
         "guides/hooks.md",
         "guides/testing.md",
+        "guides/module-organization.md",
         "guides/migration-guide.md"
       ],
       groups_for_modules: [
