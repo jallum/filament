@@ -696,19 +696,11 @@ defmodule Filament.TagEngine do
     mod = expand_with_line(mod_ast, line, state.caller)
     store_component_call({mod, fun}, attr_info, [], line, state)
     meta = [line: line, column: column + mod_size]
-    call = {{:., meta, [mod_ast, fun]}, meta, []}
-
-    ast =
-      quote line: tag_meta.line do
-        Filament.TagEngine.component(
-          &(unquote(call) / 1),
-          unquote(assigns),
-          {__MODULE__, __ENV__.function, __ENV__.file, unquote(tag_meta.line)}
-        )
-      end
 
     case pop_special_attrs!(attrs, tag_meta, state) do
       {false, _tag_meta, _attrs} ->
+        ast = build_filament_component_ast(state, mod_ast, fun, assigns, nil, tag_meta.line)
+
         state
         |> set_root_on_not_tag()
         |> maybe_anno_caller(meta, state.file, line)
@@ -716,14 +708,32 @@ defmodule Filament.TagEngine do
         |> continue(tokens)
 
       {true, new_meta, _new_attrs} ->
-        state
-        |> push_substate_to_stack()
-        |> update_subengine(:handle_begin, [])
-        |> set_root_on_not_tag()
-        |> maybe_anno_caller(meta, state.file, line)
-        |> update_subengine(:handle_expr, ["=", ast])
-        |> handle_special_expr(new_meta)
-        |> continue(tokens)
+        # Phase 1.4.2: in structured mode, only standalone `:key` is supported
+        # here; `:if` and `:for` get their own structured emission paths in
+        # 1.4.4 and 1.4.3 respectively.
+        if state.structured? and structured_special_unsupported?(new_meta) do
+          raise_structured_special_unsupported!(new_meta, tag_meta, state)
+        end
+
+        key_ast = if state.structured?, do: Map.get(new_meta, :key, nil), else: nil
+        ast = build_filament_component_ast(state, mod_ast, fun, assigns, key_ast, tag_meta.line)
+
+        if state.structured? do
+          state
+          |> set_root_on_not_tag()
+          |> maybe_anno_caller(meta, state.file, line)
+          |> update_subengine(:handle_expr, ["=", ast])
+          |> continue(tokens)
+        else
+          state
+          |> push_substate_to_stack()
+          |> update_subengine(:handle_begin, [])
+          |> set_root_on_not_tag()
+          |> maybe_anno_caller(meta, state.file, line)
+          |> update_subengine(:handle_expr, ["=", ast])
+          |> handle_special_expr(new_meta)
+          |> continue(tokens)
+        end
     end
   end
 
@@ -862,19 +872,17 @@ defmodule Filament.TagEngine do
     mod = actual_component_module(state.caller, fun)
     store_component_call({mod, fun}, attr_info, [], line, state)
     meta = [line: line, column: column]
+    # `mod_ast` for local components: a literal module atom resolved from the
+    # caller env (rather than an `__aliases__` AST). This is necessary because
+    # the unstructured path's call AST embeds `fun` (the local function name);
+    # for the structured vnode emission we want the resolved module.
+    mod_ast = mod
     call = {fun, meta, __MODULE__}
-
-    ast =
-      quote line: line do
-        Filament.TagEngine.component(
-          &(unquote(call) / 1),
-          unquote(assigns),
-          {__MODULE__, __ENV__.function, __ENV__.file, unquote(line)}
-        )
-      end
 
     case pop_special_attrs!(attrs, tag_meta, state) do
       {false, _tag_meta, _attrs} ->
+        ast = build_filament_local_component_ast(state, mod_ast, fun, call, assigns, nil, line)
+
         state
         |> set_root_on_not_tag()
         |> maybe_anno_caller(meta, state.file, line)
@@ -882,14 +890,29 @@ defmodule Filament.TagEngine do
         |> continue(tokens)
 
       {true, new_meta, _new_attrs} ->
-        state
-        |> push_substate_to_stack()
-        |> update_subengine(:handle_begin, [])
-        |> set_root_on_not_tag()
-        |> maybe_anno_caller(meta, state.file, line)
-        |> update_subengine(:handle_expr, ["=", ast])
-        |> handle_special_expr(new_meta)
-        |> continue(tokens)
+        if state.structured? and structured_special_unsupported?(new_meta) do
+          raise_structured_special_unsupported!(new_meta, tag_meta, state)
+        end
+
+        key_ast = if state.structured?, do: Map.get(new_meta, :key, nil), else: nil
+        ast = build_filament_local_component_ast(state, mod_ast, fun, call, assigns, key_ast, line)
+
+        if state.structured? do
+          state
+          |> set_root_on_not_tag()
+          |> maybe_anno_caller(meta, state.file, line)
+          |> update_subengine(:handle_expr, ["=", ast])
+          |> continue(tokens)
+        else
+          state
+          |> push_substate_to_stack()
+          |> update_subengine(:handle_begin, [])
+          |> set_root_on_not_tag()
+          |> maybe_anno_caller(meta, state.file, line)
+          |> update_subengine(:handle_expr, ["=", ast])
+          |> handle_special_expr(new_meta)
+          |> continue(tokens)
+        end
     end
   end
 
@@ -1256,6 +1279,77 @@ defmodule Filament.TagEngine do
     |> update_subengine(:handle_text, [meta, text])
     |> handle_tag_attrs(meta, attrs)
     |> update_subengine(:handle_text, [meta, suffix])
+  end
+
+  # Build the AST for a remote Filament component: structured emission yields
+  # a `{:component, Mod, props, key}` vnode tuple constructor; unstructured
+  # path retains the legacy `Filament.TagEngine.component(&Mod.fun/1, ...)`
+  # call. The unstructured path is what `Phoenix.LiveView.Engine` consumes.
+  defp build_filament_component_ast(%{structured?: true}, mod_ast, fun, assigns, key_ast, line) do
+    if fun != :render do
+      raise CompileError,
+        description:
+          "Filament VNode emission supports `<Module />` (fun=:render) only; got #{inspect(fun)}",
+        line: line
+    end
+
+    {:{}, [line: line], [:component, mod_ast, assigns, key_ast]}
+  end
+
+  defp build_filament_component_ast(_state, mod_ast, fun, assigns, _key_ast, line) do
+    meta = [line: line]
+    call = {{:., meta, [mod_ast, fun]}, meta, []}
+
+    quote line: line do
+      Filament.TagEngine.component(
+        &(unquote(call) / 1),
+        unquote(assigns),
+        {__MODULE__, __ENV__.function, __ENV__.file, unquote(line)}
+      )
+    end
+  end
+
+  # Variant for local components: the legacy AST embeds the local function
+  # reference (`call`) rather than `Mod.fun`, but the structured emission
+  # only needs the resolved module.
+  defp build_filament_local_component_ast(
+         %{structured?: true},
+         mod_ast,
+         _fun,
+         _call,
+         assigns,
+         key_ast,
+         line
+       ) do
+    {:{}, [line: line], [:component, mod_ast, assigns, key_ast]}
+  end
+
+  defp build_filament_local_component_ast(_state, _mod_ast, _fun, call, assigns, _key_ast, line) do
+    quote line: line do
+      Filament.TagEngine.component(
+        &(unquote(call) / 1),
+        unquote(assigns),
+        {__MODULE__, __ENV__.function, __ENV__.file, unquote(line)}
+      )
+    end
+  end
+
+  defp structured_special_unsupported?(meta) do
+    Map.has_key?(meta, :for) or Map.has_key?(meta, :if)
+  end
+
+  defp raise_structured_special_unsupported!(meta, tag_meta, state) do
+    attr =
+      cond do
+        Map.has_key?(meta, :for) -> ":for"
+        Map.has_key?(meta, :if) -> ":if"
+      end
+
+    raise_syntax_error!(
+      "#{attr} on a component is not yet supported under Filament.VNodeEngine (Phase 1.4.3/1.4.4)",
+      tag_meta,
+      state
+    )
   end
 
   defp collect_structured_attrs(attrs, state) do
