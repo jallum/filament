@@ -9,7 +9,6 @@ defmodule Filament.VNodeCompiler do
       line: caller.line + 1,
       caller: caller,
       indentation: 0,
-      subengine: Filament.VNodeEngine,
       tag_handler: Filament.HTMLEngine
     )
     |> rewrite_at_assigns()

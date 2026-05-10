@@ -3,7 +3,6 @@ defmodule Filament.VNodeEngineComponentsTest do
   Phase 1.4.2: component tags inside ~F templates compile to `{:component, Mod,
   props, key}` vnode tuples instead of runtime `Filament.TagEngine.component/3`
   calls. Substrate walker (Phase 1.1) registers the child fiber.
-
   Scope: self-closing components, with optional `:key`. No slots / inner content
   (1.4.4), no `:for` / `:if` (1.4.3, 1.4.4).
   """
@@ -14,7 +13,6 @@ defmodule Filament.VNodeEngineComponentsTest do
   alias Filament.Renderer
   alias Filament.TagEngine
   alias Filament.Web
-
   # A trivial Filament component used as the child target for these tests.
   # Defining it inside the test module keeps it self-contained.
   defmodule Item do
@@ -38,7 +36,6 @@ defmodule Filament.VNodeEngineComponentsTest do
       file: env.file,
       line: env.line,
       indentation: 0,
-      subengine: Filament.VNodeEngine,
       tag_handler: Filament.HTMLEngine
     )
   end
@@ -102,16 +99,13 @@ defmodule Filament.VNodeEngineComponentsTest do
     test "walker registers child fiber for unkeyed component" do
       ast = compile("<Filament.VNodeEngineComponentsTest.Item.Item label={l}/>")
       vnode = eval(ast, l: "Alpha")
-
       ctx = root_ctx()
       Process.put(:filament_render_context, ctx)
       walked = Renderer.walk_vnode(vnode, ctx)
       final_ctx = Process.get(:filament_render_context)
       Process.delete(:filament_render_context)
-
       child_id = Fiber.child_id(ctx.fiber_tree["root"], Item.Item, {:index, 0})
       assert Map.has_key?(final_ctx.new_fibers, child_id)
-
       html = walked |> Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "<span>Alpha</span>"
     end
@@ -119,13 +113,11 @@ defmodule Filament.VNodeEngineComponentsTest do
     test "walker registers child fiber for keyed component" do
       ast = compile("<Filament.VNodeEngineComponentsTest.Item.Item :key={k}/>")
       vnode = eval(ast, k: "abc")
-
       ctx = root_ctx()
       Process.put(:filament_render_context, ctx)
       _walked = Renderer.walk_vnode(vnode, ctx)
       final_ctx = Process.get(:filament_render_context)
       Process.delete(:filament_render_context)
-
       child_id = Fiber.child_id(ctx.fiber_tree["root"], Item.Item, {:key, "abc"})
       assert Map.has_key?(final_ctx.new_fibers, child_id)
       assert final_ctx.new_fibers[child_id].key == "abc"
