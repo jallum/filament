@@ -323,7 +323,35 @@ Because hook slot identity is component-local, two components using the same
 custom hook each get independent slot storage — there is no shared state
 between them.
 
+## use_cell/2 — generic transport-agnostic subscription
+
+`use_observable/2` is sugar over the more general `use_cell/2`. A cell is
+a `{transport_module, transport_data}` tagged tuple; any module that
+implements the `Filament.Cell` behaviour can be subscribed to via
+`use_cell`. The `Filament.Observable.GenServer` transport ships with
+Filament; non-GenServer transports (in-process structs, focus trackers,
+custom backends) can be added without changing the hook.
+
+```elixir
+def render(_assigns) do
+  cell = {MyApp.AgentCell, agent_pid}
+
+  count = use_cell(cell, fn
+    :disconnected -> 0
+    state -> state.count
+  end)
+
+  ~F"<span>{count}</span>"
+end
+```
+
+`use_observable(server, fn)` and `use_cell({Filament.Observable.GenServer,
+server}, fn)` are equivalent — use the shorter form when the cell is your
+own GenServer; use `use_cell` when consuming a cell from a backend you
+don't own. See the **[Cells guide](cells.html)** for the transport
+authoring contract.
+
 ## API reference
 
 See `Filament.Hooks` for the full `@spec` signatures of `use_state/1`,
-`use_observable/1`, `use_observable/2`, and `use_effect/2`.
+`use_observable/1`, `use_observable/2`, `use_cell/2`, and `use_effect/2`.
