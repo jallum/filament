@@ -13,7 +13,7 @@ defmodule TodoWeb.Components.TodoList do
 
     def render(%{title: title}) do
       cell =
-        use_cell(fn ->
+        use_observable(fn ->
           {:ok, pid} = Store.start_link([])
           {Filament.Observable.GenServer, pid}
         end)
@@ -32,7 +32,7 @@ defmodule TodoWeb.Components.TodoList do
       # do (e.g. completing a todo while the Active filter is selected leaves
       # filtered, active_count, and all_completed all unchanged).
       {filtered, active_count, all_completed, any_todos} =
-        use_cell(cell, fn
+        use_observable(cell, fn
           :disconnected ->
             {[], 0, false, false}
 

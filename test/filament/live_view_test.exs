@@ -167,8 +167,10 @@ defmodule Filament.LiveViewTest do
 
       @impl true
       def render(%{server: server}) do
+        cell = {Filament.Observable.GenServer, server}
+
         value =
-          use_observable(server, fn
+          use_observable(cell, fn
             :disconnected -> :disconnected
             n -> n
           end)
@@ -293,7 +295,7 @@ defmodule Filament.LiveViewTest do
         prop(:cell, :any, required: true)
 
         def render(%{cell: cell}) do
-          count = use_cell(cell, & &1)
+          count = use_observable(cell, & &1)
           ~F"<p>cell-count: {count}</p>"
         end
       end
@@ -446,7 +448,7 @@ defmodule Filament.LiveViewTest do
       html_disconnected =
         socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
 
-      # The cell can't reach its (dead) source, so use_cell yields :disconnected.
+      # The cell can't reach its (dead) source, so use_observable yields :disconnected.
       assert html_disconnected =~ "cell-count: disconnected"
 
       # Restart the cell against a fresh server. Component re-render via a

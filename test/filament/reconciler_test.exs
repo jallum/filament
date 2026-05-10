@@ -263,26 +263,15 @@ defmodule Filament.ReconcilerTest do
     def start_link(_opts \\ []), do: GenServer.start_link(__MODULE__, :state)
     def init(s), do: {:ok, s}
 
-    def proj_key_count(srv), do: GenServer.call(srv, :proj_key_count)
-    def subscriber_count(srv), do: GenServer.call(srv, :subscriber_count)
+    def proj_key_count(srv), do: GenServer.call(srv, :cell_subscriber_count)
+    def subscriber_count(srv), do: GenServer.call(srv, :cell_subscriber_count)
 
     @impl Filament.Observable
     def handle_subscribe(_sub, state), do: {:ok, state, state}
 
     @impl GenServer
-    def handle_call(:proj_key_count, _from, state) do
-      total =
-        :__filament_subscribers__
-        |> Process.get(%{})
-        |> Map.values()
-        |> Enum.reduce(0, fn s, acc -> acc + map_size(s.proj_keys) end)
-
-      {:reply, total, state}
-    end
-
-    @impl GenServer
-    def handle_call(:subscriber_count, _from, state) do
-      {:reply, map_size(Process.get(:__filament_subscribers__, %{})), state}
+    def handle_call(:cell_subscriber_count, _from, state) do
+      {:reply, map_size(Process.get(:__filament_cell_subscribers__, %{})), state}
     end
   end
 
@@ -291,7 +280,9 @@ defmodule Filament.ReconcilerTest do
     use Filament.Component
 
     def render(%{server: server}) do
-      use_observable(server, fn
+      cell = {Filament.Observable.GenServer, server}
+
+      use_observable(cell, fn
         :disconnected -> nil
         state -> state
       end)

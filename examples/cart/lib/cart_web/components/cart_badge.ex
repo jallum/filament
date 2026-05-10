@@ -7,7 +7,7 @@ defmodule CartWeb.Components.CartBadge do
 
     def render(%{cell: cell}) do
       count =
-        use_cell(cell, fn
+        use_observable(cell, fn
           :disconnected -> 0
           s -> Cart.State.item_count(s)
         end)
