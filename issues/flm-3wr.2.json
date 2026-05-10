@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-10T08:29:13Z",
+  "description": "Generalise Filament's reactivity unit. Today `Filament.Observable` is a single mechanism with a GenServer transport baked in. After this epic:\n\n- A **cell** is a versioned value with subscribers and a projection-equality check. Transport-agnostic.\n- The existing GenServer-backed observable becomes one transport. Others can be added by wrappers (in-process struct, focus tracker, manual update) without component code changing.\n- New `use_cell(cell_ref, projection)` hook — the generic subscription primitive.\n- Existing `use_observable` stays as sugar over `use_cell` + GenServer transport for backward compat.\n- Decision pending: rename `use_state` → `use_local` (or keep both). Document final naming.\n\nAfter this lands, OctoPi's TUI backend (and any future non-GenServer transport) can deliver values to components without touching Filament's substrate.\n\n## Strategy\n\nDecompose into 4 children:\n\n1. **2.1** Define the `Filament.Cell` behaviour (subscribe / unsubscribe / current / notify protocol).\n2. **2.2** Refactor `Filament.Observable.GenServer` to implement the Cell behaviour. Existing `use_observable` and tests continue to work unchanged.\n3. **2.3** Add `use_cell(cell_ref, projection)` hook. Refactor `use_observable` as sugar over it.\n4. **2.4** Documentation: cell guide, transport authoring example, naming decision.\n\n## Acceptance\n\n- Cell behaviour + types defined in `Filament.Cell`.\n- `Filament.Observable.GenServer` implements Cell.\n- `use_cell` exists, `use_observable` reimplemented as sugar.\n- All existing examples + tests pass unchanged.\n- Cell guide in guides/.",
+  "id": "flm-3wr.2",
+  "labels": [],
+  "parent": "flm-3wr",
+  "priority": 1,
+  "status": "open",
+  "title": "[EPIC] Phase 2: cell mechanism with pluggable transports",
+  "type": "task",
+  "updated_at": "2026-05-10T08:29:13Z"
+}
