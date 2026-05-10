@@ -19,6 +19,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.4.1] - 2026-05-09
+
+### Added
+
+- `Filament.Experimental.Hooks.use_event_ref/1` now supports 2-arity handlers
+  that receive a `push/2` fn as their second argument, paired with a new
+  `window.filament.handleEvent` JS helper. Together they let a component push
+  events back to the specific JS hook instance that called in — scoped
+  automatically via the wire ref, so multiple hook instances on the same page
+  never cross:
+
+  ```elixir
+  ref = use_event_ref(fn payload, push ->
+    push.("progress", %{step: 1})
+    push.("done", payload)
+  end)
+
+  ~F"""
+  <div phx-hook="MyHook" data-ref={ref} />
+  """
+  ```
+
+  ```javascript
+  // hook
+  const handleEvent = window.filament.handleEvent(this);
+  handleEvent("progress", ({step}) => /* ... */);
+  handleEvent("done", (data) => /* ... */);
+  ```
+
+### Fixed
+
+- Keyed comprehensions (`:for` + `:key` on a component tag) wrapping child
+  components or event handlers no longer raise `"hook called outside a render
+  pass"` after a re-render. The `~F` compiler's comprehension hoister matched
+  only non-keyed entry tuples (first element `nil`), so `component_keyed`
+  calls stayed inside keyed entry fn bodies and crashed when LiveView's diff
+  engine re-invoked them outside the Filament render context. The hoister
+  now handles both keyed and non-keyed entry tuples.
+
 ## [0.4.0] - 2026-05-08
 
 ### Added
