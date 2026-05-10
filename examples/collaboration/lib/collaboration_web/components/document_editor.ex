@@ -8,7 +8,7 @@ defmodule CollaborationWeb.Components.DocumentEditor do
     prop(:doc_id, :string, required: true)
 
     def render(%{doc_id: doc_id}) do
-      cell = use_observable({Filament.Observable.GenServer, DocumentServer.via_registry(doc_id)})
+      source = use_source({Filament.Observable.GenServer, DocumentServer.via_registry(doc_id)})
 
       server = DocumentServer.via_registry(doc_id)
 
@@ -24,7 +24,7 @@ defmodule CollaborationWeb.Components.DocumentEditor do
       # full document structure. The first-load WS patch then only updates the dynamic
       # leaves (presence text, lock badge) rather than replacing the entire layout.
       doc_view =
-        use_observable(cell, fn
+        use_value(source, fn
           :disconnected -> %{presence: 0, locked: false, lock_holder: nil}
           s -> s
         end)

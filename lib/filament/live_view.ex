@@ -22,7 +22,7 @@ defmodule Filament.LiveView do
   the WebSocket connects. This produces fully-rendered initial HTML with real
   data, which is beneficial for SEO and perceived performance.
 
-  When `false`, all `use_observable` calls return their `:disconnected`
+  When `false`, all `use_value` calls return their `:disconnected`
   value during the static render; real data appears after the WebSocket connects.
 
   Note: Phoenix LiveView uses separate OS processes for the static render and
@@ -37,9 +37,9 @@ defmodule Filament.LiveView do
       end
   """
 
-  alias Filament.Reconciler
-
   import Phoenix.Component, only: [sigil_H: 2]
+
+  alias Filament.Reconciler
 
   @callback root_component() :: module()
 
@@ -381,5 +381,4 @@ defmodule Filament.LiveView do
         {:noreply, socket}
     end
   end
-
 end

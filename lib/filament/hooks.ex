@@ -7,32 +7,33 @@ defmodule Filament.Hooks do
   Call these at the top level of `render/1`:
 
     - `use_state/1` — local mutable state; returns `{value, setter}`
-    - `use_observable/1` — resolve a `Filament.Cell` once (cell tuple or factory fn)
-    - `use_observable/2` — subscribe to a cell and project its current value; fn receives `:disconnected` when unavailable
+    - `use_source/1` — bind a reactive source once (factory fn or cell tuple); returns a stable handle
+    - `use_value/2` — read a projected value from a source and subscribe to its updates
     - `use_effect/2` — side-effect with optional cleanup
     - `memo_at/3` and `event_at/2` — invoked by compiler-generated code from `~F` templates
 
-  ## Pattern: use_observable/1 + use_observable/2
+  ## Pattern: use_source + use_value
 
-  Resolve the cell once with `/1`, then project from it with `/2`. This lets you pass
-  the cell to child components and apply multiple projections from the same source:
+  Bind the source once with `use_source`, then read values from it with `use_value`.
+  This lets you pass the source to child components and apply multiple projections
+  from the same source:
 
       def render(%{session_id: session_id}) do
-        cell = use_observable(fn ->
+        source = use_source(fn ->
           {Filament.Observable.GenServer, MyServer.start_link(session_id)}
         end)
 
-        count = use_observable(cell, fn
+        count = use_value(source, fn
           :disconnected -> 0
           state -> state.count
         end)
 
-        <ChildComponent cell={cell} />
+        <ChildComponent source={source} />
       end
 
       # In the child:
-      def render(%{cell: cell}) do
-        value = use_observable(cell, fn
+      def render(%{source: source}) do
+        value = use_value(source, fn
           :disconnected -> nil
           s -> s.some_field
         end)
@@ -183,36 +184,38 @@ defmodule Filament.Hooks do
   defp extract_cleanup(_), do: nil
 
   @doc """
-  Resolve a cell once for the calling fiber and return it.
+  Bind a reactive source once for the calling fiber and return a stable handle.
 
-  Accepts a cell tuple `{transport, data}` or a 0-arity factory fn that
-  returns one. The factory variant is the cell-side equivalent of
-  `use_observable/1`: parents resolve the cell once (e.g. via a session-keyed
-  `ensure_started/1`) and pass it down to children that apply their own
-  projections via `use_observable/2`.
+  Accepts a source tuple `{transport, data}` or a 0-arity factory fn that
+  returns one. Parents bind the source once (e.g. via a session-keyed
+  `ensure_started/1`) and pass the handle down to children that read their
+  own projections via `use_value/2`.
 
       # Parent
-      cell = use_observable(fn ->
+      source = use_source(fn ->
         {Filament.Observable.GenServer, CartServer.ensure_started(session_id)}
       end)
 
-      <Child cell={cell} />
+      <Child source={source} />
 
       # Child
-      count = use_observable(cell, fn
+      count = use_value(source, fn
         :disconnected -> 0
         state         -> state.count
       end)
 
   Returns `nil` during disconnected (static HTTP) renders. On subsequent
-  renders, reuses the cached cell if its underlying transport is still
+  renders, reuses the cached handle if its underlying transport is still
   reachable; calls the factory again otherwise (e.g. the GenServer behind
-  the cell crashed).
+  the source crashed).
+
+  The handle is a `Filament.Cell.t()` — see `Filament.Cell` for the transport
+  contract; "source" is the user-facing name for the same value.
 
   Must be called at the top level of `render/1` in consistent order.
   """
-  @spec use_observable(Filament.Cell.t() | (-> Filament.Cell.t())) :: Filament.Cell.t() | nil
-  def use_observable(cell_or_fn) when is_function(cell_or_fn, 0) or is_tuple(cell_or_fn) do
+  @spec use_source(Filament.Cell.t() | (-> Filament.Cell.t())) :: Filament.Cell.t() | nil
+  def use_source(cell_or_fn) when is_function(cell_or_fn, 0) or is_tuple(cell_or_fn) do
     {slot_index, previous, ctx} = use_slot(:uninitialized)
 
     if ctx.subscribe_enabled do
@@ -237,25 +240,23 @@ defmodule Filament.Hooks do
 
   defp resolve_observable_factory(cell, _previous) when is_tuple(cell), do: cell
 
-  defp observable_reachable?({Filament.Observable.GenServer, pid}) when is_pid(pid),
-    do: Process.alive?(pid)
+  defp observable_reachable?({Filament.Observable.GenServer, pid}) when is_pid(pid), do: Process.alive?(pid)
 
   defp observable_reachable?(_), do: true
 
   @doc """
-  Subscribe the current fiber to a `Filament.Cell` and apply a projection.
+  Read a projected value from a source and subscribe to its updates.
 
-  Generic over the cell's transport — works against any module that implements
+  Generic over the source's transport — works against any module that implements
   `Filament.Cell` (the GenServer-backed observable, an in-process struct, a
-  focus tracker, etc.). The component is unaware of how the cell is fed.
+  focus tracker, etc.). The component is unaware of how the source is fed.
 
-  The hook subscribes with identity projection (the cell delivers raw values)
-  and applies the user-supplied `projection` at render time. This matches
-  `use_observable/2`'s closure-freshness semantics: a projection that closes
-  over local component state always sees the current value.
+  The hook subscribes with identity projection (the source delivers raw values)
+  and applies the user-supplied `projection` at render time. A projection that
+  closes over local component state always sees the current value.
 
   Returns `projection.(:disconnected)` during static (HTTP) renders and when
-  the cell can't reach its source.
+  the source can't reach its underlying state.
 
   ## Example
 
@@ -265,10 +266,10 @@ defmodule Filament.Hooks do
       end
 
       def render(%{counter: counter}) do
-        cell = {Filament.Observable.GenServer, counter}
+        source = {Filament.Observable.GenServer, counter}
 
         count =
-          use_observable(cell, fn
+          use_value(source, fn
             :disconnected -> 0
             n -> n
           end)
@@ -278,8 +279,8 @@ defmodule Filament.Hooks do
 
   Must be called at the top level of `render/1` in consistent order.
   """
-  @spec use_observable(Filament.Cell.t() | nil, (term() | :disconnected -> term())) :: term()
-  def use_observable(cell, projection) when is_function(projection, 1) do
+  @spec use_value(Filament.Cell.t() | nil, (term() | :disconnected -> term())) :: term()
+  def use_value(cell, projection) when is_function(projection, 1) do
     {slot_index, previous, ctx} = use_slot(:uninitialized)
 
     cond do

@@ -3,21 +3,21 @@ defmodule CartWeb.Components.CartItems do
   use Filament.Component
 
   defcomponent do
-    prop(:cell, :any, default: nil)
+    prop(:source, :any, default: nil)
 
     defp format_price(cents) do
       "$#{div(cents, 100)}.#{String.pad_leading(Integer.to_string(rem(cents, 100)), 2, "0")}"
     end
 
-    def render(%{cell: cell}) do
+    def render(%{source: source}) do
       cart =
-        use_observable(cell, fn
+        use_value(source, fn
           :disconnected -> nil
           s -> s
         end)
 
       server =
-        case cell do
+        case source do
           {Filament.Observable.GenServer, pid} -> pid
           _ -> nil
         end

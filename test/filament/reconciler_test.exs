@@ -8,9 +8,9 @@ defmodule Filament.ReconcilerTest do
 
   defmodule StubCellTransport do
     @moduledoc false
-    use GenServer
-
     @behaviour Filament.Cell
+
+    use GenServer
 
     def start_link, do: GenServer.start_link(__MODULE__, [])
 
@@ -302,7 +302,7 @@ defmodule Filament.ReconcilerTest do
     def render(%{server: server}) do
       cell = {Filament.Observable.GenServer, server}
 
-      use_observable(cell, fn
+      use_value(cell, fn
         :disconnected -> nil
         state -> state
       end)

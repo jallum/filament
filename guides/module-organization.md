@@ -18,7 +18,7 @@ Target-agnostic. Zero `Phoenix.LiveView.*` imports.
 - `Filament.Core` — capture/bubble event dispatcher (`dispatch_event/4`,
   `stop_propagation/1`).
 - `Filament.Fiber` / `Filament.FiberTree` — fiber state and lookups.
-- `Filament.Hooks` — `use_state`, `use_observable`, `use_effect`,
+- `Filament.Hooks` — `use_state`, `use_source`, `use_value`, `use_effect`,
   `event_at`, `register_event_handler`, `memo_at`.
 - `Filament.KeyModifiers` — keyboard modifier struct used by `on_key`
   handlers.
