@@ -256,7 +256,7 @@ defmodule Filament.Renderer do
 
   def walk_vnode({:element, tag, attrs, children}, context) do
     resolved_attrs = Enum.map(attrs, &resolve_event_attr/1)
-    walked = Enum.map(children, &walk_vnode(&1, context))
+    walked = Enum.map(children, &walk_child(&1, context))
     {:element, tag, resolved_attrs, walked}
   end
 
@@ -274,13 +274,20 @@ defmodule Filament.Renderer do
   end
 
   def walk_vnode({:fragment, children}, context) do
-    walked = Enum.map(children, &walk_vnode(&1, context))
+    walked = Enum.map(children, &walk_child(&1, context))
     {:fragment, walked}
   end
 
   def walk_vnode(invalid, _context) do
     raise ArgumentError, "invalid vnode: #{inspect(invalid)}"
   end
+
+  # Element/fragment children may include scalar values (a string interpolation
+  # `{name}`, a number, etc.) alongside vnode tuples. Tuples recurse through
+  # the walker; scalars pass through and are stringified/escaped by
+  # `Filament.Web.to_iodata`.
+  defp walk_child(child, context) when is_tuple(child), do: walk_vnode(child, context)
+  defp walk_child(child, _context), do: child
 
   # Substrate-side resolution of `on_*` attribute handlers: registers the
   # closure as an event handler under the active fiber and replaces the

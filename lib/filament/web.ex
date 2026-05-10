@@ -41,7 +41,7 @@ defmodule Filament.Web do
 
   def to_iodata({:element, tag, attrs, walked_children}) do
     tag_str = to_string(tag)
-    rendered_children = Enum.map(walked_children, &to_iodata/1)
+    rendered_children = Enum.map(walked_children, &child_to_iodata/1)
 
     if void_element?(tag_str) do
       ["<", tag_str, render_attrs(attrs), ">"]
@@ -55,7 +55,7 @@ defmodule Filament.Web do
   end
 
   def to_iodata({:fragment, walked_children}) do
-    Enum.map(walked_children, &to_iodata/1)
+    Enum.map(walked_children, &child_to_iodata/1)
   end
 
   # Transitional shape (Phase 1.2): wraps a `Phoenix.LiveView.Rendered` struct
@@ -72,6 +72,14 @@ defmodule Filament.Web do
   def to_iodata(invalid) do
     raise ArgumentError, "invalid walked vnode: #{inspect(invalid)}"
   end
+
+  # Scalar child of an element/fragment — string from `{name}` interpolation,
+  # integer, atom, etc. HTML-escape and emit as iodata. Nil/false render as
+  # empty (matches HEEx semantics for `nil` interpolations).
+  defp child_to_iodata(child) when is_tuple(child), do: to_iodata(child)
+  defp child_to_iodata(nil), do: []
+  defp child_to_iodata(false), do: []
+  defp child_to_iodata(child), do: Safe.to_iodata(child)
 
   defp embed_child(%Phoenix.LiveView.Rendered{} = r), do: Safe.to_iodata(r)
   defp embed_child({tag, _} = walked_vnode) when is_atom(tag), do: to_iodata(walked_vnode)
@@ -119,6 +127,8 @@ defmodule Filament.Web do
 
   defp render_attr_value(_key_str, false), do: []
   defp render_attr_value(key_str, true), do: [" ", key_str]
+  # `nil` is emitted by VNodeEngine for bare boolean attrs (`<input disabled>`).
+  defp render_attr_value(key_str, nil), do: [" ", key_str]
 
   defp render_attr_value(key_str, value) do
     escaped_value = Plug.HTML.html_escape_to_iodata(to_string(value))
