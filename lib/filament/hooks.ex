@@ -441,79 +441,6 @@ defmodule Filament.Hooks do
   end
 
   @doc false
-  @spec memo_at(
-          slot :: non_neg_integer() | {:t, non_neg_integer()},
-          deps :: [term()] | :no_deps,
-          factory :: (-> term())
-        ) :: term()
-  def memo_at(slot, deps, factory) when is_function(factory, 0) do
-    ctx = Process.get(:filament_render_context)
-
-    if is_nil(ctx) do
-      # Called outside a render pass (PLV diff engine re-evaluating comprehension entry fns).
-      # Just compute and return — no caching needed here.
-      factory.()
-    else
-      previous = read_slot_at(ctx, slot)
-
-      case previous do
-        {:memo, cached_deps, cached_value, handler_range}
-        when deps != :no_deps and cached_deps == deps ->
-          # Cache hit: replay event handlers registered by the factory last time
-          # so the fiber's event_handlers map stays populated without re-running factory.
-          replay_handler_range(ctx, handler_range)
-          after_ctx = Process.get(:filament_render_context)
-          slot_entry = {:memo, cached_deps, cached_value, handler_range}
-          updated = Map.put(after_ctx.new_hook_slots, slot, slot_entry)
-          Process.put(:filament_render_context, %{after_ctx | new_hook_slots: updated})
-          cached_value
-
-        _ ->
-          # Cache miss or first render: run factory, record which handler indices it used.
-          run_memo_factory(slot, deps, factory)
-      end
-    end
-  end
-
-  defp run_memo_factory(slot, deps, factory) do
-    ctx = Process.get(:filament_render_context)
-    e_start = ctx.event_handler_index
-    value = factory.()
-    after_ctx = Process.get(:filament_render_context)
-    e_end = after_ctx.event_handler_index
-    stored_deps = if deps == :no_deps, do: :no_deps, else: deps
-    slot_entry = {:memo, stored_deps, value, {e_start, e_end}}
-    updated = Map.put(after_ctx.new_hook_slots, slot, slot_entry)
-    Process.put(:filament_render_context, %{after_ctx | new_hook_slots: updated})
-    value
-  end
-
-  defp read_slot_at(ctx, slot) do
-    case Map.get(ctx.hook_slots, slot) do
-      nil ->
-        fiber = Map.get(ctx.fiber_tree, ctx.fiber_id)
-        if fiber, do: Map.get(fiber.hook_slots, slot, :__unset__), else: :__unset__
-
-      value ->
-        value
-    end
-  end
-
-  # Replay event handlers from the previous fiber for the given auto-increment index range.
-  defp replay_handler_range(_ctx, {e_start, e_start}), do: :ok
-
-  defp replay_handler_range(ctx, {e_start, e_end}) do
-    fiber = Map.get(ctx.fiber_tree, ctx.fiber_id)
-
-    if fiber do
-      after_ctx = Process.get(:filament_render_context)
-      replayed = Map.take(fiber.event_handlers, Enum.to_list(e_start..(e_end - 1)))
-      merged = Map.merge(after_ctx.new_event_handlers, replayed)
-      Process.put(:filament_render_context, %{after_ctx | new_event_handlers: merged})
-    end
-  end
-
-  @doc false
   @spec event_at(non_neg_integer(), function()) :: String.t()
   @spec event_at(non_neg_integer(), function(), :bubble | :capture) :: String.t()
   def event_at(slot, handler, phase \\ :bubble) when is_function(handler) and phase in [:bubble, :capture] do
@@ -533,16 +460,6 @@ defmodule Filament.Hooks do
 
   defp put_handler(ctx, :capture, slot, handler) do
     %{ctx | new_capture_handlers: Map.put(ctx.new_capture_handlers, slot, handler)}
-  end
-
-  @doc false
-  def set_event_handler_floor(n) when is_integer(n) do
-    case Process.get(:filament_render_context) do
-      nil -> :ok
-      ctx when ctx.event_handler_index < n ->
-        Process.put(:filament_render_context, %{ctx | event_handler_index: n})
-      _ -> :ok
-    end
   end
 
   @doc false
