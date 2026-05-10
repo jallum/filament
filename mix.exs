@@ -7,6 +7,7 @@ defmodule Filament.MixProject do
       version: "0.4.1",
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
+      aliases: aliases(),
       deps: deps(),
       dialyzer: [plt_add_apps: [:mix]],
       docs: docs(),
@@ -14,6 +15,36 @@ defmodule Filament.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       test_paths: test_paths(Mix.env())
     ]
+  end
+
+  # Examples are compiled and tested as part of the root `mix test` (their
+  # sources are mixed into elixirc_paths/test_paths in :test env). This alias
+  # exercises each example as a *standalone* Mix project — deps resolution,
+  # mix.exs validity, compile under its own dependency closure — which the
+  # integrated path does not cover.
+  defp aliases do
+    [
+      "examples.compile": &examples_compile/1
+    ]
+  end
+
+  defp examples_compile(_args) do
+    examples = ~w(cart collaboration inventory todo)
+
+    Enum.each(examples, fn name ->
+      cwd = Path.expand("examples/#{name}", __DIR__)
+      Mix.shell().info("==> examples/#{name}: mix deps.get + mix compile")
+      run_in!(cwd, ["deps.get"])
+      run_in!(cwd, ["compile", "--warnings-as-errors"])
+    end)
+  end
+
+  defp run_in!(cwd, args) do
+    {_, status} = System.cmd("mix", args, cd: cwd, into: IO.stream(:stdio, :line))
+
+    if status != 0 do
+      Mix.raise("examples build failed in #{cwd} (mix #{Enum.join(args, " ")} → #{status})")
+    end
   end
 
   # Include test/support (fixtures) and examples for compile verification in test env
