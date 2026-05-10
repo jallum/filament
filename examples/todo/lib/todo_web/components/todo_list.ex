@@ -18,12 +18,6 @@ defmodule TodoWeb.Components.TodoList do
           Store.cell(pid)
         end)
 
-      store =
-        case source do
-          {Filament.Observable.GenServer, pid} -> pid
-          _ -> nil
-        end
-
       {filter, set_filter} = use_state(:all)
       {clear_key, bump_clear} = use_state(0)
 
@@ -46,7 +40,7 @@ defmodule TodoWeb.Components.TodoList do
         end)
 
       on_submit = fn %{"text" => val} ->
-        if store && String.trim(val) != "", do: Store.add(store, val)
+        if String.trim(val) != "", do: Store.add(source.data, val)
         bump_clear.(clear_key + 1)
       end
 
@@ -72,15 +66,15 @@ defmodule TodoWeb.Components.TodoList do
               class="toggle-all"
               type="checkbox"
               checked={all_completed}
-              on_click={fn -> Store.toggle_all(store, !all_completed) end}
+              on_click={fn -> Store.toggle_all(source.data, !all_completed) end}
             />
             <ul class="todo-list">
               <TodoItem
                 :for={todo <- filtered}
                 :key={todo.id}
                 todo={todo}
-                on_toggle={fn -> Store.toggle(store, todo.id) end}
-                on_remove={fn -> Store.remove(store, todo.id) end}
+                on_toggle={fn -> Store.toggle(source.data, todo.id) end}
+                on_remove={fn -> Store.remove(source.data, todo.id) end}
               />
             </ul>
           </section>

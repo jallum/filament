@@ -167,7 +167,7 @@ defmodule Filament.LiveViewTest do
 
       @impl true
       def render(%{server: server}) do
-        cell = {Filament.Observable.GenServer, server}
+        cell = Filament.Source.new(Filament.Observable.GenServer, server)
 
         value =
           use_value(cell, fn
@@ -294,7 +294,7 @@ defmodule Filament.LiveViewTest do
 
     test "cell_update message updates the slot and re-renders" do
       {:ok, server} = CellCounter.start_link(0)
-      cell = {Filament.Observable.GenServer, server}
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
 
       socket = test_socket(%{cell: cell})
       {:ok, socket} = CellLiveView.mount(%{}, %{}, socket)
@@ -326,7 +326,7 @@ defmodule Filament.LiveViewTest do
 
     test "marks the slot :needs_resubscribe and re-renders" do
       {:ok, server} = CellCounter.start_link(0)
-      cell = {Filament.Observable.GenServer, server}
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
 
       socket = test_socket(%{cell: cell})
       {:ok, socket} = CellLiveView.mount(%{}, %{}, socket)
@@ -380,7 +380,7 @@ defmodule Filament.LiveViewTest do
 
     test "saturated mailbox triggers cell_resubscribe end-to-end" do
       {:ok, server} = CellCounter.start_link(0)
-      cell = {Filament.Observable.GenServer, server}
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
 
       # Use a sleeping decoy pid as the subscriber so we can flood its mailbox.
       decoy = spawn(fn -> Process.sleep(:infinity) end)
@@ -410,7 +410,7 @@ defmodule Filament.LiveViewTest do
     test "after server death, resubscribe yields :disconnected; restart resumes updates" do
       Process.flag(:trap_exit, true)
       {:ok, server} = CellCounter.start_link(0)
-      cell = {Filament.Observable.GenServer, server}
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
 
       socket = test_socket(%{cell: cell})
       {:ok, socket} = CellLiveView.mount(%{}, %{}, socket)
@@ -437,7 +437,7 @@ defmodule Filament.LiveViewTest do
       # Restart the cell against a fresh server. Component re-render via a
       # subsequent resubscribe should pick it up.
       {:ok, server2} = CellCounter.start_link(7)
-      cell2 = {Filament.Observable.GenServer, server2}
+      cell2 = Filament.Source.new(Filament.Observable.GenServer, server2)
 
       socket =
         socket

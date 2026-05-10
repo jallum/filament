@@ -70,6 +70,15 @@ defmodule Filament.Observable.GenServer do
     :exit, _ -> :disconnected
   end
 
+  @doc """
+  Optional `Filament.Cell` callback. Returns `true` if the underlying
+  GenServer is reachable — for raw pids, checks `Process.alive?/1`;
+  registered names and via-tuples are always treated as reachable
+  (their lookup happens at call time anyway).
+  """
+  def reachable?(server) when is_pid(server), do: Process.alive?(server)
+  def reachable?(_), do: true
+
   defmacro __using__(_opts) do
     quote do
       @behaviour Filament.Observable
@@ -89,23 +98,27 @@ defmodule Filament.Observable.GenServer do
       # ── Cell constructor ────────────────────────────────────────────────
 
       @doc """
-      Build a `Filament.Cell` tuple for this server.
+      Build a `%Filament.Source{}` for this server.
 
-      Pass the server reference (pid, registered name, or `{:via, ...}`) and
-      get back the `{transport, data}` tuple Filament's hook layer expects.
-      The transport module is always `Filament.Observable.GenServer` —
+      Pass the server reference (pid, registered name, or `{:via, ...}`)
+      and get back the struct Filament's hook layer expects. The
+      transport module is always `Filament.Observable.GenServer` —
       saves application code from typing it at every call site.
 
           source = use_source(fn -> __MODULE__.cell(server) end)
+          server = source.data
 
       Override if you want a different default (e.g. ensure-started lookup):
 
           def cell(session_id) do
-            {Filament.Observable.GenServer, ensure_started(session_id)}
+            Filament.Source.new(Filament.Observable.GenServer,
+                                ensure_started(session_id))
           end
       """
-      @spec cell(term()) :: Filament.Cell.t()
-      def cell(server), do: {Filament.Observable.GenServer, server}
+      @spec cell(term()) :: Filament.Source.t()
+      def cell(server) do
+        Filament.Source.new(Filament.Observable.GenServer, server)
+      end
 
       defoverridable cell: 1
 

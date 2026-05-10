@@ -30,7 +30,7 @@ defmodule Filament.Observable.CellBackpressureTest do
   defp drain_sleeper_mailbox(pid), do: Process.exit(pid, :kill)
 
   defp subscribe_cell(server, sub_pid, fiber_id, slot_index) do
-    cell = {Filament.Observable.GenServer, server}
+    cell = Filament.Source.new(Filament.Observable.GenServer, server)
     subscriber = {sub_pid, fiber_id, slot_index}
     {:ok, _} = Cell.subscribe(cell, subscriber, &Function.identity/1)
     subscriber

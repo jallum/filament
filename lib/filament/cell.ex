@@ -1,27 +1,35 @@
 defmodule Filament.Cell do
   @moduledoc """
-  Reactive value with subscribers and a projection-equality check.
+  Behaviour that a Filament transport implements.
 
-  A cell is the unit of reactivity in Filament. Components consume cells via
-  hooks (`use_source` to bind, `use_value` to read); transports — GenServer-backed
-  observables, in-process structs, focus trackers — provide them. The
-  component is unaware of the transport; swapping transports is purely a
-  wrapper concern.
+  A *cell* is the unit of reactivity in Filament. Components consume cells
+  via hooks (`use_source` to bind, `use_value` to read); transports —
+  GenServer-backed observables, in-process structs, focus trackers — provide
+  them by implementing this behaviour. Components are unaware of which
+  transport delivers a cell's value.
 
-  "Cell" is the internal/transport-author name; the user-facing hook
-  vocabulary calls the same value a "source." The two are the same tagged
-  tuple — the rename only reflects the audience of each API surface.
+  ## Vocabulary
+
+  Filament splits the API surface into two related names:
+
+    * **`Filament.Cell`** — this module. The *behaviour* a transport author
+      implements. Defines `subscribe/3`, `unsubscribe/2`, `current/2`
+      callbacks and routing helpers that dispatch through to the transport.
+
+    * **`Filament.Source`** — the *struct* application code holds. Carries
+      the transport module + transport-specific data. Returned by
+      `use_source/1` and passed to `use_value/2`.
 
   ## Shape
 
-  A cell value is a tagged tuple:
+  A source is a struct:
 
-      cell :: {transport_module :: module(), transport_data :: term()}
+      %Filament.Source{transport: module(), data: term()}
 
   The dispatch helpers in this module route subscribe / unsubscribe / current
-  calls to `transport_module`. Each transport implements the callbacks below
-  with whatever mechanism it likes (a GenServer call, a synchronous Agent
-  read, a direct ETS lookup, etc.).
+  calls through `source.transport`. Each transport implements the callbacks
+  below however it likes (a GenServer call, a synchronous Agent read, a
+  direct ETS lookup, etc.).
 
   ## Change-or-bust
 
@@ -40,7 +48,7 @@ defmodule Filament.Cell do
 
   @type transport :: module()
   @type transport_data :: term()
-  @type t :: {transport(), transport_data()}
+  @type t :: Filament.Source.t()
   @type subscriber :: term()
   @type projection :: (term() -> term())
   @type projected :: term()
@@ -64,23 +72,33 @@ defmodule Filament.Cell do
   @callback current(transport_data(), projection()) :: projected() | :disconnected
 
   @doc """
-  Subscribe `subscriber` to `cell` with a projection. See the callback
+  Subscribe `subscriber` to `source` with a projection. See the callback
   semantics above.
   """
   @spec subscribe(t(), subscriber(), projection()) :: {:ok, projected()} | :disconnected
-  def subscribe({transport, data}, subscriber, projection) when is_function(projection, 1) do
-    transport.subscribe(data, subscriber, projection)
+  def subscribe(%Filament.Source{transport: t, data: d}, subscriber, projection) when is_function(projection, 1) do
+    t.subscribe(d, subscriber, projection)
   end
 
   @doc "Cancel a subscription. Idempotent."
   @spec unsubscribe(t(), subscriber()) :: :ok
-  def unsubscribe({transport, data}, subscriber) do
-    transport.unsubscribe(data, subscriber)
+  def unsubscribe(%Filament.Source{transport: t, data: d}, subscriber) do
+    t.unsubscribe(d, subscriber)
   end
 
   @doc "Read the current projected value without subscribing."
   @spec current(t(), projection()) :: projected() | :disconnected
-  def current({transport, data}, projection) when is_function(projection, 1) do
-    transport.current(data, projection)
+  def current(%Filament.Source{transport: t, data: d}, projection) when is_function(projection, 1) do
+    t.current(d, projection)
+  end
+
+  @doc """
+  Optional reachability check used by `use_source/1` to decide whether a
+  cached source's underlying transport is still alive. Transports may
+  override `reachable?/1`; the default returns `true`.
+  """
+  @spec reachable?(t()) :: boolean()
+  def reachable?(%Filament.Source{transport: t, data: d}) do
+    if function_exported?(t, :reachable?, 1), do: t.reachable?(d), else: true
   end
 end

@@ -141,6 +141,17 @@ defmodule Filament.LiveView do
   defmacro __using__(opts) do
     static_subscribe = Keyword.get(opts, :static_subscribe, true)
 
+    # When static_subscribe is true the connected? check is irrelevant —
+    # subscribe during HTTP render too. Emit just `true` so dialyzer doesn't
+    # see `true or connected?(socket)` and flag the unreachable `false`
+    # branch in `:erlang.or/2`.
+    subscribe_enabled_ast =
+      if static_subscribe do
+        true
+      else
+        quote do: Phoenix.LiveView.connected?(socket)
+      end
+
     quote do
       @behaviour Filament.LiveView
 
@@ -152,7 +163,7 @@ defmodule Filament.LiveView do
       def mount(_params, _session, socket) do
         component = root_component()
         props = build_props(socket)
-        subscribe_enabled = unquote(static_subscribe) or Phoenix.LiveView.connected?(socket)
+        subscribe_enabled = unquote(subscribe_enabled_ast)
 
         {tree, rendered, pending_effects} =
           Reconciler.mount(component, props,
@@ -282,7 +293,7 @@ defmodule Filament.LiveView do
     # false and we'd silently drop every prop. ensure_loaded?/1 forces
     # the load before we ask.
     if Code.ensure_loaded?(component) and function_exported?(component, :__props__, 0) do
-      allowed = component.__props__() |> Enum.map(fn {name, _meta} -> name end)
+      allowed = Enum.map(component.__props__(), fn {name, _meta} -> name end)
       Map.take(assigns, allowed)
     else
       %{}

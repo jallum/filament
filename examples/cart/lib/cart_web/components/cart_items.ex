@@ -16,12 +16,6 @@ defmodule CartWeb.Components.CartItems do
           s -> s
         end)
 
-      server =
-        case source do
-          {Filament.Observable.GenServer, pid} -> pid
-          _ -> nil
-        end
-
       ~F"""
       <section class="cart-section">
         <h2>Your Cart</h2>
@@ -37,7 +31,7 @@ defmodule CartWeb.Components.CartItems do
                   <span class="item-name">{item.name}</span>
                   <span class="item-qty">× {item.quantity}</span>
                   <span class="item-price">{format_price(item.price_cents * item.quantity)}</span>
-                  <button class="btn-remove" on_click={fn -> Cart.Server.remove_item(server, item.id) end}>Remove</button>
+                  <button class="btn-remove" on_click={fn -> Cart.Server.remove_item(source.data, item.id) end}>Remove</button>
                 </li>
               {end}
             </ul>

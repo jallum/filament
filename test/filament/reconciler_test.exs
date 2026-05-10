@@ -221,7 +221,7 @@ defmodule Filament.ReconcilerTest do
     test "cell is unsubscribed when fiber is removed" do
       server = start_supervised!(%{id: StubCellTransport, start: {StubCellTransport, :start_link, []}})
       owner = self()
-      cell = {StubCellTransport, server}
+      cell = Filament.Source.new(StubCellTransport, server)
 
       {tree, _, _} = Reconciler.mount(CounterComponent, %{count: 0})
 
@@ -300,7 +300,7 @@ defmodule Filament.ReconcilerTest do
     use Filament.Component
 
     def render(%{server: server}) do
-      cell = {Filament.Observable.GenServer, server}
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
 
       use_value(cell, fn
         :disconnected -> nil

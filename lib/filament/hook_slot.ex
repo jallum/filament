@@ -35,9 +35,12 @@ defmodule Filament.HookSlot do
     :ok
   end
 
-  def cleanup({:cell_subscribed, cell, _raw}, %{owner_pid: owner_pid, fiber_id: fiber_id, slot_index: slot_index})
-      when not is_nil(cell) do
-    Filament.Cell.unsubscribe(cell, {owner_pid, fiber_id, slot_index})
+  def cleanup({:cell_subscribed, %Filament.Source{} = source, _raw}, %{
+        owner_pid: owner_pid,
+        fiber_id: fiber_id,
+        slot_index: slot_index
+      }) do
+    Filament.Cell.unsubscribe(source, {owner_pid, fiber_id, slot_index})
     :ok
   end
 
@@ -67,13 +70,13 @@ defmodule Filament.HookSlot do
 
   @doc """
   Apply a new raw value to a `use_value` slot, preserving the existing
-  cell identity so unsubscribe-on-cell-swap detection still works on
+  source identity so unsubscribe-on-source-swap detection still works on
   the next render.
   """
   @spec put_cell_value(slot :: term(), new_raw :: term()) ::
-          {:cell_subscribed, term() | nil, term()}
-  def put_cell_value({:cell_subscribed, cell, _old}, new_raw) do
-    {:cell_subscribed, cell, new_raw}
+          {:cell_subscribed, Filament.Source.t() | nil, term()}
+  def put_cell_value({:cell_subscribed, source, _old}, new_raw) do
+    {:cell_subscribed, source, new_raw}
   end
 
   def put_cell_value(_other, new_raw), do: {:cell_subscribed, nil, new_raw}

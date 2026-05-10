@@ -84,14 +84,14 @@ defmodule Filament.CellTest do
   describe "Cell.subscribe/3" do
     test "returns the current projected value" do
       {:ok, agent} = TestCell.start_link(%{count: 5})
-      cell = {TestCell, agent}
+      cell = Filament.Source.new(TestCell, agent)
 
       assert {:ok, 5} = Cell.subscribe(cell, :sub_a, & &1.count)
     end
 
     test "different subscribers can use different projections" do
       {:ok, agent} = TestCell.start_link(%{count: 5, name: "alice"})
-      cell = {TestCell, agent}
+      cell = Filament.Source.new(TestCell, agent)
 
       assert {:ok, 5} = Cell.subscribe(cell, :a, & &1.count)
       assert {:ok, "alice"} = Cell.subscribe(cell, :b, & &1.name)
@@ -101,7 +101,7 @@ defmodule Filament.CellTest do
   describe "Cell.current/2" do
     test "reads the current projected value without subscribing" do
       {:ok, agent} = TestCell.start_link(%{count: 7})
-      cell = {TestCell, agent}
+      cell = Filament.Source.new(TestCell, agent)
 
       assert Cell.current(cell, & &1.count) == 7
       # No subscriber should have been added.
@@ -112,7 +112,7 @@ defmodule Filament.CellTest do
   describe "Cell.unsubscribe/2" do
     test "stops further updates from reaching the subscriber" do
       {:ok, agent} = TestCell.start_link(%{count: 0})
-      cell = {TestCell, agent}
+      cell = Filament.Source.new(TestCell, agent)
 
       Cell.subscribe(cell, :sub, & &1.count)
       Cell.unsubscribe(cell, :sub)
@@ -123,7 +123,7 @@ defmodule Filament.CellTest do
 
     test "is idempotent on unknown subscribers" do
       {:ok, agent} = TestCell.start_link(%{})
-      cell = {TestCell, agent}
+      cell = Filament.Source.new(TestCell, agent)
 
       assert :ok = Cell.unsubscribe(cell, :never_subscribed)
     end
@@ -132,7 +132,7 @@ defmodule Filament.CellTest do
   describe "change-or-bust notification" do
     test "subscriber receives an update when the projection changes" do
       {:ok, agent} = TestCell.start_link(%{count: 0, name: "alice"})
-      cell = {TestCell, agent}
+      cell = Filament.Source.new(TestCell, agent)
 
       Cell.subscribe(cell, :counter, & &1.count)
 
@@ -142,7 +142,7 @@ defmodule Filament.CellTest do
 
     test "subscriber does NOT receive an update when projection unchanged" do
       {:ok, agent} = TestCell.start_link(%{count: 0, name: "alice"})
-      cell = {TestCell, agent}
+      cell = Filament.Source.new(TestCell, agent)
 
       Cell.subscribe(cell, :name_only, & &1.name)
 

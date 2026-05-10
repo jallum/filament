@@ -50,7 +50,7 @@ defmodule Filament.Hooks.UseValueTest do
   describe "use_value/2" do
     test "delivers the initial projected value on first mount" do
       {:ok, server} = Counter.start_link(7)
-      cell = {Filament.Observable.GenServer, server}
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
 
       {tree, walked, _} =
         Reconciler.mount(CellComp.CellComp, %{cell: cell}, owner_pid: self())
@@ -62,7 +62,7 @@ defmodule Filament.Hooks.UseValueTest do
 
     test "applies the projection function on render" do
       {:ok, server} = Counter.start_link(5)
-      cell = {Filament.Observable.GenServer, server}
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
 
       defmodule ProjectedComp do
         @moduledoc false
@@ -86,7 +86,7 @@ defmodule Filament.Hooks.UseValueTest do
 
     test "cell update sends a message scoped to the subscribing fiber" do
       {:ok, server} = Counter.start_link(0)
-      cell = {Filament.Observable.GenServer, server}
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
 
       Reconciler.mount(CellComp.CellComp, %{cell: cell}, owner_pid: self())
 
@@ -96,7 +96,7 @@ defmodule Filament.Hooks.UseValueTest do
     end
 
     test "use_value returns :disconnected projection when the source is unreachable" do
-      cell = {Filament.Observable.GenServer, :nonexistent_server}
+      cell = Filament.Source.new(Filament.Observable.GenServer, :nonexistent_server)
 
       defmodule DisconnectedComp do
         @moduledoc false
@@ -127,7 +127,7 @@ defmodule Filament.Hooks.UseValueTest do
   describe "subscribe_enabled = false (HTTP static mount)" do
     test "use_value returns :disconnected projection during static render" do
       {:ok, server} = Counter.start_link(42)
-      cell = {Filament.Observable.GenServer, server}
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
 
       defmodule StaticComp do
         @moduledoc false
@@ -161,7 +161,7 @@ defmodule Filament.Hooks.UseValueTest do
   describe "use_value + Reconciler.update reflect cell changes" do
     test "re-render after cell update reads the latest value via fiber slot" do
       {:ok, server} = Counter.start_link(0)
-      cell = {Filament.Observable.GenServer, server}
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
 
       {tree1, walked1, _} =
         Reconciler.mount(CellComp.CellComp, %{cell: cell}, owner_pid: self())
@@ -183,8 +183,8 @@ defmodule Filament.Hooks.UseValueTest do
     test "swapping the cell across renders unsubscribes from the old transport" do
       {:ok, server_a} = Counter.start_link(10)
       {:ok, server_b} = Counter.start_link(20)
-      cell_a = {Filament.Observable.GenServer, server_a}
-      cell_b = {Filament.Observable.GenServer, server_b}
+      cell_a = Filament.Source.new(Filament.Observable.GenServer, server_a)
+      cell_b = Filament.Source.new(Filament.Observable.GenServer, server_b)
 
       {tree1, walked1, _} =
         Reconciler.mount(CellComp.CellComp, %{cell: cell_a}, owner_pid: self())
@@ -217,7 +217,7 @@ defmodule Filament.Hooks.UseValueTest do
         prop(:server, :any, required: true)
 
         def render(%{server: server}) do
-          cell = use_source(fn -> {Filament.Observable.GenServer, server} end)
+          cell = use_source(fn -> Filament.Source.new(Filament.Observable.GenServer, server) end)
           count = use_value(cell, & &1)
           ~F"<p>{count}</p>"
         end
@@ -240,7 +240,7 @@ defmodule Filament.Hooks.UseValueTest do
 
       factory = fn ->
         :counters.add(counter, 1, 1)
-        {Filament.Observable.GenServer, server}
+        Filament.Source.new(Filament.Observable.GenServer, server)
       end
 
       defmodule SpyComp do
@@ -279,7 +279,7 @@ defmodule Filament.Hooks.UseValueTest do
       factory = fn ->
         :counters.add(counter, 1, 1)
         pid = :persistent_term.get({__MODULE__, :pid_ref})
-        {Filament.Observable.GenServer, pid}
+        Filament.Source.new(Filament.Observable.GenServer, pid)
       end
 
       defmodule LiveSpyComp do
@@ -320,7 +320,7 @@ defmodule Filament.Hooks.UseValueTest do
 
     test "passing a cell tuple directly returns it unchanged" do
       {:ok, server} = Counter.start_link(42)
-      cell = {Filament.Observable.GenServer, server}
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
 
       defmodule PassthroughComp do
         @moduledoc false
