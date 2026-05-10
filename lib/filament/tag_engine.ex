@@ -492,7 +492,12 @@ defmodule Filament.TagEngine do
 
   defp jsx_end(%{stack: [{:jsx_block, :for, for_args, _bm} | _]} = state, tokens) do
     body = invoke_subengine(state, :handle_end, [])
-    ast = {:for, [], for_args ++ [[do: body]]}
+    for_ast = {:for, [], for_args ++ [[do: body]]}
+
+    # Structured emission: a `for` expression produces a list; the surrounding
+    # vnode tree expects a single child node. Wrap as `{:fragment, list}` so
+    # the substrate walker descends into the iteration results in order.
+    ast = if state.structured?, do: {:fragment, for_ast}, else: for_ast
 
     state
     |> pop_stack_item()
@@ -708,15 +713,19 @@ defmodule Filament.TagEngine do
         |> continue(tokens)
 
       {true, new_meta, _new_attrs} ->
-        # Phase 1.4.2: in structured mode, only standalone `:key` is supported
-        # here; `:if` and `:for` get their own structured emission paths in
-        # 1.4.4 and 1.4.3 respectively.
         if state.structured? and structured_special_unsupported?(new_meta) do
           raise_structured_special_unsupported!(new_meta, tag_meta, state)
         end
 
         key_ast = if state.structured?, do: Map.get(new_meta, :key, nil), else: nil
         ast = build_filament_component_ast(state, mod_ast, fun, assigns, key_ast, tag_meta.line)
+
+        ast =
+          if state.structured? and Map.has_key?(new_meta, :for) do
+            wrap_for_with_fragment(ast, new_meta.for)
+          else
+            ast
+          end
 
         if state.structured? do
           state
@@ -896,6 +905,13 @@ defmodule Filament.TagEngine do
 
         key_ast = if state.structured?, do: Map.get(new_meta, :key, nil), else: nil
         ast = build_filament_local_component_ast(state, mod_ast, fun, call, assigns, key_ast, line)
+
+        ast =
+          if state.structured? and Map.has_key?(new_meta, :for) do
+            wrap_for_with_fragment(ast, new_meta.for)
+          else
+            ast
+          end
 
         if state.structured? do
           state
@@ -1335,21 +1351,27 @@ defmodule Filament.TagEngine do
   end
 
   defp structured_special_unsupported?(meta) do
-    Map.has_key?(meta, :for) or Map.has_key?(meta, :if)
+    Map.has_key?(meta, :if)
   end
 
-  defp raise_structured_special_unsupported!(meta, tag_meta, state) do
-    attr =
-      cond do
-        Map.has_key?(meta, :for) -> ":for"
-        Map.has_key?(meta, :if) -> ":if"
-      end
-
+  defp raise_structured_special_unsupported!(_meta, tag_meta, state) do
     raise_syntax_error!(
-      "#{attr} on a component is not yet supported under Filament.VNodeEngine (Phase 1.4.3/1.4.4)",
+      ":if on a component is not yet supported under Filament.VNodeEngine (Phase 1.4.4)",
       tag_meta,
       state
     )
+  end
+
+  # Wrap a single component vnode AST in `for ..., do: vnode_ast` and then in
+  # `{:fragment, list}` so the surrounding vnode tree treats the iteration
+  # output as a flat sequence of children. When `:key` is also present, the
+  # component AST already carries the key expression — the loop variable is
+  # captured by the closure.
+  defp wrap_for_with_fragment(component_ast, for_expr) do
+    # for_expr is the parsed `:<-` AST; PLV's `for` form expects a list of
+    # generator/filter clauses, so wrap it as a single-element list.
+    for_ast = {:for, [], [for_expr, [do: component_ast]]}
+    {:fragment, for_ast}
   end
 
   defp collect_structured_attrs(attrs, state) do
