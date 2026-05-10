@@ -20,7 +20,7 @@ defmodule Filament.LiveComponent do
 
   Because `Filament.LiveComponent` runs inside the parent LiveView process,
   observable update messages (`:filament_set_state`, `:filament_observable_updates`,
-  `:filament_observable_resubscribe`, `:cell_update`) arrive at the **parent**
+  `:filament_observable_resubscribe`, `:cell_update`, `:cell_resubscribe`) arrive at the **parent**
   LiveView's `handle_info/2`. The parent must forward them to the component:
 
       def handle_info({:filament_set_state, _fid, _slot, _val} = msg, socket) do
@@ -190,6 +190,22 @@ defmodule Filament.LiveComponent do
 
       fiber ->
         new_slots = Map.put(fiber.hook_slots, slot_index, {:cell_subscribed, value})
+        new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
+
+        {final_tree, rendered, pending_effects} =
+          Reconciler.update(new_tree, fiber_id, fiber.props, owner_pid: owner_pid)
+
+        {:ok, final_tree, rendered, pending_effects}
+    end
+  end
+
+  defp process_filament_msg({:cell_resubscribe, {_owner_pid, fiber_id, slot_index}}, tree, owner_pid) do
+    case Map.get(tree, fiber_id) do
+      nil ->
+        :ignore
+
+      fiber ->
+        new_slots = Map.put(fiber.hook_slots, slot_index, :needs_resubscribe)
         new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
 
         {final_tree, rendered, pending_effects} =

@@ -175,7 +175,10 @@ defmodule Filament.Observable.GenServer do
 
         # Cell-style subscribers — change-or-bust on the projected value
         cell_subs = Process.get(:__filament_cell_subscribers__, %{})
-        new_cell_subs = Filament.Observable.GenServer.notify_cell_each(cell_subs, new_state)
+
+        new_cell_subs =
+          Filament.Observable.GenServer.notify_cell_each(cell_subs, new_state, @max_mailbox_depth)
+
         Process.put(:__filament_cell_subscribers__, new_cell_subs)
 
         :ok
@@ -326,17 +329,47 @@ defmodule Filament.Observable.GenServer do
   defp subscriber_pid(_), do: self()
 
   @doc false
-  def notify_cell_each(cell_subs, new_state) do
-    Map.new(cell_subs, fn {sub, %{projection: proj, last: last} = entry} ->
+  def notify_cell_each(cell_subs, new_state, max_mailbox_depth) do
+    Map.new(cell_subs, fn {sub, %{pid: pid} = entry} ->
+      depth_result = Process.info(pid, :message_queue_len)
+      {sub, notify_cell_subscriber(sub, entry, new_state, depth_result, max_mailbox_depth)}
+    end)
+  end
+
+  defp notify_cell_subscriber(sub, entry, new_state, depth_result, max_mailbox_depth) do
+    %{pid: pid, projection: proj, last: last} = entry
+
+    if saturated_depth?(depth_result, max_mailbox_depth) do
+      log_and_resubscribe_cell(sub, pid, depth_result, max_mailbox_depth)
+      entry
+    else
       new_projected = proj.(new_state)
 
       if new_projected !== last do
-        send(entry.pid, {:cell_update, sub, new_projected})
-        {sub, %{entry | last: new_projected}}
+        send(pid, {:cell_update, sub, new_projected})
+        %{entry | last: new_projected}
       else
-        {sub, entry}
+        entry
       end
-    end)
+    end
+  end
+
+  defp log_and_resubscribe_cell(sub, pid, depth_result, max_mailbox_depth) do
+    require Logger
+
+    depth_str =
+      case depth_result do
+        nil -> "dead"
+        {:message_queue_len, n} -> "#{n}"
+      end
+
+    Logger.warning(
+      "[Filament.Observable] cell subscriber #{inspect(pid)} " <>
+        "mailbox saturated (depth=#{depth_str}/#{max_mailbox_depth}), " <>
+        "dropping update"
+    )
+
+    send(pid, {:cell_resubscribe, sub})
   end
 
   @doc false
