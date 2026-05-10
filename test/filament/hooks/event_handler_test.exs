@@ -198,12 +198,22 @@ defmodule Filament.Hooks.EventHandlerTest do
     end
 
     fiber_a =
-      Fiber.new(id: "root.A[0]", component: nil, hook_slots: %{},
-                event_handlers: %{0 => make_handler.("a")}, status: :stable)
+      Fiber.new(
+        id: "root.A[0]",
+        component: nil,
+        hook_slots: %{},
+        event_handlers: %{0 => make_handler.("a")},
+        status: :stable
+      )
 
     fiber_b =
-      Fiber.new(id: "root.B[0]", component: nil, hook_slots: %{},
-                event_handlers: %{0 => make_handler.("b")}, status: :stable)
+      Fiber.new(
+        id: "root.B[0]",
+        component: nil,
+        hook_slots: %{},
+        event_handlers: %{0 => make_handler.("b")},
+        status: :stable
+      )
 
     tree = %{"root.A[0]" => fiber_a, "root.B[0]" => fiber_b}
     socket = fake_socket(tree)

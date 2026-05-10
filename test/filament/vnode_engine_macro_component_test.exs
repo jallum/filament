@@ -16,6 +16,7 @@ defmodule Filament.VNodeEngineMacroComponentTest do
   defmodule Fixture do
     @moduledoc false
     use Filament.Component
+
     import Filament.Test.VNodeEngineHelper
 
     def template do

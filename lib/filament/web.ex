@@ -44,8 +44,8 @@ defmodule Filament.Web do
   def to_rendered(walked) do
     state = %{static: [""], dynamic: [], fp: 0}
     state = walk_rendered(walked, state)
-    static = state.static |> Enum.reverse()
-    dynamic = state.dynamic |> Enum.reverse()
+    static = Enum.reverse(state.static)
+    dynamic = Enum.reverse(state.dynamic)
 
     %Rendered{
       static: static,
@@ -180,7 +180,7 @@ defmodule Filament.Web do
 
   """
   @spec to_iodata(term()) :: iodata()
-  def to_iodata(%Phoenix.LiveView.Rendered{} = r), do: Safe.to_iodata(r)
+  def to_iodata(%Rendered{} = r), do: Safe.to_iodata(r)
 
   def to_iodata({:text, content}), do: content
 
@@ -218,14 +218,12 @@ defmodule Filament.Web do
   defp child_to_iodata(false), do: []
   defp child_to_iodata(child), do: Safe.to_iodata(child)
 
-  defp embed_child(%Phoenix.LiveView.Rendered{} = r), do: Safe.to_iodata(r)
+  defp embed_child(%Rendered{} = r), do: Safe.to_iodata(r)
   defp embed_child({tag, _} = walked_vnode) when is_atom(tag), do: to_iodata(walked_vnode)
 
-  defp embed_child({tag, _, _, _} = walked_vnode) when is_atom(tag),
-    do: to_iodata(walked_vnode)
+  defp embed_child({tag, _, _, _} = walked_vnode) when is_atom(tag), do: to_iodata(walked_vnode)
 
-  defp embed_child({tag, _, _, _, _} = walked_vnode) when is_atom(tag),
-    do: to_iodata(walked_vnode)
+  defp embed_child({tag, _, _, _, _} = walked_vnode) when is_atom(tag), do: to_iodata(walked_vnode)
 
   defp embed_child(other), do: Safe.to_iodata(other)
 

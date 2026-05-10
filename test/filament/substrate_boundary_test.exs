@@ -22,6 +22,8 @@ defmodule Filament.SubstrateBoundaryTest do
   """
   use ExUnit.Case, async: true
 
+  alias Phoenix.LiveView.Rendered
+
   @pure_substrate [
     Filament.Cell,
     Filament.Component,
@@ -41,8 +43,8 @@ defmodule Filament.SubstrateBoundaryTest do
   ]
 
   @substrate_with_web_fallbacks [
-    {Filament.Reconciler, [Phoenix.LiveView.Rendered]},
-    {Filament.Renderer, [Phoenix.LiveView.Rendered, Phoenix.HTML.Safe]}
+    {Filament.Reconciler, [Rendered]},
+    {Filament.Renderer, [Rendered, Phoenix.HTML.Safe]}
   ]
 
   defp module_imports(module) do
@@ -62,7 +64,8 @@ defmodule Filament.SubstrateBoundaryTest do
     module
     |> module_imports()
     |> Enum.filter(fn imported ->
-      to_string(imported)
+      imported
+      |> to_string()
       |> String.starts_with?("Elixir.Phoenix.LiveView")
     end)
     |> Enum.reject(&(&1 in allowed))

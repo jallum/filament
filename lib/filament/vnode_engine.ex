@@ -39,7 +39,7 @@ defmodule Filament.VNodeEngine do
 
   @doc false
   def handle_body(state, _opts) do
-    case state.root |> Enum.reverse() do
+    case Enum.reverse(state.root) do
       [] -> quote(do: {:text, ""})
       [single] -> single
       multiple -> fragment_ast(multiple)

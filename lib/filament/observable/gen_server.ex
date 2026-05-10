@@ -191,9 +191,8 @@ defmodule Filament.Observable.GenServer do
 
     new_state =
       Enum.reduce(dead, state, fn {sub, _entry}, acc ->
-        case mod.handle_unsubscribe(sub, acc) do
-          {:ok, next} -> next
-        end
+        {:ok, next} = mod.handle_unsubscribe(sub, acc)
+        next
       end)
 
     {:noreply, new_state}
@@ -237,11 +236,11 @@ defmodule Filament.Observable.GenServer do
       true ->
         new_projected = proj.(new_state)
 
-        if new_projected !== last do
+        if new_projected === last do
+          entry
+        else
           send(pid, {:cell_update, sub, new_projected})
           %{entry | last: new_projected}
-        else
-          entry
         end
     end
   end

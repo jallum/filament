@@ -26,7 +26,7 @@ defmodule Filament.CellTest do
         }
     """
 
-    @behaviour Filament.Cell
+    @behaviour Cell
 
     use Agent
 

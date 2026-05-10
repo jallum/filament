@@ -95,8 +95,8 @@ defmodule Filament.Renderer do
       hook_slots: hook_slots
     }
 
-    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers,
-     child_event_handlers, child_capture_handlers} =
+    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers, child_event_handlers,
+     child_capture_handlers} =
       render(mod, props, child_ctx)
 
     child_fiber = %Fiber{
@@ -153,11 +153,9 @@ defmodule Filament.Renderer do
     end
   end
 
-  defp fallback_child_id(parent_id, mod, {:index, index}),
-    do: "#{parent_id}.#{mod}[#{index}]"
+  defp fallback_child_id(parent_id, mod, {:index, index}), do: "#{parent_id}.#{mod}[#{index}]"
 
-  defp fallback_child_id(parent_id, mod, {:key, key}),
-    do: "#{parent_id}.#{mod}[key=#{inspect(key)}]"
+  defp fallback_child_id(parent_id, mod, {:key, key}), do: "#{parent_id}.#{mod}[key=#{inspect(key)}]"
 
   @doc """
   Substrate-only walk of a vnode tree.

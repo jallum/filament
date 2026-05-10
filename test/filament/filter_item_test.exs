@@ -69,7 +69,9 @@ defmodule Filament.FilterItemTest do
       test_pid = self()
       on_change = fn val -> send(test_pid, {:filter_changed, val}) end
 
-      view = mount!(FilterBar, %{filters: @filters, default: :all, on_change: on_change}) |> click!("li:nth-child(2) a")
+      view =
+        FilterBar |> mount!(%{filters: @filters, default: :all, on_change: on_change}) |> click!("li:nth-child(2) a")
+
       assert_receive {:filter_changed, :active}
       assert view.rendered_html =~ "Active"
     end
