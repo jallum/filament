@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "flm-3wr.3.1"
+  ],
   "blocks": [],
   "created": "2026-05-10T08:43:56Z",
   "description": "Walk fiber ancestry on event dispatch:\n- Capture phase: root → target (each ancestor, in order, runs its capture handler if registered).\n- Target phase: target's bubble handler (and any other handler at the target).\n- Bubble phase: target → root (each ancestor's bubble handler).\n- `stop_propagation` halts the walk after the current handler.\n\nReturns the handler results plus any pending side effects (state setters, observable writes, etc.).\n\n## Acceptance\n- Tests for capture-only, bubble-only, mixed, and stop_propagation behaviours.\n- Tests with a multi-level fiber tree to verify root-to-target and target-to-root ordering.\n- No web/Phoenix coupling in Core's dispatch logic.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Phase 3.2: Filament.Core.dispatch_event walker",
   "type": "task",
-  "updated_at": "2026-05-10T08:43:56Z"
+  "updated_at": "2026-05-10T08:43:57Z"
 }
