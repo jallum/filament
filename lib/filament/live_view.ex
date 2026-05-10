@@ -262,27 +262,27 @@ defmodule Filament.LiveView do
       [fiber_id_str, index_str] ->
         handler_index = String.to_integer(index_str)
         tree = socket.assigns._filament_tree
-        handler = Filament.FiberTree.get_event_handler(tree, fiber_id_str, handler_index)
-        invoke_event_handler(handler, params, socket, "filament:" <> ref)
+        target_handler = Filament.FiberTree.get_event_handler(tree, fiber_id_str, handler_index)
+
+        if is_function(target_handler, 2) do
+          # 2-arity handlers (use_event_ref push pattern) need socket access for
+          # `Phoenix.LiveView.push_event`, which is web-specific. They bypass
+          # the Core dispatcher and run directly with the socket-aware shim.
+          invoke_2arity_handler(target_handler, params, socket, "filament:" <> ref)
+        else
+          # All other handlers go through `Filament.Core.dispatch_event`, which
+          # walks fiber ancestry firing capture handlers root-to-target before
+          # the target's bubble handler. Backend-agnostic.
+          _ = Filament.Core.dispatch_event(tree, fiber_id_str, handler_index, params)
+          {:noreply, socket}
+        end
 
       _other ->
         {:noreply, socket}
     end
   end
 
-  defp invoke_event_handler(nil, _params, socket, _wire_ref), do: {:noreply, socket}
-
-  defp invoke_event_handler(fun, _params, socket, _wire_ref) when is_function(fun, 0) do
-    fun.()
-    {:noreply, socket}
-  end
-
-  defp invoke_event_handler(fun, params, socket, _wire_ref) when is_function(fun, 1) do
-    fun.(params)
-    {:noreply, socket}
-  end
-
-  defp invoke_event_handler(fun, params, socket, wire_ref) when is_function(fun, 2) do
+  defp invoke_2arity_handler(fun, params, socket, wire_ref) when is_function(fun, 2) do
     key = {__MODULE__, :push_socket, make_ref()}
     Process.put(key, socket)
 
