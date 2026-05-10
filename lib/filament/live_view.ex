@@ -344,8 +344,7 @@ defmodule Filament.LiveView do
 
       fiber ->
         existing = Map.get(fiber.hook_slots, slot_index, {nil, nil})
-        setter = elem(existing, 1)
-        new_slots = Map.put(fiber.hook_slots, slot_index, {new_value, setter})
+        new_slots = Map.put(fiber.hook_slots, slot_index, Filament.HookSlot.put_state_value(existing, new_value))
         {:ok, Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots}), fiber_id}
     end
   end
@@ -364,20 +363,14 @@ defmodule Filament.LiveView do
         :ignore
 
       fiber ->
-        new_slot = build_cell_slot(fiber.hook_slots, slot_index, value)
+        existing = Map.get(fiber.hook_slots, slot_index)
+        new_slot = Filament.HookSlot.put_cell_value(existing, value)
         new_slots = Map.put(fiber.hook_slots, slot_index, new_slot)
         {:ok, Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots}), fiber_id}
     end
   end
 
   def apply_cell_update(_tree, _subscriber, _value), do: :ignore
-
-  defp build_cell_slot(hook_slots, slot_index, value) do
-    case Map.get(hook_slots, slot_index) do
-      {:cell_subscribed, cell, _} -> {:cell_subscribed, cell, value}
-      _ -> {:cell_subscribed, nil, value}
-    end
-  end
 
   @doc """
   Apply a `:cell_resubscribe` message to the fiber tree without rendering.

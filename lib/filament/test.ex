@@ -437,7 +437,7 @@ defmodule Filament.Test do
   defp flush_messages(view) do
     receive do
       {:filament_set_state, fiber_id, slot_index, new_value} ->
-        view = apply_hook_slot_update(view, fiber_id, slot_index, new_value)
+        view = apply_state_slot_update(view, fiber_id, slot_index, new_value)
         flush_messages(view)
 
       {:cell_update, {_owner_pid, fiber_id, slot_index}, value} ->
@@ -445,7 +445,7 @@ defmodule Filament.Test do
         flush_messages(view)
 
       {:cell_resubscribe, {_owner_pid, fiber_id, slot_index}} ->
-        view = apply_hook_slot_update(view, fiber_id, slot_index, :needs_resubscribe)
+        view = apply_resubscribe_slot(view, fiber_id, slot_index)
         flush_messages(view)
     after
       0 -> rerender(view)
@@ -458,33 +458,31 @@ defmodule Filament.Test do
         view.fiber_tree,
         fiber_id,
         slot_index,
-        fn existing ->
-          case existing do
-            {:cell_subscribed, cell, _} -> {:cell_subscribed, cell, value}
-            _ -> {:cell_subscribed, nil, value}
-          end
-        end
+        &Filament.HookSlot.put_cell_value(&1, value)
       )
 
     %{view | fiber_tree: tree}
   end
 
-  defp apply_hook_slot_update(view, fiber_id, slot_index, new_value) do
+  defp apply_state_slot_update(view, fiber_id, slot_index, new_value) do
     tree =
       Filament.FiberTree.update_hook_slot(
         view.fiber_tree,
         fiber_id,
         slot_index,
-        fn existing ->
-          # Preserve existing setter when updating use_state value
-          setter =
-            case existing do
-              {_, s} when is_function(s, 1) -> s
-              _ -> nil
-            end
+        &Filament.HookSlot.put_state_value(&1, new_value)
+      )
 
-          {new_value, setter}
-        end
+    %{view | fiber_tree: tree}
+  end
+
+  defp apply_resubscribe_slot(view, fiber_id, slot_index) do
+    tree =
+      Filament.FiberTree.update_hook_slot(
+        view.fiber_tree,
+        fiber_id,
+        slot_index,
+        fn _ -> :needs_resubscribe end
       )
 
     %{view | fiber_tree: tree}

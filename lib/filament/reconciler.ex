@@ -2,6 +2,7 @@ defmodule Filament.Reconciler do
   @moduledoc false
 
   alias Filament.Fiber
+  alias Filament.HookSlot
   alias Filament.ReconcilerError
   alias Filament.RenderContext
   alias Filament.Renderer
@@ -118,23 +119,7 @@ defmodule Filament.Reconciler do
     tree
     |> Map.values()
     |> Enum.each(fn fiber ->
-      Enum.each(fiber.hook_slots, fn
-        {_index, {_deps, cleanup}} when is_function(cleanup, 0) ->
-          cleanup.()
-
-        {index, {:cell_subscribed, cell, _raw}} when not is_nil(cell) ->
-          Filament.Cell.unsubscribe(cell, {owner_pid, fiber.id, index})
-
-        {_index, {:resolved, _server}} ->
-          :ok
-
-        {_index, {:cell_resolved, _cell}} ->
-          :ok
-
-        _ ->
-          :ok
-      end)
-
+      HookSlot.cleanup_all(fiber.hook_slots, owner_pid, fiber.id)
       %{fiber | status: :unmounting}
     end)
 
@@ -172,22 +157,7 @@ defmodule Filament.Reconciler do
         tree
 
       fiber ->
-        Enum.each(fiber.hook_slots, fn
-          {_index, {_deps, cleanup}} when is_function(cleanup, 0) ->
-            cleanup.()
-
-          {index, {:cell_subscribed, cell, _raw}} when not is_nil(cell) ->
-            Filament.Cell.unsubscribe(cell, {owner_pid, fiber.id, index})
-
-          {_index, {:resolved, _server}} ->
-            :ok
-
-          {_index, {:cell_resolved, _cell}} ->
-            :ok
-
-          _ ->
-            :ok
-        end)
+        HookSlot.cleanup_all(fiber.hook_slots, owner_pid, fiber.id)
 
         tree_without_descendants =
           Enum.reduce(fiber.children || [], tree, fn child_id, acc ->
