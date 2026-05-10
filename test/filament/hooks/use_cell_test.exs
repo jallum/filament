@@ -170,13 +170,45 @@ defmodule Filament.Hooks.UseCellTest do
       assert_receive {:cell_update, {_, fid, sid}, 1}, 200
 
       tree2 =
-        FiberTree.update_hook_slot(tree1, fid, sid, fn _ -> {:cell_subscribed, 1} end)
+        FiberTree.update_hook_slot(tree1, fid, sid, fn _ -> {:cell_subscribed, cell, 1} end)
 
       {_, walked3, _} =
         Reconciler.update(tree2, "root", %{cell: cell}, owner_pid: self())
 
       assert walked3 |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>1</p>"
     end
+
+    test "swapping the cell across renders unsubscribes from the old transport" do
+      {:ok, server_a} = Counter.start_link(10)
+      {:ok, server_b} = Counter.start_link(20)
+      cell_a = {Filament.Observable.GenServer, server_a}
+      cell_b = {Filament.Observable.GenServer, server_b}
+
+      {tree1, walked1, _} =
+        Reconciler.mount(CellComp.CellComp, %{cell: cell_a}, owner_pid: self())
+
+      assert walked1 |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>10</p>"
+
+      # Sanity: server_a has one cell subscriber.
+      cell_subs_a = :sys.get_state(server_a) && cell_subscribers_in(server_a)
+      assert map_size(cell_subs_a) == 1
+
+      # Re-render with a different cell — slot should detect the swap and
+      # transition to subscribing on cell_b.
+      {_tree2, walked2, _} =
+        Reconciler.update(tree1, "root", %{cell: cell_b}, owner_pid: self())
+
+      assert walked2 |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>20</p>"
+
+      # server_a now has zero subscribers; server_b has one.
+      assert cell_subscribers_in(server_a) |> map_size() == 0
+      assert cell_subscribers_in(server_b) |> map_size() == 1
+    end
+  end
+
+  defp cell_subscribers_in(server) do
+    {:dictionary, dict} = Process.info(server, :dictionary)
+    Keyword.get(dict, :__filament_cell_subscribers__, %{})
   end
 
   describe "use_observable backward compatibility" do

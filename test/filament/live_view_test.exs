@@ -355,7 +355,7 @@ defmodule Filament.LiveViewTest do
 
       # After resubscribe, the slot should hold a fresh :cell_subscribed value
       # (set by the re-render which calls cell_subscribe_fresh).
-      assert {:cell_subscribed, _} =
+      assert {:cell_subscribed, _cell, _raw} =
                Map.fetch!(socket.assigns._filament_tree["root"].hook_slots, slot_index)
     end
 

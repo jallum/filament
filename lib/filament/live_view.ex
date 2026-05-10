@@ -388,18 +388,30 @@ defmodule Filament.LiveView do
   def handle_cell_update(tree, subscriber, value, socket, rerender_fn) do
     case subscriber do
       {_owner_pid, fiber_id, slot_index} ->
-        case Map.get(tree, fiber_id) do
-          nil ->
-            {:noreply, socket}
-
-          fiber ->
-            new_slots = Map.put(fiber.hook_slots, slot_index, {:cell_subscribed, value})
-            new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-            {:noreply, rerender_fn.(socket, new_tree)}
-        end
+        apply_cell_update(tree, fiber_id, slot_index, value, socket, rerender_fn)
 
       _ ->
         {:noreply, socket}
+    end
+  end
+
+  defp apply_cell_update(tree, fiber_id, slot_index, value, socket, rerender_fn) do
+    case Map.get(tree, fiber_id) do
+      nil ->
+        {:noreply, socket}
+
+      fiber ->
+        new_slot = build_cell_slot(fiber.hook_slots, slot_index, value)
+        new_slots = Map.put(fiber.hook_slots, slot_index, new_slot)
+        new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
+        {:noreply, rerender_fn.(socket, new_tree)}
+    end
+  end
+
+  defp build_cell_slot(hook_slots, slot_index, value) do
+    case Map.get(hook_slots, slot_index) do
+      {:cell_subscribed, cell, _} -> {:cell_subscribed, cell, value}
+      _ -> {:cell_subscribed, nil, value}
     end
   end
 

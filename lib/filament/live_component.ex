@@ -189,7 +189,13 @@ defmodule Filament.LiveComponent do
         :ignore
 
       fiber ->
-        new_slots = Map.put(fiber.hook_slots, slot_index, {:cell_subscribed, value})
+        new_slot =
+          case Map.get(fiber.hook_slots, slot_index) do
+            {:cell_subscribed, cell, _} -> {:cell_subscribed, cell, value}
+            _ -> {:cell_subscribed, nil, value}
+          end
+
+        new_slots = Map.put(fiber.hook_slots, slot_index, new_slot)
         new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
 
         {final_tree, rendered, pending_effects} =
