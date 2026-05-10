@@ -7,14 +7,15 @@
   "blocks": [
     "flm-3wr.2.4"
   ],
+  "closed_at": "2026-05-10T08:40:52Z",
   "created": "2026-05-10T08:29:13Z",
   "description": "New hook: `use_cell(cell_ref, projection)`. Subscribes the current fiber to any cell, regardless of transport. `use_observable` becomes sugar over `use_cell` + the GenServer transport, preserving existing API.\n\n## TDD\n- Test: use_cell with a stub in-memory cell delivers initial value.\n- Test: change-or-bust suppresses re-render when projection unchanged.\n- Test: use_observable still works (regression).\n\n## Files\n- lib/filament/hooks.ex (add use_cell)\n- test/filament/hooks/use_cell_test.exs (new)",
   "id": "flm-3wr.2.3",
   "labels": [],
   "parent": "flm-3wr.2",
   "priority": 1,
-  "status": "open",
+  "status": "closed",
   "title": "Phase 2.3: Generic use_cell hook",
   "type": "task",
-  "updated_at": "2026-05-10T08:29:13Z"
+  "updated_at": "2026-05-10T08:40:52Z"
 }
