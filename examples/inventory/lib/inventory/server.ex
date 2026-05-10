@@ -34,9 +34,16 @@ defmodule Inventory.Server do
   end
 
   # Automatic hold release when a subscriber's LiveView process terminates.
+  # Cell subscribers are tuples `{owner_pid, fiber_id, slot_index}`.
   @impl Filament.Observable
   def handle_unsubscribe(subscriber, state) do
-    case Map.pop(state.holds, subscriber.pid) do
+    holder_pid =
+      case subscriber do
+        {pid, _, _} when is_pid(pid) -> pid
+        _ -> nil
+      end
+
+    case Map.pop(state.holds, holder_pid) do
       {nil, _} ->
         {:ok, state}
 

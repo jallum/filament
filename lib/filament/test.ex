@@ -18,7 +18,6 @@ defmodule Filament.Test do
       assert render_text(view) =~ "Count: 1"
   """
 
-  alias Filament.Test.Stub
   alias Phoenix.HTML.Engine, as: HTMLEngine
   alias Phoenix.LiveView.Rendered
 
@@ -67,16 +66,11 @@ defmodule Filament.Test do
   @spec mount(component :: module(), props :: map(), opts :: keyword()) ::
           {:ok, t()} | {:error, term()}
   def mount(component, props, opts \\ []) do
-    stub_specs = Keyword.get(opts, :stub, [])
-    {stubs_map, _pids} = Stub.build(stub_specs)
-
+    _opts = opts
     owner_pid = self()
 
     {tree, rendered, pending_effects} =
-      Filament.Reconciler.mount(component, props,
-        owner_pid: owner_pid,
-        observable_stubs: stubs_map
-      )
+      Filament.Reconciler.mount(component, props, owner_pid: owner_pid)
 
     tree = run_effects(tree, pending_effects)
 
@@ -89,7 +83,7 @@ defmodule Filament.Test do
       rendered: rendered,
       rendered_html: html,
       owner_pid: owner_pid,
-      stubs: stubs_map
+      stubs: %{}
     }
 
     {:ok, view}
@@ -368,7 +362,6 @@ defmodule Filament.Test do
       pending_effects: [],
       event_handler_index: 0,
       new_event_handlers: %{},
-      observable_stubs: %{},
       owner_pid: nil
     })
 
@@ -468,14 +461,6 @@ defmodule Filament.Test do
         view = apply_hook_slot_update(view, fiber_id, slot_index, new_value)
         flush_messages(view)
 
-      {:filament_observable_updates, updates} ->
-        tree = Filament.LiveView.apply_observable_updates(view.fiber_tree, updates)
-        flush_messages(%{view | fiber_tree: tree})
-
-      {:filament_observable_resubscribe, fiber_id, slot_index} ->
-        view = apply_hook_slot_update(view, fiber_id, slot_index, :needs_resubscribe)
-        flush_messages(view)
-
       {:cell_update, {_owner_pid, fiber_id, slot_index}, value} ->
         view = apply_cell_slot_update(view, fiber_id, slot_index, value)
         flush_messages(view)
@@ -532,8 +517,7 @@ defmodule Filament.Test do
         view.fiber_tree,
         "root",
         view.props,
-        owner_pid: view.owner_pid,
-        observable_stubs: view.stubs
+        owner_pid: view.owner_pid
       )
 
     new_tree = run_effects(new_tree, pending_effects)

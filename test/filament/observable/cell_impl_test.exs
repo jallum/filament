@@ -117,32 +117,4 @@ defmodule Filament.Observable.CellImplTest do
     end
   end
 
-  describe "Cell.subscribe coexists with legacy Observable.subscribe" do
-    test "both subscriber sets get notified independently" do
-      alias Filament.Observable
-      alias Filament.Observable.Subscriber
-
-      {:ok, server} = Counter.start_link()
-      cell = {Filament.Observable.GenServer, server}
-
-      # Cell-style subscriber
-      Cell.subscribe(cell, {self(), :cell_path}, & &1)
-
-      # Legacy-style subscriber (via Observable.subscribe and the Subscriber struct)
-      legacy_sub = %Subscriber{
-        pid: self(),
-        ref: nil,
-        proj_keys: %{{"fiber_legacy", 0} => & &1},
-        last_raw: nil,
-        session_token: nil
-      }
-
-      Observable.subscribe(server, legacy_sub)
-
-      GenServer.call(server, :increment)
-
-      assert_receive {:cell_update, {_, :cell_path}, 1}, 200
-      assert_receive {:filament_observable_updates, [{"fiber_legacy", 0, 1}]}, 200
-    end
-  end
 end

@@ -133,8 +133,7 @@ defmodule Filament.LiveView do
         {tree, rendered, pending_effects} =
           Reconciler.mount(component, props,
             owner_pid: self(),
-            connected: subscribe_enabled,
-            session_token: socket.id
+            connected: subscribe_enabled
           )
 
         socket =
@@ -196,25 +195,6 @@ defmodule Filament.LiveView do
       def handle_info({:filament_set_state, fiber_id, slot_index, new_value}, socket) do
         tree = socket.assigns._filament_tree
         Filament.LiveView.handle_set_state(tree, fiber_id, slot_index, new_value, socket, &rerender_from_root/2)
-      end
-
-      @doc """
-      Phoenix LiveView info handler for observable updates.
-      Receives a batched list of `{fiber_id, slot_index, value}` tuples from a single
-      `notify_observers/1` call and applies them all before re-rendering.
-      """
-      def handle_info({:filament_observable_updates, updates}, socket) do
-        tree = socket.assigns._filament_tree
-        Filament.LiveView.handle_observable_updates(tree, updates, socket, &rerender_from_root/2)
-      end
-
-      @doc """
-      Phoenix LiveView info handler for observable resubscribe signals.
-      Triggered when a subscriber's mailbox is saturated; forces re-subscription on next render.
-      """
-      def handle_info({:filament_observable_resubscribe, fiber_id, slot_index}, socket) do
-        tree = socket.assigns._filament_tree
-        Filament.LiveView.handle_observable_resubscribe(tree, fiber_id, slot_index, socket, &rerender_from_root/2)
       end
 
       @doc """
@@ -353,38 +333,6 @@ defmodule Filament.LiveView do
   end
 
   @doc false
-  def handle_observable_updates(tree, updates, socket, rerender_fn) do
-    new_tree = apply_observable_updates(tree, updates)
-
-    if Enum.any?(updates, fn {fid, _, _} -> Map.has_key?(tree, fid) end) do
-      {:noreply, rerender_fn.(socket, new_tree)}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  @doc false
-  def apply_observable_updates(tree, updates) do
-    Enum.reduce(updates, tree, fn {fiber_id, slot_index, new_value}, acc ->
-      case Map.get(acc, fiber_id) do
-        nil -> acc
-        fiber -> apply_slot_update(acc, fiber_id, fiber, slot_index, new_value)
-      end
-    end)
-  end
-
-  defp apply_slot_update(tree, fiber_id, fiber, slot_index, new_value) do
-    new_slot =
-      case Map.get(fiber.hook_slots, slot_index, :uninitialized) do
-        {:subscribed, s, _} -> {:subscribed, s, new_value}
-        _ -> {:subscribed, nil, new_value}
-      end
-
-    new_slots = Map.put(fiber.hook_slots, slot_index, new_slot)
-    Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-  end
-
-  @doc false
   def handle_cell_update(tree, subscriber, value, socket, rerender_fn) do
     case subscriber do
       {_owner_pid, fiber_id, slot_index} ->
@@ -434,16 +382,4 @@ defmodule Filament.LiveView do
     end
   end
 
-  @doc false
-  def handle_observable_resubscribe(tree, fiber_id, slot_index, socket, rerender_fn) do
-    case Map.get(tree, fiber_id) do
-      nil ->
-        {:noreply, socket}
-
-      fiber ->
-        new_slots = Map.put(fiber.hook_slots, slot_index, :needs_resubscribe)
-        tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-        {:noreply, rerender_fn.(socket, tree)}
-    end
-  end
 end

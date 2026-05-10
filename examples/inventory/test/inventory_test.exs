@@ -4,7 +4,6 @@ defmodule Inventory.Test do
   import Filament.Test
 
   # ── Rung 1: Inventory.Server domain ─────────────────────────────────────────
-  alias Filament.Observable.Subscriber
   alias InventoryWeb.Components.InventoryItem
 
   describe "Inventory.Server" do
@@ -44,12 +43,9 @@ defmodule Inventory.Test do
 
       holder =
         spawn(fn ->
-          sub = %Subscriber{
-            pid: self(),
-            proj_keys: %{{:holder_fiber, 0} => true}
-          }
-
-          {:ok, _} = Filament.Observable.subscribe(server, sub)
+          cell = {Filament.Observable.GenServer, server}
+          subscriber = {self(), :holder_fiber, 0}
+          {:ok, _} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
           :ok = GenServer.call(server, {:filament_hold, "item-a", 1, self()})
           send(parent, :acquired)
           receive do: (:die -> :ok)
@@ -69,12 +65,9 @@ defmodule Inventory.Test do
 
       for i <- [1, 2] do
         spawn(fn ->
-          sub = %Subscriber{
-            pid: self(),
-            proj_keys: %{{:"holder_#{i}", 0} => true}
-          }
-
-          {:ok, _} = Filament.Observable.subscribe(server, sub)
+          cell = {Filament.Observable.GenServer, server}
+          subscriber = {self(), :"holder_#{i}", 0}
+          {:ok, _} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
           :ok = GenServer.call(server, {:filament_hold, "item-a", 1, self()})
           send(parent, {:"h#{i}", :acquired})
           receive do: (:stop -> :ok)
@@ -151,12 +144,9 @@ defmodule Inventory.Test do
       # Spawn a subscriber that acquires the hold, then waits
       holder =
         spawn(fn ->
-          sub = %Subscriber{
-            pid: self(),
-            proj_keys: %{{:holder, 0} => true}
-          }
-
-          {:ok, _} = Filament.Observable.subscribe(server, sub)
+          cell = {Filament.Observable.GenServer, server}
+          subscriber = {self(), :holder, 0}
+          {:ok, _} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
           :ok = GenServer.call(server, {:filament_hold, "last", 1, self()})
           send(parent, :held)
           receive do: (:stop -> :ok)

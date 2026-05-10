@@ -34,9 +34,7 @@ defmodule Filament.Reconciler do
       fiber_id: "root",
       fiber_tree: %{},
       owner_pid: owner_pid,
-      observable_stubs: Keyword.get(opts, :observable_stubs, %{}),
-      subscribe_enabled: Keyword.get(opts, :connected, true),
-      session_token: Keyword.get(opts, :session_token)
+      subscribe_enabled: Keyword.get(opts, :connected, true)
     }
 
     # Render the component
@@ -80,8 +78,7 @@ defmodule Filament.Reconciler do
     context = %RenderContext{
       fiber_id: fiber_id,
       fiber_tree: tree,
-      owner_pid: owner_pid,
-      observable_stubs: Keyword.get(opts, :observable_stubs, %{})
+      owner_pid: owner_pid
     }
 
     # Re-render component
@@ -124,9 +121,6 @@ defmodule Filament.Reconciler do
       Enum.each(fiber.hook_slots, fn
         {_index, {_deps, cleanup}} when is_function(cleanup, 0) ->
           cleanup.()
-
-        {index, {:subscribed, server, _raw}} ->
-          Filament.Observable.remove_projection(server, owner_pid, fiber.id, index)
 
         {index, {:cell_subscribed, cell, _raw}} when not is_nil(cell) ->
           Filament.Cell.unsubscribe(cell, {owner_pid, fiber.id, index})
@@ -181,9 +175,6 @@ defmodule Filament.Reconciler do
         Enum.each(fiber.hook_slots, fn
           {_index, {_deps, cleanup}} when is_function(cleanup, 0) ->
             cleanup.()
-
-          {index, {:subscribed, server, _raw}} ->
-            Filament.Observable.remove_projection(server, owner_pid, fiber.id, index)
 
           {index, {:cell_subscribed, cell, _raw}} when not is_nil(cell) ->
             Filament.Cell.unsubscribe(cell, {owner_pid, fiber.id, index})
