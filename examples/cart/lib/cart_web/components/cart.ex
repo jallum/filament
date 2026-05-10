@@ -21,13 +21,22 @@ defmodule CartWeb.Components.Cart do
     end
 
     def render(%{session_id: session_id}) do
-      server = use_observable(fn -> Cart.Server.ensure_started(session_id) end)
+      cell =
+        use_cell(fn ->
+          {Filament.Observable.GenServer, Cart.Server.ensure_started(session_id)}
+        end)
+
+      server =
+        case cell do
+          {Filament.Observable.GenServer, pid} -> pid
+          _ -> nil
+        end
 
       ~F"""
       <div class="page">
         <header class="page-header">
           <h1>Shopping Demo</h1>
-          <CartBadge server={server} />
+          <CartBadge cell={cell} />
         </header>
 
         <section class="products">
@@ -47,7 +56,7 @@ defmodule CartWeb.Components.Cart do
           {end}
         </section>
 
-        <CartItems server={server} />
+        <CartItems cell={cell} />
       </div>
       """
     end

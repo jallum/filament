@@ -429,15 +429,21 @@ defmodule Filament.Hooks do
 
   Must be called at the top level of `render/1` in consistent order.
   """
-  @spec use_cell(Filament.Cell.t(), (term() | :disconnected -> term())) :: term()
+  @spec use_cell(Filament.Cell.t() | nil, (term() | :disconnected -> term())) :: term()
   def use_cell(cell, projection) when is_function(projection, 1) do
     {slot_index, previous, ctx} = use_slot(:uninitialized)
 
-    if ctx.subscribe_enabled do
-      use_cell_subscribed(cell, projection, slot_index, previous, ctx)
-    else
-      commit_slot(slot_index, :uninitialized)
-      projection.(:disconnected)
+    cond do
+      not ctx.subscribe_enabled ->
+        commit_slot(slot_index, :uninitialized)
+        projection.(:disconnected)
+
+      is_nil(cell) ->
+        commit_slot(slot_index, :uninitialized)
+        projection.(:disconnected)
+
+      true ->
+        use_cell_subscribed(cell, projection, slot_index, previous, ctx)
     end
   end
 

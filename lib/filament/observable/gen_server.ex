@@ -107,12 +107,18 @@ defmodule Filament.Observable.GenServer do
       # keeping the injected quote block short.
       @impl true
       def handle_call({:filament_cell_subscribe, subscriber, projection}, from, state) do
-        Filament.Observable.GenServer.handle_cell_subscribe(subscriber, projection, from, state)
+        Filament.Observable.GenServer.handle_cell_subscribe(
+          __MODULE__,
+          subscriber,
+          projection,
+          from,
+          state
+        )
       end
 
       @impl true
       def handle_call({:filament_cell_current, projection}, from, state) do
-        Filament.Observable.GenServer.handle_cell_current(projection, from, state)
+        Filament.Observable.GenServer.handle_cell_current(__MODULE__, projection, from, state)
       end
 
       @impl true
@@ -295,20 +301,22 @@ defmodule Filament.Observable.GenServer do
   end
 
   @doc false
-  def handle_cell_subscribe(subscriber, projection, _from, state) do
+  def handle_cell_subscribe(mod, subscriber, projection, _from, state) do
+    {:ok, raw, new_state} = mod.handle_subscribe(subscriber, state)
     cell_subs = Process.get(:__filament_cell_subscribers__, %{})
-    projected = projection.(state)
+    projected = projection.(raw)
     send_pid = subscriber_pid(subscriber)
 
     entry = %{pid: send_pid, projection: projection, last: projected}
     Process.put(:__filament_cell_subscribers__, Map.put(cell_subs, subscriber, entry))
 
-    {:reply, {:ok, projected}, state}
+    {:reply, {:ok, projected}, new_state}
   end
 
   @doc false
-  def handle_cell_current(projection, _from, state) do
-    {:reply, projection.(state), state}
+  def handle_cell_current(mod, projection, _from, state) do
+    {:ok, raw, new_state} = mod.handle_subscribe(:__filament_current__, state)
+    {:reply, projection.(raw), new_state}
   end
 
   @doc false
