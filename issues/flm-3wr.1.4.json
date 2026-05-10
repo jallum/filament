@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-10T01:40:45Z",
+  "description": "`Filament.VNodeCompiler` currently produces code that constructs `%Phoenix.LiveView.Rendered{}` structs at runtime. Switch the codegen target to vnode tuples — `{:element, \"div\", [...attrs...], [...children...]}`, `{:component, Mod, props, key}`, `{:text, value}`, `{:fragment, [...]}`.\n\n## Semantics that must map cleanly to vnode IR\n\n- Lexical `@`-variable scoping (Item 1a from flm-40e).\n- Reactive scope inference / auto-memoization (Item 1b from flm-40e).\n- `:for` + `:key` keyed comprehensions, with the existing `hoist_comprehension_handlers` passes adapted for vnode-emitting bodies. (The recent compiler hoisting fix's intent is preserved: `component_keyed` calls don't sit inside lazy entry fns; substrate-side eager evaluation.)\n- Event-handler registration (`event_at` calls) firing eagerly during the substrate walk, not via `Safe.to_iodata` coercion. The `Renderer.render/3` flow no longer relies on `Safe.to_iodata` to drive side effects.\n- Colocated hooks.\n\nPLV's `Tokenizer` remains the upstream parser for `~F`'s HTML-like syntax. The change is in what the post-parse AST passes lower into.\n\n## Files\n\n- `lib/filament/vnode_compiler.ex` (largest change).\n- `lib/filament/sigil_f.ex` (potentially).\n- `lib/filament/tag_engine.ex` (`component`/`component_keyed` calling-convention shift).\n\n## Tests touched\n\n- `test/filament/vnode_compiler_test.exs`\n- `test/filament/sigil_f_phase1_test.exs`\n- `test/filament/sigil_f_phase2_test.exs`\n- Keyed-comprehension reconciler tests\n- Colocated-hook tests\n- Memoization tests\n\n## Acceptance\n\n- `~F\"...\"` evaluates to a vnode tree (or a closure returning one).\n- Keyed reconciliation works (todo example, `:for` + `:key` case).\n- Memoization tests pass.\n- Colocated-hook tests pass.\n- No `%Phoenix.LiveView.Rendered{}` constructed by compiler-emitted code.",
+  "id": "flm-3wr.1.4",
+  "labels": [],
+  "parent": "flm-3wr.1",
+  "priority": 1,
+  "status": "open",
+  "title": "Phase 1.3: ~F codegen target switch",
+  "type": "task",
+  "updated_at": "2026-05-10T01:40:45Z"
+}
