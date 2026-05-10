@@ -19,14 +19,17 @@ defmodule Filament.RenderContext do
     pending_effects: [],
     # non_neg_integer() - current event handler index
     event_handler_index: 0,
-    # %{non_neg_integer() => function()} - event handlers registered this render
+    # %{non_neg_integer() => function()} - bubble-phase event handlers
+    # registered this render
     new_event_handlers: %{},
-    # %{term() => pid()} - observable stubs for test isolation
-    observable_stubs: %{},
+    # non_neg_integer() - current capture-phase handler index (independent
+    # slot space from event_handler_index)
+    capture_handler_index: 0,
+    # %{non_neg_integer() => function()} - capture-phase event handlers
+    # registered this render
+    new_capture_handlers: %{},
     # boolean() - false during disconnected (HTTP) mounts to skip subscriptions
     subscribe_enabled: true,
-    # String.t() | nil - session token for static→WS observable handoff
-    session_token: nil,
     # %{non_neg_integer() => term()} - existing hook slot state for new child fibers
     hook_slots: %{},
     # %{module() => non_neg_integer()} - per-module counter for stable child fiber IDs.
@@ -45,9 +48,9 @@ defmodule Filament.RenderContext do
           pending_effects: [{non_neg_integer(), (-> (-> :ok) | nil), term() | :no_deps}],
           event_handler_index: non_neg_integer(),
           new_event_handlers: %{non_neg_integer() => function()},
-          observable_stubs: %{term() => pid()},
+          capture_handler_index: non_neg_integer(),
+          new_capture_handlers: %{non_neg_integer() => function()},
           subscribe_enabled: boolean(),
-          session_token: String.t() | nil,
           hook_slots: %{non_neg_integer() => term()},
           child_component_indices: %{module() => non_neg_integer()}
         }

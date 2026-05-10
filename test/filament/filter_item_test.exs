@@ -5,7 +5,6 @@ defmodule Filament.FilterItemTest do
 
   alias Filament.FiberTree
   alias Filament.Reconciler
-  alias Phoenix.HTML.Safe
   alias TodoWeb.Components.FilterBar
 
   @filters [all: "All", active: "Active", completed: "Done"]
@@ -15,7 +14,7 @@ defmodule Filament.FilterItemTest do
       {_tree, rendered, _} =
         Reconciler.mount(FilterBar, %{filters: @filters, default: :all}, owner_pid: self())
 
-      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "All"
       assert html =~ "Active"
       assert html =~ "Done"
@@ -25,7 +24,7 @@ defmodule Filament.FilterItemTest do
       {_tree, rendered, _} =
         Reconciler.mount(FilterBar, %{filters: @filters, default: :active}, owner_pid: self())
 
-      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ ~s(class="selected")
     end
 
@@ -70,7 +69,9 @@ defmodule Filament.FilterItemTest do
       test_pid = self()
       on_change = fn val -> send(test_pid, {:filter_changed, val}) end
 
-      view = mount!(FilterBar, %{filters: @filters, default: :all, on_change: on_change}) |> click!("li:nth-child(2) a")
+      view =
+        FilterBar |> mount!(%{filters: @filters, default: :all, on_change: on_change}) |> click!("li:nth-child(2) a")
+
       assert_receive {:filter_changed, :active}
       assert view.rendered_html =~ "Active"
     end

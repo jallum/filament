@@ -2,7 +2,7 @@ import Config
 
 config :cart, CartWeb.Endpoint,
   url: [host: "localhost"],
-  http: [port: 4000],
+  http: [port: String.to_integer(System.get_env("PORT") || "4000")],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
     formats: [html: CartWeb.ErrorHTML],

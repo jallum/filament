@@ -5,20 +5,38 @@ defmodule Filament.ReconcilerTest do
   alias Filament.Fixtures.CounterComponent
   alias Filament.Reconciler
   alias Filament.ReconcilerError
-  alias Phoenix.HTML.Safe
 
-  defmodule StubObservable do
+  defmodule StubCellTransport do
     @moduledoc false
+    @behaviour Filament.Cell
+
     use GenServer
 
     def start_link, do: GenServer.start_link(__MODULE__, [])
+
+    @impl GenServer
     def init(_), do: {:ok, []}
     def unsubscribe_calls(pid), do: GenServer.call(pid, :calls)
 
-    def handle_cast({:filament_remove_projection, owner_pid, {fiber_id, slot_index}}, calls),
-      do: {:noreply, [{owner_pid, fiber_id, slot_index} | calls]}
+    @impl Filament.Cell
+    def subscribe(server, _subscriber, _projection), do: {:ok, GenServer.call(server, :get_initial)}
 
+    @impl Filament.Cell
+    def unsubscribe(server, subscriber) do
+      GenServer.cast(server, {:unsubscribed, subscriber})
+      :ok
+    end
+
+    @impl Filament.Cell
+    def current(_server, _projection), do: nil
+
+    @impl GenServer
+    def handle_call(:get_initial, _from, calls), do: {:reply, nil, calls}
     def handle_call(:calls, _from, calls), do: {:reply, calls, calls}
+
+    @impl GenServer
+    def handle_cast({:unsubscribed, {owner_pid, fiber_id, slot_index}}, calls),
+      do: {:noreply, [{owner_pid, fiber_id, slot_index} | calls]}
   end
 
   describe "mount/2" do
@@ -32,7 +50,7 @@ defmodule Filament.ReconcilerTest do
       assert tree["root"].status == :stable
       assert tree["root"].id == "root"
 
-      assert %Phoenix.LiveView.Rendered{} = rendered
+      assert is_tuple(rendered)
       assert pending_effects == []
     end
 
@@ -40,7 +58,7 @@ defmodule Filament.ReconcilerTest do
       {_tree, rendered, _pending_effects} =
         Reconciler.mount(CounterComponent, %{count: 42})
 
-      iodata = Safe.to_iodata(rendered)
+      iodata = Filament.Web.to_iodata(rendered)
       html = IO.iodata_to_binary(iodata)
 
       assert html =~ "42"
@@ -66,7 +84,7 @@ defmodule Filament.ReconcilerTest do
       assert new_tree["root"].status == :stable
 
       # Check rendered output
-      iodata = Safe.to_iodata(new_rendered)
+      iodata = Filament.Web.to_iodata(new_rendered)
       html = IO.iodata_to_binary(iodata)
       assert html =~ "1"
     end
@@ -78,8 +96,8 @@ defmodule Filament.ReconcilerTest do
       {new_tree, rendered2, _pending_effects2} = Reconciler.update(tree, "root", %{count: 5})
 
       # Rendered should be equivalent
-      html1 = rendered1 |> Safe.to_iodata() |> IO.iodata_to_binary()
-      html2 = rendered2 |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html1 = rendered1 |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
+      html2 = rendered2 |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html1 == html2
 
       # Tree should be updated
@@ -200,9 +218,10 @@ defmodule Filament.ReconcilerTest do
       assert :grandchild in calls
     end
 
-    test "observable is unsubscribed when fiber is removed" do
-      server = start_supervised!(%{id: StubObservable, start: {StubObservable, :start_link, []}})
+    test "cell is unsubscribed when fiber is removed" do
+      server = start_supervised!(%{id: StubCellTransport, start: {StubCellTransport, :start_link, []}})
       owner = self()
+      cell = Filament.Source.new(StubCellTransport, server)
 
       {tree, _, _} = Reconciler.mount(CounterComponent, %{count: 0})
 
@@ -213,7 +232,7 @@ defmodule Filament.ReconcilerTest do
           props: %{count: 1},
           status: :stable,
           parent_id: "root",
-          hook_slots: %{0 => {:subscribed, server, 42}}
+          hook_slots: %{0 => {:cell_subscribed, cell, 42}}
         )
 
       tree =
@@ -226,7 +245,7 @@ defmodule Filament.ReconcilerTest do
       refute Map.has_key?(new_tree, "root.child")
       # Allow the cast to be processed
       :timer.sleep(10)
-      assert StubObservable.unsubscribe_calls(server) == [{owner, "root.child", 0}]
+      assert StubCellTransport.unsubscribe_calls(server) == [{owner, "root.child", 0}]
     end
 
     test "parent fiber children list is updated to match new render" do
@@ -264,26 +283,15 @@ defmodule Filament.ReconcilerTest do
     def start_link(_opts \\ []), do: GenServer.start_link(__MODULE__, :state)
     def init(s), do: {:ok, s}
 
-    def proj_key_count(srv), do: GenServer.call(srv, :proj_key_count)
-    def subscriber_count(srv), do: GenServer.call(srv, :subscriber_count)
+    def proj_key_count(srv), do: GenServer.call(srv, :cell_subscriber_count)
+    def subscriber_count(srv), do: GenServer.call(srv, :cell_subscriber_count)
 
     @impl Filament.Observable
     def handle_subscribe(_sub, state), do: {:ok, state, state}
 
     @impl GenServer
-    def handle_call(:proj_key_count, _from, state) do
-      total =
-        :__filament_subscribers__
-        |> Process.get(%{})
-        |> Map.values()
-        |> Enum.reduce(0, fn s, acc -> acc + map_size(s.proj_keys) end)
-
-      {:reply, total, state}
-    end
-
-    @impl GenServer
-    def handle_call(:subscriber_count, _from, state) do
-      {:reply, map_size(Process.get(:__filament_subscribers__, %{})), state}
+    def handle_call(:cell_subscriber_count, _from, state) do
+      {:reply, map_size(Process.get(:__filament_cell_subscribers__, %{})), state}
     end
   end
 
@@ -292,7 +300,9 @@ defmodule Filament.ReconcilerTest do
     use Filament.Component
 
     def render(%{server: server}) do
-      use_observable(server, fn
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+
+      use_value(cell, fn
         :disconnected -> nil
         state -> state
       end)

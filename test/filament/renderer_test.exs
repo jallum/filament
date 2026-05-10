@@ -4,8 +4,6 @@ defmodule Filament.RendererTest do
   alias Filament.Fiber
   alias Filament.RenderContext
   alias Filament.Renderer
-  alias Phoenix.HTML.Safe
-  alias Phoenix.LiveView.Rendered
 
   defmodule SimpleItem do
     @moduledoc false
@@ -62,10 +60,10 @@ defmodule Filament.RendererTest do
         fiber_tree: %{}
       }
 
-      {result, hook_slots, pending_effects, new_fibers, event_handlers} =
+      {result, hook_slots, pending_effects, new_fibers, event_handlers, _capture_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "world"}, context)
 
-      assert %Rendered{} = result
+      assert is_tuple(result)
       assert hook_slots == %{}
       assert pending_effects == []
       assert new_fibers == %{}
@@ -78,10 +76,10 @@ defmodule Filament.RendererTest do
         fiber_tree: %{}
       }
 
-      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers} =
+      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers, _capture_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "Alice"}, context)
 
-      iodata = Safe.to_iodata(result)
+      iodata = Filament.Web.to_iodata(result)
       html = IO.iodata_to_binary(iodata)
 
       assert html =~ "Hello, Alice"
@@ -104,10 +102,10 @@ defmodule Filament.RendererTest do
         fiber_tree: %{}
       }
 
-      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers} =
+      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers, _capture_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "Bob"}, context)
 
-      iodata = Safe.to_iodata(result)
+      iodata = Filament.Web.to_iodata(result)
       html = IO.iodata_to_binary(iodata)
 
       assert html =~ "Bob"
@@ -144,156 +142,85 @@ defmodule Filament.RendererTest do
     end
   end
 
-  describe "render_vnode/2" do
-    test "renders :text vnode" do
+  describe "walk_vnode/2" do
+    test "returns :text node unchanged" do
       context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
-      result = Renderer.render_vnode({:text, "hello"}, context)
-      assert result == "hello"
+      assert Renderer.walk_vnode({:text, "hi"}, context) == {:text, "hi"}
     end
 
-    test "renders :element vnode with children" do
+    test "recurses into :element children, returns walked element" do
       context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
-      vnode = {:element, "div", [{"class", "test"}], [{:text, "content"}]}
-      result = Renderer.render_vnode(vnode, context)
-      html = IO.iodata_to_binary(result)
-      assert html =~ "<div"
-      assert html =~ "content"
-      assert html =~ "</div>"
+      vnode = {:element, "div", [{"class", "x"}], [{:text, "a"}, {:text, "b"}]}
+      walked = Renderer.walk_vnode(vnode, context)
+      assert walked == {:element, "div", [{"class", "x"}], [{:text, "a"}, {:text, "b"}]}
     end
 
-    test "renders :fragment vnode" do
+    test "recurses into :fragment children" do
       context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
-      vnode = {:fragment, [{:text, "A"}, {:text, "B"}]}
-      result = Renderer.render_vnode(vnode, context)
-      assert result == ["A", "B"]
+      vnode = {:fragment, [{:text, "A"}, {:element, "span", [], [{:text, "B"}]}]}
+      walked = Renderer.walk_vnode(vnode, context)
+      assert walked == {:fragment, [{:text, "A"}, {:element, "span", [], [{:text, "B"}]}]}
     end
 
-    test "renders :component vnode" do
-      context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
+    test "registers unkeyed :component child fiber and rewrites to 5-tuple" do
+      root_fiber = Fiber.new(id: "root", component: __MODULE__)
 
-      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers} =
-        Renderer.render(TestHello.TestHello, %{name: "vnode"}, context)
+      context = %RenderContext{
+        fiber_id: "root",
+        fiber_tree: %{"root" => root_fiber},
+        new_fibers: %{},
+        pending_effects: []
+      }
 
-      assert %Rendered{} = result
-      html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
-      assert html =~ "vnode"
+      Process.put(:filament_render_context, context)
+      walked = Renderer.walk_vnode({:component, SimpleItem.SimpleItem, %{label: "x"}, nil}, context)
+      final_ctx = Process.get(:filament_render_context)
+      Process.delete(:filament_render_context)
+
+      assert {:component, SimpleItem.SimpleItem, %{label: "x"}, nil, child_render} = walked
+      assert child_render
+
+      child_id = Fiber.child_id(root_fiber, SimpleItem.SimpleItem, {:index, 0})
+      assert Map.has_key?(final_ctx.new_fibers, child_id)
+    end
+
+    test "registers keyed :component child fiber" do
+      root_fiber = Fiber.new(id: "root", component: __MODULE__)
+
+      context = %RenderContext{
+        fiber_id: "root",
+        fiber_tree: %{"root" => root_fiber},
+        new_fibers: %{},
+        pending_effects: []
+      }
+
+      Process.put(:filament_render_context, context)
+      walked = Renderer.walk_vnode({:component, SimpleItem.SimpleItem, %{label: "x"}, "k1"}, context)
+      final_ctx = Process.get(:filament_render_context)
+      Process.delete(:filament_render_context)
+
+      assert {:component, SimpleItem.SimpleItem, %{label: "x"}, "k1", _child} = walked
+
+      child_id = Fiber.child_id(root_fiber, SimpleItem.SimpleItem, {:key, "k1"})
+      assert Map.has_key?(final_ctx.new_fibers, child_id)
+      assert final_ctx.new_fibers[child_id].key == "k1"
     end
 
     test "raises on invalid vnode" do
       context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
 
       assert_raise ArgumentError, ~r/invalid vnode/, fn ->
-        Renderer.render_vnode({:invalid, "data"}, context)
+        Renderer.walk_vnode({:bogus, 1}, context)
       end
     end
 
-    test "1. render_vnode :text returns content" do
+    test "emits no HTML iodata for elements" do
       context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
-      assert Renderer.render_vnode({:text, "hello"}, context) == "hello"
+      result = Renderer.walk_vnode({:element, "div", [{"class", "x"}], []}, context)
+      # The walker returns a vnode tuple, never iodata.
+      assert is_tuple(result)
+      assert elem(result, 0) == :element
     end
-
-    test "2. render_vnode :element with atom tag and attrs produces correct HTML" do
-      root_fiber = Fiber.new(id: "root", component: __MODULE__)
-      context = %RenderContext{fiber_id: "root", fiber_tree: %{"root" => root_fiber}}
-      Process.put(:filament_render_context, context)
-
-      vnode = {:element, :div, [class: "x"], [{:text, "hi"}]}
-      result = Renderer.render_vnode(vnode, context)
-      html = IO.iodata_to_binary(result)
-
-      Process.delete(:filament_render_context)
-
-      assert html == ~s(<div class="x">hi</div>)
-    end
-
-    test "3. render_vnode :element void element has no closing tag" do
-      context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
-      Process.put(:filament_render_context, context)
-
-      result = Renderer.render_vnode({:element, :br, [], []}, context)
-      html = IO.iodata_to_binary(result)
-
-      Process.delete(:filament_render_context)
-
-      assert html == "<br>"
-    end
-
-    test "4. render_vnode :component registers child fiber in new_fibers" do
-      root_fiber = Fiber.new(id: "root", component: __MODULE__)
-
-      context = %RenderContext{
-        fiber_id: "root",
-        fiber_tree: %{"root" => root_fiber},
-        new_fibers: %{},
-        pending_effects: []
-      }
-
-      {_rendered, _hook_slots, _effects, new_fibers, _handlers} =
-        Renderer.render(SimpleItem.SimpleItem, %{label: "test"}, context)
-
-      assert map_size(new_fibers) == 0
-
-      # Now test via render_vnode directly within an active render context
-      Process.put(:filament_render_context, context)
-
-      Renderer.render_vnode({:component, SimpleItem.SimpleItem, %{label: "hi"}, nil}, context)
-
-      final_ctx = Process.get(:filament_render_context)
-      Process.delete(:filament_render_context)
-
-      child_id = Fiber.child_id(root_fiber, SimpleItem.SimpleItem, {:index, 0})
-      assert Map.has_key?(final_ctx.new_fibers, child_id)
-    end
-
-    test "5. rendering a component twice with same key preserves hook_slots" do
-      root_fiber = Fiber.new(id: "root", component: __MODULE__)
-
-      context = %RenderContext{
-        fiber_id: "root",
-        fiber_tree: %{"root" => root_fiber},
-        new_fibers: %{},
-        pending_effects: []
-      }
-
-      child_id = Fiber.child_id(root_fiber, StatefulComp.StatefulComp, {:key, "item"})
-
-      # First render
-      Process.put(:filament_render_context, context)
-
-      Renderer.render_vnode(
-        {:component, StatefulComp.StatefulComp, %{initial: 42}, "item"},
-        context
-      )
-
-      first_ctx = Process.get(:filament_render_context)
-      Process.delete(:filament_render_context)
-
-      first_child_fiber = Map.get(first_ctx.new_fibers, child_id)
-      assert first_child_fiber
-
-      # Second render: provide existing fiber in fiber_tree for state continuity
-      context2 = %RenderContext{
-        fiber_id: "root",
-        fiber_tree: %{"root" => root_fiber, child_id => first_child_fiber},
-        new_fibers: %{},
-        pending_effects: []
-      }
-
-      Process.put(:filament_render_context, context2)
-
-      Renderer.render_vnode(
-        {:component, StatefulComp.StatefulComp, %{initial: 42}, "item"},
-        context2
-      )
-
-      second_ctx = Process.get(:filament_render_context)
-      Process.delete(:filament_render_context)
-
-      second_child_fiber = Map.get(second_ctx.new_fibers, child_id)
-      assert second_child_fiber.status == :stable
-      assert second_child_fiber.hook_slots == first_child_fiber.hook_slots
-    end
-
   end
 
   describe "current_context/0" do

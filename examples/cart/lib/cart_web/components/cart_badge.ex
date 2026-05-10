@@ -3,11 +3,11 @@ defmodule CartWeb.Components.CartBadge do
   use Filament.Component
 
   defcomponent do
-    prop(:server, :any, default: nil)
+    prop(:source, :any, default: nil)
 
-    def render(%{server: server}) do
+    def render(%{source: source}) do
       count =
-        use_observable(server, fn
+        use_value(source, fn
           :disconnected -> 0
           s -> Cart.State.item_count(s)
         end)

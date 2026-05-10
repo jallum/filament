@@ -7,17 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
 ### Changed
 
-### Deprecated
+- **Breaking:** `use_observable` now goes through `Filament.Cell`. The hook
+  takes a cell tuple `{transport, data}` (or a 0-arity factory returning
+  one) instead of a raw GenServer reference. For an observable GenServer
+  the migration is mechanical — wrap the server pid in a tuple:
+
+  ```elixir
+  # Before
+  count = use_observable(server, fn :disconnected -> 0; s -> s.count end)
+
+  # After
+  cell  = {Filament.Observable.GenServer, server}
+  count = use_observable(cell,   fn :disconnected -> 0; s -> s.count end)
+  ```
+
+  The factory form (`use_observable/1`) returns the cell, which can then
+  be passed as a prop to children that subscribe with their own
+  projections.
+
+- `Filament.Observable.GenServer.handle_unsubscribe/2` is now invoked
+  with the cell-subscriber tuple `{owner_pid, fiber_id, slot_index}`
+  rather than the old `%Subscriber{}` struct. Servers that read
+  `subscriber.pid` need to destructure the tuple instead.
 
 ### Removed
 
-### Fixed
-
-### Security
+- `Filament.Observable.Subscriber` struct and the entire parallel
+  Subscriber-keyed subscription path. `Filament.Observable.subscribe/2`
+  and `remove_projection/4` are gone; subscribe via `Filament.Cell` or
+  through the `use_observable` hook.
+- `:filament_observable_updates` and `:filament_observable_resubscribe`
+  messages are no longer sent or handled. The cell transport sends
+  `:cell_update` and `:cell_resubscribe` instead, with matching
+  `handle_info` clauses injected by `use Filament.LiveView`.
+- `Filament.RenderContext` no longer carries `observable_stubs` or
+  `session_token` fields. Tests should construct cells against stub pids
+  directly rather than relying on identifier-to-pid swap.
 
 ## [0.4.1] - 2026-05-09
 

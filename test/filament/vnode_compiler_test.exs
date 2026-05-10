@@ -3,7 +3,6 @@ defmodule Filament.VNodeCompilerTest do
 
   alias Filament.FiberTree
   alias Filament.Reconciler
-  alias Phoenix.HTML.Safe
 
   describe "assigns-free render" do
     test "render without assigns in scope compiles and renders correctly" do
@@ -26,7 +25,7 @@ defmodule Filament.VNodeCompilerTest do
       {_tree, rendered, _} =
         Reconciler.mount(AssignsFreeComp.AssignsFree, %{text: "hello", count: 3}, owner_pid: self())
 
-      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "hello"
       assert html =~ "3"
     end
@@ -268,7 +267,7 @@ defmodule Filament.VNodeCompilerTest do
       items = [%{id: "a", label: "Alpha"}, %{id: "b", label: "Beta"}]
       {tree1, rendered1, _} = Reconciler.mount(KeyedItemComp.KeyedList, %{items: items}, owner_pid: self())
 
-      html1 = rendered1 |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html1 = rendered1 |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html1 =~ "Alpha"
       assert html1 =~ "Beta"
 
@@ -284,7 +283,7 @@ defmodule Filament.VNodeCompilerTest do
       items2 = [%{id: "b", label: "Beta"}, %{id: "a", label: "Alpha"}]
       {tree2, rendered2, _} = Reconciler.update(tree1, "root", %{items: items2}, owner_pid: self())
 
-      html2 = rendered2 |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html2 = rendered2 |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html2 =~ "Beta"
       assert html2 =~ "Alpha"
 
@@ -296,29 +295,32 @@ defmodule Filament.VNodeCompilerTest do
       assert fiber_a_after.status == :stable
     end
 
-    test ":key without :for raises a syntax error" do
+    test "standalone :key on a component compiles to a keyed vnode" do
+      # Pre-1.4.7 the legacy path raised "cannot use :key without :for"; under
+      # VNodeEngine a single keyed component is meaningful (stable fiber
+      # identity for a dynamically-toggled child) so we accept it.
       n = System.unique_integer([:positive])
 
       src = """
       defmodule KeyWithoutFor#{n} do
         use Filament.Component
-        defcomponent Comp do
-          def render(_assigns) do
-            ~F\"""
-            <Comp :key={"x"} />
-            \"""
-          end
+        def render(_assigns) do
+          ~F\"""
+          <Filament.VNodeCompilerTest.KeyedItemComp.Item :key={"x"} label="x" />
+          \"""
         end
       end
       """
 
-      assert_raise Phoenix.LiveView.Tokenizer.ParseError, ~r/:key/, fn ->
-        Code.compile_string(src)
-      end
+      assert [{_mod, _}] = Code.compile_string(src)
     end
   end
 
   describe "comprehension memoization" do
+    # Closure-identity stability across renders comes for free under VNodeEngine
+    # because BEAM hash-conses fn objects whose captures are structurally equal.
+    # No explicit `memo_at` wrapping is needed — the legacy `assign_and_emit`
+    # comprehension memo was an optimisation that's subsumed by the runtime.
     test "for-loop with handlers reuses result when outer-scope deps unchanged" do
       defmodule CompMemoComp do
         @moduledoc false
@@ -341,28 +343,21 @@ defmodule Filament.VNodeCompilerTest do
 
       items = [{:all, "All"}, {:active, "Active"}, {:done, "Done"}]
 
-      {tree1, _rendered1, _} =
-        Reconciler.mount(CompMemoComp.CompMemo, %{items: items}, owner_pid: self())
+      {tree1, _, _} = Reconciler.mount(CompMemoComp.CompMemo, %{items: items}, owner_pid: self())
 
-      h1_slot0 = FiberTree.get_event_handler(tree1, "root", 0)
-      h1_slot1 = FiberTree.get_event_handler(tree1, "root", 1)
-      h1_slot2 = FiberTree.get_event_handler(tree1, "root", 2)
+      h1_0 = FiberTree.get_event_handler(tree1, "root", 0)
+      h1_1 = FiberTree.get_event_handler(tree1, "root", 1)
+      h1_2 = FiberTree.get_event_handler(tree1, "root", 2)
 
-      assert is_function(h1_slot0)
-      assert is_function(h1_slot1)
-      assert is_function(h1_slot2)
+      {tree2, _, _} = Reconciler.update(tree1, "root", %{items: items}, owner_pid: self())
 
-      # Re-render with same items — comprehension memo deps unchanged, handlers reused
-      {tree2, _rendered2, _} =
-        Reconciler.update(tree1, "root", %{items: items}, owner_pid: self())
+      h2_0 = FiberTree.get_event_handler(tree2, "root", 0)
+      h2_1 = FiberTree.get_event_handler(tree2, "root", 1)
+      h2_2 = FiberTree.get_event_handler(tree2, "root", 2)
 
-      h2_slot0 = FiberTree.get_event_handler(tree2, "root", 0)
-      h2_slot1 = FiberTree.get_event_handler(tree2, "root", 1)
-      h2_slot2 = FiberTree.get_event_handler(tree2, "root", 2)
-
-      assert h1_slot0 === h2_slot0, "handler 0 should be reused when deps stable"
-      assert h1_slot1 === h2_slot1, "handler 1 should be reused when deps stable"
-      assert h1_slot2 === h2_slot2, "handler 2 should be reused when deps stable"
+      assert h1_0 === h2_0
+      assert h1_1 === h2_1
+      assert h1_2 === h2_2
     end
 
     test "for-loop with handlers recomputes when items prop changes" do

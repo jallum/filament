@@ -14,7 +14,7 @@ Add the dependency:
 
 ```elixir
 # mix.exs
-{:filament, "~> 0.1"}
+{:filament, "~> 0.4"}
 ```
 
 Run `mix deps.get`. No other changes to your existing LiveViews are required yet.
@@ -111,10 +111,10 @@ defmodule MyApp.CartComponent do
   use Filament.Component
 
   defcomponent do
-    prop(:server, :any, default: MyApp.CartServer)
+    def render(_props) do
+      source = use_source(MyApp.CartServer.cell(MyApp.CartServer))
 
-    def render(%{server: server}) do
-      cart = use_observable(server, fn :disconnected -> nil; s -> s end)
+      cart = use_value(source, fn :disconnected -> nil; s -> s end)
       items = if cart == nil, do: [], else: cart.items
       total = if cart == nil, do: 0, else: cart.total
 
@@ -135,38 +135,50 @@ end
 
 Key differences from the LiveView template:
 
-- `use_observable(server, fn :disconnected -> nil; s -> s end)` subscribes this
-  component to the server and returns the current projected value. The function
-  receives `:disconnected` during HTTP renders and returns a safe default.
+- `use_source/1` binds the reactive source once for the calling fiber.
+  `use Filament.Observable.GenServer` injects a default `cell/1` constructor
+  on every observable server — `MyApp.CartServer.cell(server_ref)` builds
+  the `%Filament.Source{}` struct Filament expects.
+- `use_value(source, fn :disconnected -> nil; s -> s end)` subscribes this
+  component to the source and returns the current projected value. The
+  function receives `:disconnected` during HTTP renders and returns a
+  safe default.
 - `~F"""` templates use `{expression}` interpolation and `{for ... do}` / `{end}`
   loops instead of `<%= %>` and `<% %>`.
 - The component re-renders automatically when `notify_observers/1` is called on
   the server — you do not need `handle_event` to update the view.
 
-### Server-as-prop: sharing one server across sibling components
+### Source-as-prop: sharing one source across sibling components
 
-When a parent renders multiple children that all project from the same server, resolve
-the server once in the parent and pass the pid as a prop. This keeps subscriptions
-efficient — each `{parent_pid, request}` pair shares a single subscriber entry on the
-server regardless of how many projections it has:
+When a parent renders multiple children that all project from the same
+server, bind the source once in the parent and pass the struct as a
+prop. This keeps subscriptions efficient — sibling components share the
+same underlying server, each with its own projection slot:
 
 ```elixir
-# Parent: resolve once with use_observable/1
+# Parent: bind once with use_source/1
 def render(%{session_id: session_id}) do
-  server = use_observable(fn -> MyApp.CartServer.start_link(session_id) end)
+  source = use_source(fn -> MyApp.CartServer.cell(session_id) end)
 
   ~F"""
-  <CartBadge server={server} />
-  <CartItems server={server} />
+  <CartBadge source={source} />
+  <CartItems source={source} />
   """
 end
 
-# Child: project with use_observable/2 — no redundant subscription
-def render(%{server: server}) do
-  count = use_observable(server, fn :disconnected -> 0; s -> Cart.State.item_count(s) end)
+# Child: project with use_value/2 — no redundant subscription
+def render(%{source: source}) do
+  count = use_value(source, fn :disconnected -> 0; s -> Cart.State.item_count(s) end)
+
+  # Mutations reach through source.data for the underlying server reference:
+  # on_click={fn -> MyApp.CartServer.add_item(source.data, item) end}
   ...
 end
 ```
+
+The `MyApp.CartServer.cell/1` constructor is overridable — projects with
+session-keyed servers commonly override it to take the session id and
+ensure-start the server (see `examples/cart/lib/cart/server.ex`).
 
 ## Phase 5: Embed in the existing LiveView (incremental adoption)
 
@@ -187,9 +199,8 @@ update messages must be forwarded from the parent's `handle_info/2`:
 
 ```elixir
 # In MyApp.CartLive:
-def handle_info({type, _} = msg, socket)
-    when type in [:filament_set_state, :filament_observable_updates,
-                  :filament_observable_resubscribe] do
+def handle_info({type, _, _} = msg, socket)
+    when type in [:filament_set_state, :cell_update, :cell_resubscribe] do
   Phoenix.LiveView.send_update(Filament.LiveComponent, id: "cart", filament_msg: msg)
   {:noreply, socket}
 end
@@ -198,7 +209,7 @@ end
 This is a Phase 1 limitation described in `Filament.LiveComponent`. You only need
 this forwarding while the component is hosted inside a regular LiveView.
 
-For components that use only `use_state` (no `use_observable`), no forwarding is
+For components that use only `use_state` (no `use_value`), no forwarding is
 needed because state updates are handled internally within the same process.
 
 ## Phase 6: Full migration (optional)
@@ -221,45 +232,59 @@ for the full `Filament.LiveView` explanation.
 
 If your application has checkout flows, pessimistic locks, or reservation UX, holds
 are not part of Filament core — but they are straightforward to build as a custom
-hook on top of `use_observable`. See
+hook on top of `use_value`. See
 `examples/inventory/lib/inventory_web/hooks.ex` for a complete `use_hold/3`
 implementation that acquires and releases quantity-based holds, with automatic
 release when the LiveView disconnects via `handle_unsubscribe/2` on the server.
 The [Hooks guide](hooks.html) covers composing and writing custom hooks.
 
-## Observable API breaking changes
+## Upgrading from older Filament releases
 
-This section documents the breaking changes to the Observable/subscription API
-introduced after the initial 0.1 release. If you are starting fresh from the
-current release you can skip this section — the examples in Phases 3–6 above
-already reflect the new API.
+If you are starting fresh from the current release, skip this section —
+the examples in Phases 3–6 already reflect the current API. This summary
+exists for projects upgrading across Filament's pre-1.0 API shifts.
 
-### `use_projection/3` removed — use `use_observable/2` instead
+### Subscription API: tuples → `%Filament.Source{}`
 
-`use_projection/3` no longer exists. Replace every call with `use_observable/2`,
-passing a two-clause function that handles the `:disconnected` case and projects
-the live state. The function runs client-side at render time and can close over
-local component assigns.
+Subscriptions go through `Filament.Cell`, dispatched on a struct rather
+than a tagged tuple. Application code rarely sees the struct's internals
+directly — `use_source/1` returns it; `use_value/2` consumes it; child
+components pass it as a prop. When you need the underlying server reference
+in an event handler, reach through `source.data`.
 
 ```elixir
-# Before
-server = use_observable(CartServer)
-count = use_projection(server, fn state -> Cart.State.item_count(state) end, disconnected: 0)
+# Before (pre-0.4 styles, in roughly historical order)
+count = use_observable(CartServer, fn :disconnected -> 0; s -> s.count end)
+count = use_observable({Filament.Observable.GenServer, server}, fn ... end)
 
 # After
-count = use_observable(CartServer, fn
-  :disconnected -> 0
-  state -> Cart.State.item_count(state)
-end)
+source = use_source(fn -> CartServer.cell(session_id) end)
+count  = use_value(source, fn :disconnected -> 0; s -> s.count end)
+on_click = fn -> CartServer.add_item(source.data, item) end
 ```
 
-The old `disconnected:` keyword option form of `use_observable/2` is also gone —
-use the function-argument form shown above for all cases.
+`use Filament.Observable.GenServer` now injects a default `cell/1`
+constructor that builds the right struct; override it for session-keyed
+ensure-started servers.
+
+### Hook split: `use_observable` → `use_source` / `use_value`
+
+`use_observable/1` and `use_observable/2` were two unrelated operations
+(resolve vs. subscribe-and-project) sharing a name. They are now two
+separately-named hooks:
+
+- `use_source/1` — bind a reactive source once, returns
+  `%Filament.Source{} | nil`.
+- `use_value/2` — read a projected value from a source, subscribe to
+  updates.
+
+Older `use_projection/3` and `use_observable/2` `disconnected:` keyword
+form are both gone — pass a two-clause function to `use_value/2` instead.
 
 ### `handle_subscribe/3` → `handle_subscribe/2`
 
-The `request` argument has been removed from the `handle_subscribe` callback.
-Drop the first parameter:
+The `request` argument has been removed from the `handle_subscribe`
+callback. Drop the first parameter:
 
 ```elixir
 # Before
@@ -269,53 +294,33 @@ def handle_subscribe(_request, _subscriber, state), do: {:ok, state, state}
 def handle_subscribe(_subscriber, state), do: {:ok, state, state}
 ```
 
-### `Observable.subscribe/3` → `Observable.subscribe/2`
+### Subscriber identity: `%Subscriber{}` → tuple
 
-The `request` argument has been dropped from `Observable.subscribe/3`. If you
-call this function directly (e.g. in tests or low-level integration code), remove
-the second positional argument:
-
-```elixir
-# Before
-Observable.subscribe(server, nil, subscriber)
-
-# After
-Observable.subscribe(server, subscriber)
-```
-
-`Observable.remove_projection/5` is now `Observable.remove_projection/4` for the
-same reason — the `request` argument is gone.
-
-### `Subscriber` struct fields
-
-`Subscriber.request` and `Subscriber.projections` have been removed. The
-replacement for tracking active projections is `proj_keys`, a map of
-`{fiber_id, slot_index}` tuples to `true`:
+The `Filament.Observable.Subscriber` struct is gone. `handle_unsubscribe/2`
+receives the cell-subscriber tuple directly:
 
 ```elixir
 # Before
-%Subscriber{pid: self(), request: nil, projections: %{{"root", 0} => {& &1, :unset}}}
+def handle_unsubscribe(%Subscriber{pid: pid}, state), do: ...
 
 # After
-%Subscriber{pid: self(), proj_keys: %{{"root", 0} => true}}
+def handle_unsubscribe({owner_pid, _fiber_id, _slot_index}, state), do: ...
 ```
 
-### `{:subscribed, ...}` slot shape
+### Update-message names
 
-The four-element `{:subscribed, server, request, projected_value}` tuple is gone.
-If you pattern-match on this shape anywhere, remove the `request` element.
+The cell transport now sends `:cell_update` and `:cell_resubscribe`
+messages (in place of the legacy `:filament_observable_updates` /
+`:filament_observable_resubscribe`). `Filament.LiveView` handles them
+automatically. `Filament.LiveComponent` users forwarding from the host
+LiveView's `handle_info/2` should match on the new names — see the
+forwarding example in Phase 5 above.
 
 ### Change-detection: raw state, client-side projection
 
-Previously the server compared projected values to decide whether to push an
-update. The server now sends raw state to all subscribers and each subscriber
-compares the raw value (`new_raw !== last_raw`) independently. Projection
-functions are applied at render time on the client side. The practical effect:
-
-- The projection function passed to `use_observable/2` can safely close over
-  component-local state without needing the server to know about it.
-- All subscribers to the same server share one raw-state broadcast; there is no
-  per-projection diffing on the server.
+Filament sends raw state to subscribers and each subscriber's projection
+runs at render time. The component's projection can safely close over
+local state — closures are fresh on every render.
 
 ## Codemods (where automatable)
 

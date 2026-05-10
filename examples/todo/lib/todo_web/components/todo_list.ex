@@ -12,7 +12,12 @@ defmodule TodoWeb.Components.TodoList do
     prop(:title, :string, default: "Todo List")
 
     def render(%{title: title}) do
-      store = use_observable(fn -> Store.start_link([]) end)
+      source =
+        use_source(fn ->
+          {:ok, pid} = Store.start_link([])
+          Store.cell(pid)
+        end)
+
       {filter, set_filter} = use_state(:all)
       {clear_key, bump_clear} = use_state(0)
 
@@ -21,7 +26,7 @@ defmodule TodoWeb.Components.TodoList do
       # do (e.g. completing a todo while the Active filter is selected leaves
       # filtered, active_count, and all_completed all unchanged).
       {filtered, active_count, all_completed, any_todos} =
-        use_observable(store, fn
+        use_value(source, fn
           :disconnected ->
             {[], 0, false, false}
 
@@ -35,7 +40,7 @@ defmodule TodoWeb.Components.TodoList do
         end)
 
       on_submit = fn %{"text" => val} ->
-        if store && String.trim(val) != "", do: Store.add(store, val)
+        if String.trim(val) != "", do: Store.add(source.data, val)
         bump_clear.(clear_key + 1)
       end
 
@@ -61,15 +66,15 @@ defmodule TodoWeb.Components.TodoList do
               class="toggle-all"
               type="checkbox"
               checked={all_completed}
-              on_click={fn -> Store.toggle_all(store, !all_completed) end}
+              on_click={fn -> Store.toggle_all(source.data, !all_completed) end}
             />
             <ul class="todo-list">
               <TodoItem
                 :for={todo <- filtered}
                 :key={todo.id}
                 todo={todo}
-                on_toggle={fn -> Store.toggle(store, todo.id) end}
-                on_remove={fn -> Store.remove(store, todo.id) end}
+                on_toggle={fn -> Store.toggle(source.data, todo.id) end}
+                on_remove={fn -> Store.remove(source.data, todo.id) end}
               />
             </ul>
           </section>

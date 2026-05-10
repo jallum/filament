@@ -51,3 +51,30 @@ jobs:
 
       - name: Dialyzer
         run: mix dialyzer
+
+  examples:
+    name: Examples build standalone
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18"
+          otp-version: "27"
+
+      - name: Cache dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            deps
+            _build
+            examples/*/deps
+            examples/*/_build
+          key: ${{ runner.os }}-examples-${{ hashFiles('**/mix.lock', 'examples/*/mix.exs') }}
+          restore-keys: |
+            ${{ runner.os }}-examples-
+
+      - name: Build each example as a standalone Mix project
+        run: mix examples.compile
