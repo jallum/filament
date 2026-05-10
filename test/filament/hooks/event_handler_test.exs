@@ -271,7 +271,7 @@ defmodule Filament.Hooks.EventHandlerTest do
     %Phoenix.LiveView.Socket{
       assigns: %{
         _filament_tree: tree,
-        _filament_rendered: %Phoenix.LiveView.Rendered{},
+        _filament_rendered: {:safe, []},
         __changed__: %{}
       },
       private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}

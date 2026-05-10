@@ -3,7 +3,6 @@ defmodule Filament.VNodeCompilerTest do
 
   alias Filament.FiberTree
   alias Filament.Reconciler
-  alias Phoenix.HTML.Safe
 
   describe "assigns-free render" do
     test "render without assigns in scope compiles and renders correctly" do
@@ -26,7 +25,7 @@ defmodule Filament.VNodeCompilerTest do
       {_tree, rendered, _} =
         Reconciler.mount(AssignsFreeComp.AssignsFree, %{text: "hello", count: 3}, owner_pid: self())
 
-      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "hello"
       assert html =~ "3"
     end
@@ -268,7 +267,7 @@ defmodule Filament.VNodeCompilerTest do
       items = [%{id: "a", label: "Alpha"}, %{id: "b", label: "Beta"}]
       {tree1, rendered1, _} = Reconciler.mount(KeyedItemComp.KeyedList, %{items: items}, owner_pid: self())
 
-      html1 = rendered1 |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html1 = rendered1 |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html1 =~ "Alpha"
       assert html1 =~ "Beta"
 
@@ -284,7 +283,7 @@ defmodule Filament.VNodeCompilerTest do
       items2 = [%{id: "b", label: "Beta"}, %{id: "a", label: "Alpha"}]
       {tree2, rendered2, _} = Reconciler.update(tree1, "root", %{items: items2}, owner_pid: self())
 
-      html2 = rendered2 |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html2 = rendered2 |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html2 =~ "Beta"
       assert html2 =~ "Alpha"
 

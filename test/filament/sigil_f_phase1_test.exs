@@ -91,8 +91,8 @@ defmodule Filament.SigilFPhase1Test do
       {tree, rendered, _} =
         Filament.Reconciler.mount(EventHandlerComp.EventHandler, %{}, owner_pid: self())
 
-      assert %Rendered{} = rendered
-      assert is_function(rendered.dynamic)
+      assert {:rendered_struct, %Rendered{dynamic: dyn}} = rendered
+      assert is_function(dyn)
       assert Filament.FiberTree.get_event_handler(tree, "root", 0)
     end
 
@@ -110,7 +110,7 @@ defmodule Filament.SigilFPhase1Test do
         end
       end
 
-      {tree, rendered, _} = Filament.Reconciler.mount(OnChangeComp.OnChange, %{}, owner_pid: self())
+      {tree, {:rendered_struct, rendered}, _} = Filament.Reconciler.mount(OnChangeComp.OnChange, %{}, owner_pid: self())
       assert Enum.any?(rendered.static, &String.contains?(&1, "phx-change"))
       assert Filament.FiberTree.get_event_handler(tree, "root", 0)
     end
@@ -129,7 +129,7 @@ defmodule Filament.SigilFPhase1Test do
         end
       end
 
-      {tree, rendered, _} = Filament.Reconciler.mount(OnBlurComp.OnBlur, %{}, owner_pid: self())
+      {tree, {:rendered_struct, rendered}, _} = Filament.Reconciler.mount(OnBlurComp.OnBlur, %{}, owner_pid: self())
       assert Enum.any?(rendered.static, &String.contains?(&1, "phx-blur"))
       assert Filament.FiberTree.get_event_handler(tree, "root", 0)
     end
@@ -151,8 +151,8 @@ defmodule Filament.SigilFPhase1Test do
         end
       end
 
-      {tree, rendered, _} = Filament.Reconciler.mount(OnKeyComp.OnKey, %{}, owner_pid: self())
-      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+      {tree, {:rendered_struct, rendered}, _} = Filament.Reconciler.mount(OnKeyComp.OnKey, %{}, owner_pid: self())
+      html = rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
 
       assert html =~ ~s(phx-hook="FilamentKey"),
              "on_key must emit phx-hook=\"FilamentKey\""
@@ -211,7 +211,7 @@ defmodule Filament.SigilFPhase1Test do
         end
       end
 
-      {tree, rendered, _} = Filament.Reconciler.mount(OnKeydownComp.OnKeydown, %{}, owner_pid: self())
+      {tree, {:rendered_struct, rendered}, _} = Filament.Reconciler.mount(OnKeydownComp.OnKeydown, %{}, owner_pid: self())
       assert Enum.any?(rendered.static, &String.contains?(&1, "phx-keydown"))
       assert Filament.FiberTree.get_event_handler(tree, "root", 0)
     end

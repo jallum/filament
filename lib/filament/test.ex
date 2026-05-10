@@ -80,7 +80,7 @@ defmodule Filament.Test do
 
     tree = run_effects(tree, pending_effects)
 
-    html = rendered_to_string(rendered)
+    html = walked_to_string(rendered)
 
     view = %__MODULE__{
       component: component,
@@ -398,6 +398,18 @@ defmodule Filament.Test do
   defp part_to_iodata(list) when is_list(list), do: list
   defp part_to_iodata(other), do: HTMLEngine.encode_to_iodata!(other)
 
+  # Phase 1.2: Reconciler now returns a walked vnode tree (typically
+  # `{:rendered_struct, %Rendered{}}` for `~F` components). Unwrap and reuse
+  # the existing `rendered_to_string/1` machinery, or convert walked vnodes
+  # via `Filament.Web.to_iodata/1` for HTML extraction.
+  defp walked_to_string({:rendered_struct, %Rendered{} = r}), do: rendered_to_string(r)
+
+  defp walked_to_string(walked) when is_tuple(walked) do
+    walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
+  end
+
+  defp walked_to_string(%Rendered{} = r), do: rendered_to_string(r)
+
   # ── Event dispatch helpers ────────────────────────────────────────────────
 
   defp find_event_ref(html, selector, attr) do
@@ -500,7 +512,7 @@ defmodule Filament.Test do
       )
 
     new_tree = run_effects(new_tree, pending_effects)
-    html = rendered_to_string(new_rendered)
+    html = walked_to_string(new_rendered)
 
     %{view | fiber_tree: new_tree, rendered: new_rendered, rendered_html: html}
   end

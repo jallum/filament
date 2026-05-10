@@ -45,7 +45,7 @@ defmodule Filament.SigilFPhase2Test do
       """
 
       assert %Rendered{} = result
-      iodata = Safe.to_iodata(result)
+      iodata = Filament.Web.to_iodata(result)
       html = IO.iodata_to_binary(iodata)
       assert html =~ "key="
       assert html =~ "Item 1"
@@ -106,7 +106,7 @@ defmodule Filament.SigilFPhase2Test do
       </ul>
       """
 
-      html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = result |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "alpha"
       assert html =~ "beta"
     end
@@ -124,7 +124,7 @@ defmodule Filament.SigilFPhase2Test do
       </div>
       """
 
-      html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = result |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "visible"
     end
 
@@ -139,7 +139,7 @@ defmodule Filament.SigilFPhase2Test do
       </div>
       """
 
-      html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = result |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       refute html =~ "visible"
     end
 
@@ -156,7 +156,7 @@ defmodule Filament.SigilFPhase2Test do
       </div>
       """
 
-      html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = result |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "locked"
       refute html =~ "open"
     end
@@ -174,7 +174,7 @@ defmodule Filament.SigilFPhase2Test do
       </div>
       """
 
-      html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = result |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       refute html =~ "locked"
       assert html =~ "open"
     end
@@ -195,7 +195,7 @@ defmodule Filament.SigilFPhase2Test do
       </div>
       """
 
-      html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = result |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "only-a"
       refute html =~ "both"
     end

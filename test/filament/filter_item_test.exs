@@ -15,7 +15,7 @@ defmodule Filament.FilterItemTest do
       {_tree, rendered, _} =
         Reconciler.mount(FilterBar, %{filters: @filters, default: :all}, owner_pid: self())
 
-      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "All"
       assert html =~ "Active"
       assert html =~ "Done"
@@ -25,7 +25,7 @@ defmodule Filament.FilterItemTest do
       {_tree, rendered, _} =
         Reconciler.mount(FilterBar, %{filters: @filters, default: :active}, owner_pid: self())
 
-      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ ~s(class="selected")
     end
 

@@ -77,7 +77,7 @@ defmodule Filament.LiveViewTest do
       assert %Rendered{} = rendered
 
       # Convert to HTML and verify
-      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = rendered |> Phoenix.HTML.Safe.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "Counter: 5"
     end
 
@@ -87,7 +87,7 @@ defmodule Filament.LiveViewTest do
       {:ok, socket} = CounterLiveView.mount(%{}, %{}, socket)
 
       rendered = CounterLiveView.render(socket.assigns)
-      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
 
       refute html =~ ~r/filament:[a-z0-9_]+:\d+/
       refute html =~ ~r/_filament/
@@ -105,7 +105,7 @@ defmodule Filament.LiveViewTest do
       assert socket.assigns._filament_tree["root"]
 
       assert Map.has_key?(socket.assigns, :_filament_rendered)
-      assert %Rendered{} = socket.assigns._filament_rendered
+      assert {:safe, _} = socket.assigns._filament_rendered
 
       assert Map.has_key?(socket.assigns, :_filament_pending_effects)
       assert socket.assigns._filament_pending_effects == []
@@ -126,7 +126,7 @@ defmodule Filament.LiveViewTest do
         assigns: %{
           count: 0,
           _filament_tree: %{},
-          _filament_rendered: %Rendered{},
+          _filament_rendered: {:safe, []},
           __changed__: %{}
         },
         private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}
@@ -140,7 +140,7 @@ defmodule Filament.LiveViewTest do
         assigns: %{
           count: 0,
           _filament_tree: %{"root" => %{component: CounterComponent, props: %{count: 0}}},
-          _filament_rendered: %Rendered{},
+          _filament_rendered: {:safe, []},
           _filament_pending_effects: [],
           __changed__: %{}
         },
@@ -199,7 +199,7 @@ defmodule Filament.LiveViewTest do
 
       {:ok, socket} = StaticSubscribeLiveView.mount(%{}, %{}, socket)
 
-      rendered = socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+      rendered = socket.assigns._filament_rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert rendered =~ "42"
       refute rendered =~ "disconnected"
     end
@@ -210,7 +210,7 @@ defmodule Filament.LiveViewTest do
 
       {:ok, socket} = NoStaticSubscribeLiveView.mount(%{}, %{}, socket)
 
-      rendered = socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+      rendered = socket.assigns._filament_rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert rendered =~ "disconnected"
       refute rendered =~ "42"
     end
@@ -222,7 +222,7 @@ defmodule Filament.LiveViewTest do
         assigns: %{
           count: 0,
           _filament_tree: %{},
-          _filament_rendered: %Rendered{},
+          _filament_rendered: {:safe, []},
           __changed__: %{}
         },
         private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}
