@@ -39,22 +39,17 @@ defmodule Filament.VNodeCompiler do
     end)
   end
 
-  # Closure-stability memoisation is intentionally a no-op for now.
+  # Closure-identity stability is provided by BEAM at runtime — fn closures
+  # whose captures are structurally equal hash-cons to the same handle, so
+  # consecutive renders of the same component shape with the same captured
+  # values reuse the same fn objects across calls to `register_event_handler`.
+  # That covers both single `on_*` attrs and per-iteration closures inside
+  # `:for` comprehensions, with no explicit `memo_at` machinery required.
   #
-  # The naive approach — wrapping each `register_event_handler(fn)` call with
-  # `memo_at({:t, N}, deps, fn -> closure end)` — is correctness-broken for
-  # closures inside `:for` comprehensions: a single compile-time slot
-  # `{:t, N}` is reused for every iteration at runtime, so the cache stores
-  # only the LAST iteration's closure. On re-render, every iteration's
-  # cache-hit returns that one closure, and all three (or N) for-loop
-  # buttons end up wired to the wrong handler.
-  #
-  # The legacy `assign_and_emit` avoided this by detecting comprehensions in
-  # `do_walk` and wrapping the entire for-loop with a single memo (deps =
-  # outer-scope vars). Porting that to vnode IR is tracked as a follow-up
-  # ticket. Until then we accept the loss of closure-identity stability —
-  # behaviour is correct (each render produces fresh closures with the right
-  # captured vars; wire-ref slot indexing is monotonic and stable).
+  # The legacy `assign_and_emit`'s comprehension memo was an optimisation
+  # that turns out to be redundant under this property. Kept here as a hook
+  # for future passes (e.g. structural reactive-value memoisation) that
+  # might want to walk the vnode AST.
   @doc false
   @spec assign_memos_vnode(Macro.t(), [atom()]) :: Macro.t()
   def assign_memos_vnode(ast, _in_scope), do: ast
