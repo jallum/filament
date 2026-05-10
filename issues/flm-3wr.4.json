@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-10T09:00:37Z",
+  "description": "The substrate modules already live at Filament.* (Reconciler, Hooks, Fiber, FiberTree, RenderContext, VNode, Cell, Core, etc.). Web-specific surface lives at Filament.Web (to_iodata, to_rendered) and Filament.LiveView/LiveComponent/HTMLEngine. The split exists; it's just not enforced or documented.\n\nRather than churn through a rename for cosmetic effect (the parent epic's 'naming TBD' is settled by the existing names), this ticket:\n\n1. Adds a documentation section that explicitly lists which modules are substrate (target-agnostic) vs web-specific.\n2. Adds a compile-time sanity test that asserts substrate modules don't reference `Phoenix.LiveView.*` types or call `Phoenix.HTML.*` — fails CI if a future change accidentally pulls a Phoenix dep into Core.\n3. Updates the relevant guides (events, cells, getting-started) with a 'modules' section pointing at the boundary.\n\nNo module moves. The proof of the split is the OctoPi consumer's ability to import only the substrate modules.\n\n## Acceptance\n- New test asserts substrate-module BEAMs don't reference Phoenix.LiveView modules.\n- Documentation lists substrate vs web modules.\n- mix test green; mix credo --strict clean; mix dialyzer 0 errors.",
+  "id": "flm-3wr.4",
+  "labels": [],
+  "parent": "flm-3wr",
+  "priority": 1,
+  "status": "open",
+  "title": "Phase 4: Document Core/Web boundary; lock the substrate against Phoenix imports",
+  "type": "task",
+  "updated_at": "2026-05-10T09:00:37Z"
+}
