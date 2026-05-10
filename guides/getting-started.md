@@ -181,19 +181,20 @@ activates automatically whenever you use `on_key`.
 
 ## Composing components and keyed lists
 
-Child components are rendered with their module name as a tag in `~F` templates:
+Child components are rendered with their module name as a tag in `~F` templates.
+For lists, put `:for` and `:key` directly on the component tag:
 
 ```elixir
 ~F"""
 <section class="main">
   <ul class="todo-list">
-    {for todo <- filtered do}
-      <TodoItem
-        todo={todo}
-        on_toggle={fn -> Todo.Store.toggle(store, todo.id) end}
-        on_remove={fn -> Todo.Store.remove(store, todo.id) end}
-      />
-    {end}
+    <TodoItem
+      :for={todo <- filtered}
+      :key={todo.id}
+      todo={todo}
+      on_toggle={fn -> Todo.Store.toggle(store, todo.id) end}
+      on_remove={fn -> Todo.Store.remove(store, todo.id) end}
+    />
   </ul>
 </section>
 """
@@ -201,17 +202,12 @@ Child components are rendered with their module name as a tag in `~F` templates:
 
 - `<TodoItem prop={value} />` passes props to the child component exactly like
   HTML attributes.
-- Each iteration of the `for` loop creates a separate fiber tracked by position
-  (index). For lists that can be reordered or have items deleted, add a `:key`
-  attribute:
-
-  ```elixir
-  <TodoItem :key={todo.id} todo={todo} on_toggle={...} on_remove={...} />
-  ```
-
-  Without `:key`, Filament matches children by position; removing an item in
-  the middle shifts all subsequent fibers. With `:key={todo.id}`, Filament
-  matches by identity and cleanly unmounts only the removed item.
+- `:for` + `:key` on a component tag identifies each child fiber by its key
+  rather than by position, so reordering or removing an item only re-renders
+  the items that actually changed and preserves hook state on the rest.
+- A plain `{for ... do} ... {end}` block around component tags also works, but
+  matches children by index — fine for small static lists, not for anything
+  that can reorder or have items removed from the middle.
 
 ## Testing with Filament.Test
 

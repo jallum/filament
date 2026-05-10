@@ -54,14 +54,18 @@ defmodule Filament.VNodeCompiler do
     hoist_comprehension_handlers(stripped)
   end
 
-  # Walk the AST looking for comprehension entry tuples — {nil, var_map, entry_fn} —
-  # and hoist any register_event_handler(fn_expr) or TagEngine.component(...) calls
-  # out of the entry fn body to new variable bindings immediately before the fn.
-  # The fn closes over those vars.
+  # Walk the AST looking for comprehension entry tuples and hoist any
+  # register_event_handler(fn_expr) or TagEngine.component(...) calls out of the
+  # entry fn body to new variable bindings immediately before the fn. The fn
+  # closes over those vars.
   #
-  # This prevents PLV's diff engine from re-calling component renders or event
-  # registrations outside the Filament render context, which raises because there
-  # is no active render pass.
+  # PLV emits two entry-tuple shapes:
+  #   {nil, var_map, entry_fn}        — non-keyed comprehensions
+  #   {key_expr, var_map, entry_fn}   — keyed comprehensions (`:for` + `:key`)
+  #
+  # Both must be hoisted: PLV's diff engine re-calls entry fns outside the
+  # Filament render context, and any hook or component call left inside an entry
+  # fn body would crash there.
   #
   # Uses prewalk so that keyed for-loops (:for + :key on a component tag) are
   # visited before their bodies: when the generator carries keyed_comprehension: true
@@ -72,8 +76,8 @@ defmodule Filament.VNodeCompiler do
       {:for, for_meta, [{:<-, gen_meta, [_lhs, _rhs]} | _rest] = args} ->
         inject_key_into_for(for_meta, gen_meta, args)
 
-      {:{}, tuple_meta, [nil, map_expr, {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body]}]}] = entry_parts} ->
-        hoist_entry_tuple(tuple_meta, map_expr, fn_meta, arrow_meta, fn_args, fn_body, entry_parts)
+      {:{}, tuple_meta, [key, map_expr, {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body]}]}]} ->
+        hoist_entry_tuple(tuple_meta, key, map_expr, fn_meta, arrow_meta, fn_args, fn_body)
 
       other ->
         other
@@ -108,16 +112,16 @@ defmodule Filament.VNodeCompiler do
     end)
   end
 
-  defp hoist_entry_tuple(tuple_meta, map_expr, fn_meta, arrow_meta, fn_args, fn_body, entry_parts) do
+  defp hoist_entry_tuple(tuple_meta, key, map_expr, fn_meta, arrow_meta, fn_args, fn_body) do
     {fn_body1, reg_hoisted} = extract_reg_handlers(fn_body)
     {fn_body2, comp_hoisted} = extract_component_calls(fn_body1)
     all_hoisted = reg_hoisted ++ comp_hoisted
 
     if all_hoisted == [] do
-      {:{}, tuple_meta, entry_parts}
+      {:{}, tuple_meta, [key, map_expr, {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body]}]}]}
     else
       new_fn = {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body2]}]}
-      new_tuple = {:{}, tuple_meta, [nil, map_expr, new_fn]}
+      new_tuple = {:{}, tuple_meta, [key, map_expr, new_fn]}
       assigns = Enum.map(all_hoisted, fn {var, expr} -> {:=, [], [var, expr]} end)
       {:__block__, [], assigns ++ [new_tuple]}
     end

@@ -64,13 +64,13 @@ defmodule TodoWeb.Components.TodoList do
               on_click={fn -> Store.toggle_all(store, !all_completed) end}
             />
             <ul class="todo-list">
-              {for todo <- filtered do}
-                <TodoItem
-                  todo={todo}
-                  on_toggle={fn -> Store.toggle(store, todo.id) end}
-                  on_remove={fn -> Store.remove(store, todo.id) end}
-                />
-              {end}
+              <TodoItem
+                :for={todo <- filtered}
+                :key={todo.id}
+                todo={todo}
+                on_toggle={fn -> Store.toggle(store, todo.id) end}
+                on_remove={fn -> Store.remove(store, todo.id) end}
+              />
             </ul>
           </section>
 
