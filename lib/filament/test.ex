@@ -349,32 +349,11 @@ defmodule Filament.Test do
 
   @doc false
   def rendered_to_string(%Rendered{static: static, dynamic: dynamic}) do
-    old_ctx = Process.get(:filament_render_context)
-
-    # Set up a minimal context so register_event_handler works during string
-    # conversion. The handlers registered here are dummies; the wire refs
-    # produced will match the real handlers because both sequences start at 0.
-    Process.put(:filament_render_context, %Filament.RenderContext{
-      fiber_id: "root",
-      fiber_tree: %{},
-      hook_index: 0,
-      new_hook_slots: %{},
-      pending_effects: [],
-      event_handler_index: 0,
-      new_event_handlers: %{},
-      owner_pid: nil
-    })
-
-    try do
-      parts = dynamic.(false)
-      static |> interleave(parts) |> IO.iodata_to_binary()
-    after
-      if old_ctx do
-        Process.put(:filament_render_context, old_ctx)
-      else
-        Process.delete(:filament_render_context)
-      end
-    end
+    # Walk the static/dynamic split into iodata. Event-handler registration
+    # was already done at render time (Filament.Web.to_rendered bakes wire
+    # refs into the static list), so no render-context shim is needed here.
+    parts = dynamic.(false)
+    static |> interleave(parts) |> IO.iodata_to_binary()
   end
 
   defp interleave([s | statics], [d | dynamics]) do

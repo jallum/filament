@@ -283,6 +283,12 @@ defmodule Filament.LiveView do
   end
 
   defp invoke_2arity_handler(fun, params, socket, wire_ref) when is_function(fun, 2) do
+    # The 2-arity handler form needs a `push/2` fn that closes over the LV
+    # socket. We thread the socket through the process dictionary so each
+    # push.(event, payload) accumulates into the same socket; the final
+    # value is what we return. try/after ensures the pdict slot is cleared
+    # even if the handler raises — otherwise the entry would leak until
+    # the LV process dies.
     key = {__MODULE__, :push_socket, make_ref()}
     Process.put(key, socket)
 
@@ -292,8 +298,12 @@ defmodule Filament.LiveView do
       :ok
     end
 
-    fun.(params, push)
-    {:noreply, Process.delete(key)}
+    try do
+      fun.(params, push)
+      {:noreply, Process.get(key)}
+    after
+      Process.delete(key)
+    end
   end
 
   @doc false
