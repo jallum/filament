@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "flm-xbb.2",
@@ -11,8 +11,8 @@
   "labels": [],
   "parent": "flm-xbb",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Wire :cell_update into LiveView and LiveComponent",
   "type": "task",
-  "updated_at": "2026-05-10T10:55:47Z"
+  "updated_at": "2026-05-10T10:56:46Z"
 }
