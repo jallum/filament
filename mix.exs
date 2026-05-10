@@ -77,6 +77,7 @@ defmodule Filament.MixProject do
         "guides/getting-started.md",
         "guides/observables.md",
         "guides/cells.md",
+        "guides/events.md",
         "guides/hooks.md",
         "guides/testing.md",
         "guides/migration-guide.md"
@@ -86,6 +87,7 @@ defmodule Filament.MixProject do
         Hooks: [Filament.Hooks],
         Observables: [Filament.Observable, Filament.Observable.GenServer],
         Cells: [Filament.Cell],
+        Core: [Filament.Core],
         LiveView: [Filament.LiveView]
       ]
     ]
