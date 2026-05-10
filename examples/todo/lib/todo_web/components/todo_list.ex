@@ -15,7 +15,7 @@ defmodule TodoWeb.Components.TodoList do
       source =
         use_source(fn ->
           {:ok, pid} = Store.start_link([])
-          {Filament.Observable.GenServer, pid}
+          Store.cell(pid)
         end)
 
       store =

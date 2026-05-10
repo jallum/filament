@@ -19,9 +19,7 @@ defmodule Filament.Hooks do
   from the same source:
 
       def render(%{session_id: session_id}) do
-        source = use_source(fn ->
-          {Filament.Observable.GenServer, MyServer.start_link(session_id)}
-        end)
+        source = use_source(fn -> MyServer.cell(session_id) end)
 
         count = use_value(source, fn
           :disconnected -> 0
@@ -197,9 +195,7 @@ defmodule Filament.Hooks do
   own projections via `use_value/2`.
 
       # Parent
-      source = use_source(fn ->
-        {Filament.Observable.GenServer, CartServer.ensure_started(session_id)}
-      end)
+      source = use_source(fn -> CartServer.cell(session_id) end)
 
       <Child source={source} />
 
@@ -271,7 +267,7 @@ defmodule Filament.Hooks do
       end
 
       def render(%{counter: counter}) do
-        source = {Filament.Observable.GenServer, counter}
+        source = Counter.cell(counter)
 
         count =
           use_value(source, fn

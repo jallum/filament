@@ -11,6 +11,12 @@ defmodule Cart.Server do
     end
   end
 
+  # Override the default cell/1 from `use Filament.Observable.GenServer`
+  # so components can pass a session id directly.
+  def cell(session_id) when is_binary(session_id) do
+    {Filament.Observable.GenServer, ensure_started(session_id)}
+  end
+
   # Public API
   def start_link(opts \\ []) do
     {name, _} = Keyword.pop(opts, :name, nil)

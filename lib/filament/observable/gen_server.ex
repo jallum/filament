@@ -86,6 +86,29 @@ defmodule Filament.Observable.GenServer do
 
       defoverridable handle_subscribe: 2, handle_unsubscribe: 2
 
+      # ── Cell constructor ────────────────────────────────────────────────
+
+      @doc """
+      Build a `Filament.Cell` tuple for this server.
+
+      Pass the server reference (pid, registered name, or `{:via, ...}`) and
+      get back the `{transport, data}` tuple Filament's hook layer expects.
+      The transport module is always `Filament.Observable.GenServer` —
+      saves application code from typing it at every call site.
+
+          source = use_source(fn -> __MODULE__.cell(server) end)
+
+      Override if you want a different default (e.g. ensure-started lookup):
+
+          def cell(session_id) do
+            {Filament.Observable.GenServer, ensure_started(session_id)}
+          end
+      """
+      @spec cell(term()) :: Filament.Cell.t()
+      def cell(server), do: {Filament.Observable.GenServer, server}
+
+      defoverridable cell: 1
+
       # ── Injected GenServer message handlers ──────────────────────────────
 
       @impl true

@@ -8,7 +8,7 @@ defmodule CollaborationWeb.Components.DocumentEditor do
     prop(:doc_id, :string, required: true)
 
     def render(%{doc_id: doc_id}) do
-      source = use_source({Filament.Observable.GenServer, DocumentServer.via_registry(doc_id)})
+      source = use_source(DocumentServer.cell(doc_id))
 
       server = DocumentServer.via_registry(doc_id)
 

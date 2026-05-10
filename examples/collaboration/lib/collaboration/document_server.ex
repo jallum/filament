@@ -119,4 +119,10 @@ defmodule Collaboration.DocumentServer do
   def via_registry(doc_id) do
     {:via, Registry, {Collaboration.Registry, doc_id}}
   end
+
+  # Override the default cell/1 from `use Filament.Observable.GenServer`
+  # so components can pass a doc_id directly.
+  def cell(doc_id) when is_binary(doc_id) do
+    {Filament.Observable.GenServer, via_registry(doc_id)}
+  end
 end
