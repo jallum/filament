@@ -6,14 +6,15 @@
   "blocks": [
     "flm-3wr.1.4.7"
   ],
+  "closed_at": "2026-05-10T02:52:53Z",
   "created": "2026-05-10T02:28:26Z",
   "description": "Adapt the keyed-comprehension hoister for vnode-emitting bodies. Today's hoister rewrites {key, var_map, entry_fn} PLV.Comprehension shapes; under vnode IR the entry fn just returns a vnode tuple, so the hoister gets simpler — but the substantive job (move register_event_handler / nested component calls out of the lazy entry fn into the surrounding for-body) still applies.\n\nNon-keyed :for emits {:fragment, [...children]}; keyed :for+:key on a component emits a list of {:component, mod, props, key} tuples wrapped in {:fragment, ...}.\n\n## Files\n- lib/filament/vnode_engine.ex\n- lib/filament/vnode_compiler.ex (hoist_comprehension_handlers, inject_key_into_for, rewrite_component_calls_to_keyed)\n\n## Acceptance\n- {for x \u003c- xs do}\u003cItem .../\u003e{end} emits {:fragment, [{:component, Item, %{}, nil}, ...]}.\n- :for + :key emits the same with stable key fields.\n- Re-render with reordered list preserves fiber identity by key (existing keyed-comprehension reconciler tests pass).",
   "id": "flm-3wr.1.4.3",
   "labels": [],
   "parent": "flm-3wr.1.4",
   "priority": 1,
-  "status": "open",
+  "status": "closed",
   "title": "Phase 1.4.3: :for and :for+:key comprehensions emit fragment/keyed-list vnodes",
   "type": "task",
-  "updated_at": "2026-05-10T02:28:27Z"
+  "updated_at": "2026-05-10T02:52:53Z"
 }
