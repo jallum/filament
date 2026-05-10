@@ -327,44 +327,50 @@ defmodule Filament.LiveView do
     end
   end
 
-  @doc false
-  def handle_set_state(tree, fiber_id, slot_index, new_value, socket, rerender_fn) do
+  # ── Pure tree mutations (shared between LiveView and LiveComponent) ──────
+
+  @doc """
+  Apply a `:filament_set_state` message to the fiber tree without rendering.
+
+  Returns `{:ok, new_tree, fiber_id}` on success or `:ignore` if the target
+  fiber no longer exists. Caller decides which fiber to re-render from.
+  """
+  @spec apply_set_state(map(), String.t(), non_neg_integer(), term()) ::
+          {:ok, map(), String.t()} | :ignore
+  def apply_set_state(tree, fiber_id, slot_index, new_value) do
     case Map.get(tree, fiber_id) do
       nil ->
-        {:noreply, socket}
+        :ignore
 
       fiber ->
         existing = Map.get(fiber.hook_slots, slot_index, {nil, nil})
         setter = elem(existing, 1)
         new_slots = Map.put(fiber.hook_slots, slot_index, {new_value, setter})
-        tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-        {:noreply, rerender_fn.(socket, tree)}
+        {:ok, Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots}), fiber_id}
     end
   end
 
-  @doc false
-  def handle_cell_update(tree, subscriber, value, socket, rerender_fn) do
-    case subscriber do
-      {_owner_pid, fiber_id, slot_index} ->
-        apply_cell_update(tree, fiber_id, slot_index, value, socket, rerender_fn)
+  @doc """
+  Apply a `:cell_update` message to the fiber tree without rendering.
 
-      _ ->
-        {:noreply, socket}
-    end
-  end
-
-  defp apply_cell_update(tree, fiber_id, slot_index, value, socket, rerender_fn) do
+  Returns `{:ok, new_tree, fiber_id}` on success or `:ignore` if the
+  subscriber tuple is malformed or the target fiber no longer exists.
+  """
+  @spec apply_cell_update(map(), term(), term()) ::
+          {:ok, map(), String.t()} | :ignore
+  def apply_cell_update(tree, {_owner_pid, fiber_id, slot_index}, value) do
     case Map.get(tree, fiber_id) do
       nil ->
-        {:noreply, socket}
+        :ignore
 
       fiber ->
         new_slot = build_cell_slot(fiber.hook_slots, slot_index, value)
         new_slots = Map.put(fiber.hook_slots, slot_index, new_slot)
-        new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-        {:noreply, rerender_fn.(socket, new_tree)}
+        {:ok, Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots}), fiber_id}
     end
   end
+
+  def apply_cell_update(_tree, _subscriber, _value), do: :ignore
 
   defp build_cell_slot(hook_slots, slot_index, value) do
     case Map.get(hook_slots, slot_index) do
@@ -373,22 +379,51 @@ defmodule Filament.LiveView do
     end
   end
 
+  @doc """
+  Apply a `:cell_resubscribe` message to the fiber tree without rendering.
+
+  Marks the slot `:needs_resubscribe` so the next render fetches a fresh
+  value. Returns `{:ok, new_tree, fiber_id}` on success or `:ignore` if
+  the subscriber tuple is malformed or the target fiber no longer exists.
+  """
+  @spec apply_cell_resubscribe(map(), term()) ::
+          {:ok, map(), String.t()} | :ignore
+  def apply_cell_resubscribe(tree, {_owner_pid, fiber_id, slot_index}) do
+    case Map.get(tree, fiber_id) do
+      nil ->
+        :ignore
+
+      fiber ->
+        new_slots = Map.put(fiber.hook_slots, slot_index, :needs_resubscribe)
+        {:ok, Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots}), fiber_id}
+    end
+  end
+
+  def apply_cell_resubscribe(_tree, _subscriber), do: :ignore
+
+  # ── LiveView-shaped wrappers ─────────────────────────────────────────────
+
+  @doc false
+  def handle_set_state(tree, fiber_id, slot_index, new_value, socket, rerender_fn) do
+    case apply_set_state(tree, fiber_id, slot_index, new_value) do
+      {:ok, new_tree, _fid} -> {:noreply, rerender_fn.(socket, new_tree)}
+      :ignore -> {:noreply, socket}
+    end
+  end
+
+  @doc false
+  def handle_cell_update(tree, subscriber, value, socket, rerender_fn) do
+    case apply_cell_update(tree, subscriber, value) do
+      {:ok, new_tree, _fid} -> {:noreply, rerender_fn.(socket, new_tree)}
+      :ignore -> {:noreply, socket}
+    end
+  end
+
   @doc false
   def handle_cell_resubscribe(tree, subscriber, socket, rerender_fn) do
-    case subscriber do
-      {_owner_pid, fiber_id, slot_index} ->
-        case Map.get(tree, fiber_id) do
-          nil ->
-            {:noreply, socket}
-
-          fiber ->
-            new_slots = Map.put(fiber.hook_slots, slot_index, :needs_resubscribe)
-            new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-            {:noreply, rerender_fn.(socket, new_tree)}
-        end
-
-      _ ->
-        {:noreply, socket}
+    case apply_cell_resubscribe(tree, subscriber) do
+      {:ok, new_tree, _fid} -> {:noreply, rerender_fn.(socket, new_tree)}
+      :ignore -> {:noreply, socket}
     end
   end
 end
