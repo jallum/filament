@@ -142,61 +142,31 @@ defmodule Filament.LiveComponent do
 
   # ── Private ─────────────────────────────────────────────────────────────────
 
-  defp process_filament_msg({:filament_set_state, fiber_id, slot_index, new_value}, tree, owner_pid) do
-    case Map.get(tree, fiber_id) do
-      nil ->
-        :ignore
-
-      fiber ->
-        existing = Map.get(fiber.hook_slots, slot_index, {nil, nil})
-        setter = elem(existing, 1)
-        new_slots = Map.put(fiber.hook_slots, slot_index, {new_value, setter})
-        new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-
-        {new_tree, rendered, pending_effects} =
-          Reconciler.update(new_tree, fiber_id, fiber.props, owner_pid: owner_pid)
-
-        {:ok, new_tree, rendered, pending_effects}
-    end
+  defp process_filament_msg({:filament_set_state, fid, slot, val}, tree, owner_pid) do
+    tree |> Filament.LiveView.apply_set_state(fid, slot, val) |> render_after_apply(tree, owner_pid)
   end
 
-  defp process_filament_msg({:cell_update, {_owner_pid, fiber_id, slot_index}, value}, tree, owner_pid) do
-    case Map.get(tree, fiber_id) do
-      nil ->
-        :ignore
-
-      fiber ->
-        new_slot =
-          case Map.get(fiber.hook_slots, slot_index) do
-            {:cell_subscribed, cell, _} -> {:cell_subscribed, cell, value}
-            _ -> {:cell_subscribed, nil, value}
-          end
-
-        new_slots = Map.put(fiber.hook_slots, slot_index, new_slot)
-        new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-
-        {final_tree, rendered, pending_effects} =
-          Reconciler.update(new_tree, fiber_id, fiber.props, owner_pid: owner_pid)
-
-        {:ok, final_tree, rendered, pending_effects}
-    end
+  defp process_filament_msg({:cell_update, sub, val}, tree, owner_pid) do
+    tree |> Filament.LiveView.apply_cell_update(sub, val) |> render_after_apply(tree, owner_pid)
   end
 
-  defp process_filament_msg({:cell_resubscribe, {_owner_pid, fiber_id, slot_index}}, tree, owner_pid) do
-    case Map.get(tree, fiber_id) do
-      nil ->
-        :ignore
-
-      fiber ->
-        new_slots = Map.put(fiber.hook_slots, slot_index, :needs_resubscribe)
-        new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-
-        {final_tree, rendered, pending_effects} =
-          Reconciler.update(new_tree, fiber_id, fiber.props, owner_pid: owner_pid)
-
-        {:ok, final_tree, rendered, pending_effects}
-    end
+  defp process_filament_msg({:cell_resubscribe, sub}, tree, owner_pid) do
+    tree |> Filament.LiveView.apply_cell_resubscribe(sub) |> render_after_apply(tree, owner_pid)
   end
 
   defp process_filament_msg(_unknown, _tree, _owner_pid), do: :ignore
+
+  # Re-render from the fiber that owns the slot. The LiveView adapter always
+  # re-renders from "root"; LiveComponent only owns the embedded subtree, so
+  # rendering from the affected fiber keeps the work scoped.
+  defp render_after_apply({:ok, new_tree, fiber_id}, _orig_tree, owner_pid) do
+    fiber = Map.fetch!(new_tree, fiber_id)
+
+    {final_tree, rendered, pending_effects} =
+      Reconciler.update(new_tree, fiber_id, fiber.props, owner_pid: owner_pid)
+
+    {:ok, final_tree, rendered, pending_effects}
+  end
+
+  defp render_after_apply(:ignore, _orig_tree, _owner_pid), do: :ignore
 end
