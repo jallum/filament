@@ -3,7 +3,9 @@
   "blocked_by": [
     "flm-xbb.4"
   ],
-  "blocks": [],
+  "blocks": [
+    "flm-xbb.7"
+  ],
   "created": "2026-05-10T10:55:46Z",
   "description": "`use_observable/1` (hooks.ex ~213) takes a server reference or a 0-arity factory fn and returns the resolved pid (or `nil` when disconnected). Cell needs the equivalent so example components can keep doing:\n\n    server = use_observable(fn -\u003e CartServer.ensure_started(session_id) end)\n    count  = use_observable(server, fn ... end)\n\n…but with cells:\n\n    cell  = use_cell(fn -\u003e {Filament.Observable.GenServer, CartServer.ensure_started(session_id)} end)\n    count = use_cell(cell, fn ... end)\n\nDecide whether `use_cell/1` resolves a factory or wraps a value, and whether `:disconnected` flows through naturally. Add coverage for the factory + lazy-start case (CartServer pattern in `examples/cart/lib/cart_web/components/cart.ex`).",
   "id": "flm-xbb.6",
