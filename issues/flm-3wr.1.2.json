@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-10T01:40:02Z",
+  "description": "Change `Filament.Renderer.render/3`'s tuple return: replace `Phoenix.LiveView.Rendered.t()` with the vnode tree (shape settled in flm-3wr.1.1). Update `Filament.Reconciler.mount/3` and `Reconciler.update/4` signatures and return values to thread the vnode tree through.\n\nSubstrate callers updated. Web side (`Filament.LiveView`) gets a transitional shim — converts vnode tree to `%Rendered{}` via the existing path so behavior is preserved until flm-3wr.1.4 lands.\n\n## Files\n\n- `lib/filament/renderer.ex`\n- `lib/filament/reconciler.ex`\n- `lib/filament/live_view.ex` (transitional shim)\n- Reconciler tests adjusted to assert on vnode-tree shape.\n\n## Acceptance\n\n- `Filament.Renderer.render/3` and `Filament.Reconciler.mount/3` / `update/4` no longer mention `Phoenix.LiveView.Rendered` in their return types.\n- `mix test` passes.\n- Transitional shim is clearly marked (TODO/comment) so 1.5 can remove it.",
+  "id": "flm-3wr.1.2",
+  "labels": [],
+  "parent": "flm-3wr.1",
+  "priority": 1,
+  "status": "open",
+  "title": "Phase 1.2: Renderer + Reconciler return vnode tree",
+  "type": "task",
+  "updated_at": "2026-05-10T01:40:02Z"
+}
