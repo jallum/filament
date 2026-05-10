@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "flm-xbb.2"
+  ],
   "created": "2026-05-10T10:55:46Z",
   "description": "Add a `handle_info({:cell_update, subscriber, projected}, socket)` clause inside the `use Filament.LiveView` macro injection (`lib/filament/live_view.ex` near the existing `:filament_observable_updates` clause around line 206) and the matching path in `lib/filament/live_component.ex`'s `process_filament_msg/3` (current clauses at ~145/163/186, catch-all at ~202).\n\nDecode subscriber tuple `{owner_pid, fiber_id, slot_index}` (the shape that `Filament.Hooks.cell_subscribe_fresh/3` passes to `Filament.Cell.subscribe`, hooks.ex:416). Look up the fiber slot, write `{:cell_subscribed, projected}`, and trigger a re-render via the same path the `:filament_observable_updates` handler uses today.\n\nAdd a LV-level integration test that proves a real `use_cell` subscription flows end-to-end through the LV process (the existing `test/filament/hooks/use_cell_test.exs` only asserts message delivery to a test pid).\n\nDone when: a component using `use_cell` re-renders on observable change in a Phoenix.LiveViewTest scenario.",
   "id": "flm-xbb.1",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Wire :cell_update into LiveView and LiveComponent",
   "type": "task",
-  "updated_at": "2026-05-10T10:55:46Z"
+  "updated_at": "2026-05-10T10:55:47Z"
 }
