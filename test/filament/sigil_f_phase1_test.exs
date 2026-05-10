@@ -1,8 +1,6 @@
 defmodule Filament.SigilFPhase1Test do
   use ExUnit.Case, async: true
 
-  import Filament.SigilF
-
   alias Filament.FiberTree
   alias Filament.Reconciler
 

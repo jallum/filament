@@ -4,7 +4,6 @@ defmodule Filament.RendererTest do
   alias Filament.Fiber
   alias Filament.RenderContext
   alias Filament.Renderer
-  alias Phoenix.LiveView.Rendered
 
   defmodule SimpleItem do
     @moduledoc false

@@ -46,8 +46,6 @@ defmodule Filament.Renderer do
         pending_effects: [],
         event_handler_index: 0,
         new_event_handlers: %{},
-      capture_handler_index: 0,
-      new_capture_handlers: %{},
         capture_handler_index: 0,
         new_capture_handlers: %{},
         hook_slots: hook_slots
