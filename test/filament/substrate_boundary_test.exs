@@ -31,6 +31,7 @@ defmodule Filament.SubstrateBoundaryTest do
     Filament.Defcomponent,
     Filament.Fiber,
     Filament.FiberTree,
+    Filament.HookSlot,
     Filament.Hooks,
     Filament.KeyModifiers,
     Filament.Observable,
