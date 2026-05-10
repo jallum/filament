@@ -4,14 +4,15 @@
   "blocks": [
     "flm-3wr.1.5.2"
   ],
+  "closed_at": "2026-05-10T04:27:45Z",
   "created": "2026-05-10T04:22:59Z",
   "description": "Restore closure-identity stability for event handlers inside :for comprehensions, regressed by 1.4.7's drop-of-memo workaround.\n\nThe legacy do_walk in assign_and_emit detected for-loops containing register_event_handler and wrapped the entire for-loop with memo_at keyed on outer-scope vars. Cache hit replays the registered handler range from previous fiber state, returning the cached list of vnode tree fragments. Closure identity stays stable when outer-scope deps don't change; new closures only mint when deps change.\n\nPort that to vnode IR.\n\n## Files\n- lib/filament/vnode_compiler.ex (assign_memos_vnode → comprehension-aware walker)\n\n## TDD\n1. Re-enable the closure-identity test in test/filament/vnode_engine_memo_test.exs.\n2. Add a 'closures rebuild when items prop changes' test.\n3. Add a 'per-iteration capture is correct' regression test for the bug found in 1.5 Chrome validation.\n\n## Acceptance\n- Re-enabled closure-identity test passes.\n- Cart example: clicking different products adds correct items across multiple re-renders (no regression of the 1.5 bug).\n- 380+ tests green.",
   "id": "flm-3wr.1.5.1",
   "labels": [],
   "parent": "flm-3wr.1.5",
   "priority": 1,
-  "status": "open",
+  "status": "closed",
   "title": "Phase 1.5.1: Comprehension-aware closure memoisation for vnode IR",
   "type": "task",
-  "updated_at": "2026-05-10T04:22:59Z"
+  "updated_at": "2026-05-10T04:27:45Z"
 }
