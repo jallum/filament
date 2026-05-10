@@ -3,7 +3,6 @@ defmodule Filament.VNodeEngineTest do
   Tests for the vnode-emitting subengine. The subengine is plugged into
   `Filament.TagEngine.compile/2` via `subengine: Filament.VNodeEngine` and
   receives the tag/text/expr events TagEngine emits during template compilation.
-
   Phase 1.4.1 scope: text leaves, expression interpolation, plain HTML
   elements with attrs (literal + expression + boolean), void elements, and
   nesting. Components, comprehensions, conditionals, and slots are out of
@@ -12,7 +11,6 @@ defmodule Filament.VNodeEngineTest do
   use ExUnit.Case, async: true
 
   alias Filament.TagEngine
-
   # Compile a `~F`-style template source through VNodeEngine and return the
   # quoted AST. Tests then bind expression-side variables and evaluate the AST.
   defp compile(source, env \\ __ENV__) do
@@ -21,7 +19,6 @@ defmodule Filament.VNodeEngineTest do
       file: env.file,
       line: env.line,
       indentation: 0,
-      subengine: Filament.VNodeEngine,
       tag_handler: Filament.HTMLEngine
     )
   end
@@ -73,6 +70,7 @@ defmodule Filament.VNodeEngineTest do
 
     test "element with multiple attributes" do
       ast = compile(~s(<div id="a" class={c}>x</div>))
+
       assert eval(ast, c: "y") ==
                {:element, "div", [{"id", "a"}, {"class", "y"}], [{:text, "x"}]}
     end
@@ -102,8 +100,7 @@ defmodule Filament.VNodeEngineTest do
       ast = compile("<a><b><c>{v}</c></b></a>")
 
       assert eval(ast, v: "deep") ==
-               {:element, "a", [],
-                [{:element, "b", [], [{:element, "c", [], ["deep"]}]}]}
+               {:element, "a", [], [{:element, "b", [], [{:element, "c", [], ["deep"]}]}]}
     end
 
     test "siblings inside an element preserve order" do
@@ -133,12 +130,10 @@ defmodule Filament.VNodeEngineTest do
     test "vnode tree round-trips through walk_vnode + Web.to_iodata" do
       ast = compile(~s(<div class={c}>hello {name}</div>))
       vnode = eval(ast, c: "greeting", name: "world")
-
       ctx = %RenderContext{fiber_id: "root", fiber_tree: %{}, new_fibers: %{}, pending_effects: []}
       Process.put(:filament_render_context, ctx)
       walked = Renderer.walk_vnode(vnode, ctx)
       Process.delete(:filament_render_context)
-
       html = walked |> Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ ~s(<div class="greeting">)
       assert html =~ "hello "

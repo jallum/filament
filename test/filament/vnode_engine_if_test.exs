@@ -5,7 +5,6 @@ defmodule Filament.VNodeEngineIfTest do
   `if` that returns a vnode (or `nil`) at runtime. The substrate walker
   and web converter both treat `nil` as "no content" so a false branch
   produces empty HTML cleanly.
-
   Slots are out of scope here: components with inner content stay on the
   legacy text path. They're tracked separately if real example apps end
   up needing them.
@@ -33,7 +32,6 @@ defmodule Filament.VNodeEngineIfTest do
       file: env.file,
       line: env.line,
       indentation: 0,
-      subengine: Filament.VNodeEngine,
       tag_handler: Filament.HTMLEngine
     )
   end
@@ -57,12 +55,10 @@ defmodule Filament.VNodeEngineIfTest do
     test "nil child gets dropped by walker + web converter" do
       ast = compile("<ul><li :if={show}>x</li></ul>")
       vnode = eval(ast, show: false)
-
       ctx = %RenderContext{fiber_id: "root", fiber_tree: %{}, new_fibers: %{}, pending_effects: []}
       Process.put(:filament_render_context, ctx)
       walked = Renderer.walk_vnode(vnode, ctx)
       Process.delete(:filament_render_context)
-
       html = walked |> Web.to_iodata() |> IO.iodata_to_binary()
       assert html == "<ul></ul>"
     end
@@ -71,18 +67,14 @@ defmodule Filament.VNodeEngineIfTest do
   describe ":if on a component" do
     test "true branch returns the component vnode" do
       ast =
-        compile(
-          "<Filament.VNodeEngineIfTest.Item.Item :if={visible} label={l}/>"
-        )
+        compile("<Filament.VNodeEngineIfTest.Item.Item :if={visible} label={l}/>")
 
       assert eval(ast, visible: true, l: "x") == {:component, Item.Item, %{label: "x"}, nil}
     end
 
     test "false branch returns nil" do
       ast =
-        compile(
-          "<Filament.VNodeEngineIfTest.Item.Item :if={visible} label={l}/>"
-        )
+        compile("<Filament.VNodeEngineIfTest.Item.Item :if={visible} label={l}/>")
 
       assert eval(ast, visible: false, l: "x") == nil
     end

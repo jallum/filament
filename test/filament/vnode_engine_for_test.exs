@@ -3,9 +3,7 @@ defmodule Filament.VNodeEngineForTest do
   Phase 1.4.3: `:for` and `:for`+`:key` comprehensions emit fragments of
   vnodes (or keyed components) instead of `Phoenix.LiveView.Comprehension`
   structs.
-
   Two surfaces:
-
     1. `:for` attribute on a tag/component — `<Item :for={x <- xs} ... />` and
        optional `:key={k}`.
     2. JSX-block `{for x <- xs do} ... {end}` wrapping a body that may itself
@@ -34,7 +32,6 @@ defmodule Filament.VNodeEngineForTest do
       file: env.file,
       line: env.line,
       indentation: 0,
-      subengine: Filament.VNodeEngine,
       tag_handler: Filament.HTMLEngine
     )
   end
@@ -47,7 +44,6 @@ defmodule Filament.VNodeEngineForTest do
   describe ":for on a self-close component (no :key)" do
     test "produces a fragment of components, one per iteration" do
       ast = compile("<Filament.VNodeEngineForTest.Item.Item :for={x <- xs} label={x}/>")
-
       result = eval(ast, xs: ["a", "b", "c"])
 
       assert result ==
@@ -68,9 +64,7 @@ defmodule Filament.VNodeEngineForTest do
   describe ":for + :key on a self-close component" do
     test "produces a fragment of keyed components" do
       ast =
-        compile(
-          "<Filament.VNodeEngineForTest.Item.Item :for={t <- todos} :key={t.id} label={t.label}/>"
-        )
+        compile("<Filament.VNodeEngineForTest.Item.Item :for={t <- todos} :key={t.id} label={t.label}/>")
 
       result =
         eval(ast,
@@ -89,7 +83,6 @@ defmodule Filament.VNodeEngineForTest do
   describe "JSX-block {for x <- xs do} ... {end}" do
     test "wraps body output in a fragment" do
       ast = compile("{for x <- xs do}<span>{x}</span>{end}")
-
       result = eval(ast, xs: ["a", "b"])
 
       assert result ==
@@ -102,7 +95,6 @@ defmodule Filament.VNodeEngineForTest do
 
     test "loop inside an enclosing element" do
       ast = compile("<ul>{for x <- xs do}<li>{x}</li>{end}</ul>")
-
       result = eval(ast, xs: ["a", "b"])
 
       assert result ==
@@ -120,13 +112,10 @@ defmodule Filament.VNodeEngineForTest do
   describe "round-trip through walker preserves keyed reconciliation" do
     test "keyed components get fiber ids by key, stable across reorder" do
       ast =
-        compile(
-          "<Filament.VNodeEngineForTest.Item.Item :for={t <- todos} :key={t.id} label={t.label}/>"
-        )
+        compile("<Filament.VNodeEngineForTest.Item.Item :for={t <- todos} :key={t.id} label={t.label}/>")
 
       todos = [%{id: "a", label: "Alpha"}, %{id: "b", label: "Beta"}]
       vnode = eval(ast, todos: todos)
-
       root_fiber = Fiber.new(id: "root", component: __MODULE__)
 
       ctx = %RenderContext{
@@ -140,7 +129,6 @@ defmodule Filament.VNodeEngineForTest do
       _walked = Renderer.walk_vnode(vnode, ctx)
       final_ctx = Process.get(:filament_render_context)
       Process.delete(:filament_render_context)
-
       child_a = Fiber.child_id(root_fiber, Item.Item, {:key, "a"})
       child_b = Fiber.child_id(root_fiber, Item.Item, {:key, "b"})
       assert Map.has_key?(final_ctx.new_fibers, child_a)
