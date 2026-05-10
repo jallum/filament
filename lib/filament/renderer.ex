@@ -19,7 +19,7 @@ defmodule Filament.Renderer do
   """
   @spec render(module(), map(), RenderContext.t()) ::
           {term(), %{non_neg_integer() => term()}, list(), %{String.t() => Fiber.t()},
-           %{non_neg_integer() => function()}}
+           %{non_neg_integer() => function()}, %{non_neg_integer() => function()}}
   def render(component_module, props, %RenderContext{} = context) do
     # Apply prop defaults for any props not supplied.
     # Code.ensure_loaded is required because function_exported?/3 returns false
@@ -46,6 +46,10 @@ defmodule Filament.Renderer do
         pending_effects: [],
         event_handler_index: 0,
         new_event_handlers: %{},
+      capture_handler_index: 0,
+      new_capture_handlers: %{},
+        capture_handler_index: 0,
+        new_capture_handlers: %{},
         hook_slots: hook_slots
     })
 
@@ -77,7 +81,7 @@ defmodule Filament.Renderer do
       final_ctx = Process.get(:filament_render_context)
 
       {rendered, final_ctx.new_hook_slots, final_ctx.pending_effects, final_ctx.new_fibers,
-       final_ctx.new_event_handlers}
+       final_ctx.new_event_handlers, final_ctx.new_capture_handlers}
     after
       # Always clear render context after render
       Process.delete(:filament_render_context)
@@ -120,10 +124,13 @@ defmodule Filament.Renderer do
       new_hook_slots: %{},
       event_handler_index: 0,
       new_event_handlers: %{},
+      capture_handler_index: 0,
+      new_capture_handlers: %{},
       hook_slots: hook_slots
     }
 
-    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers, child_event_handlers} =
+    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers,
+     child_event_handlers, child_capture_handlers} =
       render(mod, props, child_ctx)
 
     child_fiber = %Fiber{
@@ -132,6 +139,7 @@ defmodule Filament.Renderer do
       props: props,
       hook_slots: Map.merge(hook_slots, child_new_hook_slots),
       event_handlers: child_event_handlers,
+      capture_handlers: child_capture_handlers,
       children: Map.keys(grandchild_fibers),
       parent_id: parent_ctx.fiber_id,
       status: if(existing_fiber, do: :stable, else: :mounting)
@@ -184,10 +192,13 @@ defmodule Filament.Renderer do
       new_hook_slots: %{},
       event_handler_index: 0,
       new_event_handlers: %{},
+      capture_handler_index: 0,
+      new_capture_handlers: %{},
       hook_slots: hook_slots
     }
 
-    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers, child_event_handlers} =
+    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers,
+     child_event_handlers, child_capture_handlers} =
       render(mod, props, child_ctx)
 
     child_fiber = %Fiber{
@@ -197,6 +208,7 @@ defmodule Filament.Renderer do
       props: props,
       hook_slots: Map.merge(hook_slots, child_new_hook_slots),
       event_handlers: child_event_handlers,
+      capture_handlers: child_capture_handlers,
       children: Map.keys(grandchild_fibers),
       parent_id: parent_ctx.fiber_id,
       status: if(existing_fiber, do: :stable, else: :mounting)
@@ -325,13 +337,16 @@ defmodule Filament.Renderer do
       new_hook_slots: %{},
       event_handler_index: 0,
       new_event_handlers: %{},
+      capture_handler_index: 0,
+      new_capture_handlers: %{},
       hook_slots: hook_slots
     }
 
     # Save parent context before child render/3 overwrites and deletes it
     parent_ctx = Process.get(:filament_render_context)
 
-    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers, child_event_handlers} =
+    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers,
+     child_event_handlers, child_capture_handlers} =
       render(mod, props, child_context)
 
     child_fiber = %Fiber{
@@ -341,6 +356,7 @@ defmodule Filament.Renderer do
       props: props,
       hook_slots: Map.merge(hook_slots, child_new_hook_slots),
       event_handlers: child_event_handlers,
+      capture_handlers: child_capture_handlers,
       children: Map.keys(grandchild_fibers),
       parent_id: context.fiber_id,
       status: if(existing_fiber, do: :stable, else: :mounting)

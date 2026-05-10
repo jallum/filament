@@ -61,7 +61,7 @@ defmodule Filament.RendererTest do
         fiber_tree: %{}
       }
 
-      {result, hook_slots, pending_effects, new_fibers, event_handlers} =
+      {result, hook_slots, pending_effects, new_fibers, event_handlers, _capture_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "world"}, context)
 
       assert is_tuple(result)
@@ -77,7 +77,7 @@ defmodule Filament.RendererTest do
         fiber_tree: %{}
       }
 
-      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers} =
+      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers, _capture_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "Alice"}, context)
 
       iodata = Filament.Web.to_iodata(result)
@@ -103,7 +103,7 @@ defmodule Filament.RendererTest do
         fiber_tree: %{}
       }
 
-      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers} =
+      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers, _capture_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "Bob"}, context)
 
       iodata = Filament.Web.to_iodata(result)
@@ -170,7 +170,7 @@ defmodule Filament.RendererTest do
     test "renders :component vnode" do
       context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
 
-      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers} =
+      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers, _capture_handlers} =
         Renderer.render(TestHello.TestHello, %{name: "vnode"}, context)
 
       assert is_tuple(result)
@@ -227,7 +227,7 @@ defmodule Filament.RendererTest do
         pending_effects: []
       }
 
-      {_rendered, _hook_slots, _effects, new_fibers, _handlers} =
+      {_rendered, _hook_slots, _effects, new_fibers, _handlers, _captures} =
         Renderer.render(SimpleItem.SimpleItem, %{label: "test"}, context)
 
       assert map_size(new_fibers) == 0
