@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-10T02:28:26Z",
+  "description": "\u003cscript :type={Phoenix.LiveView.ColocatedHook}\u003e in ~F must continue to register the JS hook with Phoenix at compile time and emit a regular \u003cscript\u003e vnode in the tree at runtime.\n\nPhoenix's MacroComponent pipeline runs at compile time; this ticket is mostly about ensuring the post-MacroComponent AST flows through the new vnode-emitting subengine without regressions.\n\n## Files\n- lib/filament/tag_engine.ex (handle_macro_component path)\n- lib/filament/vnode_engine.ex\n\n## Acceptance\n- test/filament/colocated_hook_test.exs passes.\n- The hook's runtime \u003cscript\u003e tag appears in the rendered HTML.",
+  "id": "flm-3wr.1.4.6",
+  "labels": [],
+  "parent": "flm-3wr.1.4",
+  "priority": 2,
+  "status": "open",
+  "title": "Phase 1.4.6: Colocated hooks emit correctly under vnode IR",
+  "type": "task",
+  "updated_at": "2026-05-10T02:28:26Z"
+}
