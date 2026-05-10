@@ -13,7 +13,9 @@ defmodule CartWeb.Components.CartView do
     prop(:cart_id, :string, required: true)
 
     def render(%{cart_id: cart_id}) do
-      cart = use_value(Cart.Server.cell(cart_id), fn
+      source = use_source(fn -> Cart.Server.cell(cart_id) end)
+
+      cart = use_value(source, fn
         :disconnected -> nil
         state -> state
       end)
@@ -21,13 +23,13 @@ defmodule CartWeb.Components.CartView do
       ~F"""
       <div class="cart">
         <header>
-          <CartBadge cart_id={cart_id} />
+          <CartBadge source={source} />
         </header>
         {if cart do}
           {for item <- cart.items do}
             <div class="item">
               <span>{item.name}</span>
-              <button on_click={fn -> Cart.Server.remove(cart_id, item.id) end}>
+              <button on_click={fn -> Cart.Server.remove_item(source.data, item.id) end}>
                 Remove
               </button>
             </div>
@@ -43,10 +45,10 @@ defmodule CartWeb.Components.CartBadge do
   use Filament.Component
 
   defcomponent do
-    prop(:cart_id, :string, required: true)
+    prop(:source, :any, required: true)
 
-    def render(%{cart_id: cart_id}) do
-      count = use_value(Cart.Server.cell(cart_id), fn
+    def render(%{source: source}) do
+      count = use_value(source, fn
         :disconnected -> 0
         state -> Cart.State.item_count(state)
       end)
@@ -110,7 +112,8 @@ keeps large UIs fast without manual shouldComponentUpdate logic.
 ```elixir
 # CartBadge only re-renders when the item count changes,
 # not on every cart mutation.
-count = use_value(Cart.Server.cell(cart_id), fn
+source = use_source(fn -> Cart.Server.cell(cart_id) end)
+count  = use_value(source, fn
   :disconnected -> 0
   state -> Cart.State.item_count(state)
 end)
