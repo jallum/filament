@@ -130,7 +130,12 @@ defmodule Filament.Hooks do
   end
 
   defp build_setter(_fiber_id, _slot_index, nil) do
-    fn _new_value -> :ok end
+    fn _new_value ->
+      raise ArgumentError,
+            "use_state setter called but the render had no :owner_pid. " <>
+              "This usually means Reconciler.mount/2 or Reconciler.update/3 " <>
+              "was invoked without the owner_pid: self() option."
+    end
   end
 
   @doc """

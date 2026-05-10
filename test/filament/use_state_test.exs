@@ -37,7 +37,7 @@ defmodule Filament.UseStateTest do
       assert is_function(setter, 1)
     end
 
-    test "setter is a no-op when owner_pid is nil" do
+    test "setter raises when owner_pid is nil" do
       fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 
       {_value, setter} =
@@ -45,8 +45,12 @@ defmodule Filament.UseStateTest do
           Hooks.use_state(:initial)
         end)
 
-      # No crash, returns :ok
-      assert :ok = setter.(:new_value)
+      # Calling a setter without an owner is a programmer error — Reconciler.mount
+      # was invoked without owner_pid: self(). Raise loudly rather than silently
+      # dropping the update.
+      assert_raise ArgumentError, ~r/use_state setter called but the render had no :owner_pid/, fn ->
+        setter.(:new_value)
+      end
     end
 
     test "two use_state calls get consecutive slot indices" do
@@ -86,7 +90,7 @@ defmodule Filament.UseStateTest do
       assert values2 == [:stored_a, :b]
     end
 
-    test "setter captures fiber_id and slot_index correctly" do
+    test "setter built without an owner_pid raises when invoked" do
       fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
 
       {_value, setter} =
@@ -94,8 +98,13 @@ defmodule Filament.UseStateTest do
           Hooks.use_state(:initial)
         end)
 
-      # When owner_pid is nil, the setter is a no-op but still returns :ok
-      assert :ok = setter.(:anything)
+      # Building the setter is harmless; invoking it without an owner_pid is the
+      # bug that this raise surfaces.
+      assert is_function(setter, 1)
+
+      assert_raise ArgumentError, fn ->
+        setter.(:anything)
+      end
     end
   end
 
