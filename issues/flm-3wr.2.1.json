@@ -5,14 +5,15 @@
     "flm-3wr.2.2",
     "flm-3wr.2.3"
   ],
+  "closed_at": "2026-05-10T08:31:46Z",
   "created": "2026-05-10T08:29:13Z",
   "description": "Define the contract that all reactivity transports implement. Behaviour with these callbacks:\n\n- `subscribe(cell_ref, subscriber, projection_fn) :: {:ok, projected_value} | :disconnected` — subscribe and get the current projected value. Subscriber is opaque (typically {owner_pid, fiber_id, slot_index}).\n- `unsubscribe(cell_ref, subscriber) :: :ok` — remove subscription.\n- `current(cell_ref, projection_fn) :: projected_value | :disconnected` — read without subscribing.\n- (Internal, transport-side) push value updates to subscribers via whatever channel the transport uses. Web target uses messages to owner_pid; in-process transport calls back synchronously.\n\nPlus type specs for Cell.ref, Cell.subscriber, etc.\n\n## TDD\nTests live in test/filament/cell_test.exs and exercise a tiny in-memory test transport that implements the behaviour. Verifies subscribe/unsubscribe/current contract.\n\n## Files\n- lib/filament/cell.ex (new)\n- test/filament/cell_test.exs (new)",
   "id": "flm-3wr.2.1",
   "labels": [],
   "parent": "flm-3wr.2",
   "priority": 1,
-  "status": "open",
+  "status": "closed",
   "title": "Phase 2.1: Define Filament.Cell behaviour",
   "type": "task",
-  "updated_at": "2026-05-10T08:29:13Z"
+  "updated_at": "2026-05-10T08:31:46Z"
 }
