@@ -317,17 +317,47 @@ defmodule Filament.VNodeCompilerTest do
   end
 
   describe "comprehension memoization" do
-    # Phase 1.4.7 regression note: under VNodeEngine, comprehension bodies
-    # don't currently inherit closure-stability memoisation across iterations.
-    # Each re-render rebuilds the per-item closures. Behaviour stays correct
-    # (handlers fire with the right captured vars; wire-ref indexing is
-    # stable) but `===` identity is lost. The legacy `assign_and_emit` had
-    # special-case for-loop handling in `do_walk`; porting that to vnode IR
-    # is tracked as follow-up work — meaningful only as a perf optimisation,
-    # not a behavioural fix.
-    @tag :skip
+    # Closure-identity stability across renders comes for free under VNodeEngine
+    # because BEAM hash-conses fn objects whose captures are structurally equal.
+    # No explicit `memo_at` wrapping is needed — the legacy `assign_and_emit`
+    # comprehension memo was an optimisation that's subsumed by the runtime.
     test "for-loop with handlers reuses result when outer-scope deps unchanged" do
-      :ok
+      defmodule CompMemoComp do
+        @moduledoc false
+        use Filament.Component
+
+        defcomponent CompMemo do
+          def render(assigns) do
+            {_sel, set_sel} = use_state(:all)
+
+            ~F"""
+            <ul>
+              {for {val, label} <- assigns.items do}
+                <li><a on_click={fn -> set_sel.(val) end}>{label}</a></li>
+              {end}
+            </ul>
+            """
+          end
+        end
+      end
+
+      items = [{:all, "All"}, {:active, "Active"}, {:done, "Done"}]
+
+      {tree1, _, _} = Reconciler.mount(CompMemoComp.CompMemo, %{items: items}, owner_pid: self())
+
+      h1_0 = FiberTree.get_event_handler(tree1, "root", 0)
+      h1_1 = FiberTree.get_event_handler(tree1, "root", 1)
+      h1_2 = FiberTree.get_event_handler(tree1, "root", 2)
+
+      {tree2, _, _} = Reconciler.update(tree1, "root", %{items: items}, owner_pid: self())
+
+      h2_0 = FiberTree.get_event_handler(tree2, "root", 0)
+      h2_1 = FiberTree.get_event_handler(tree2, "root", 1)
+      h2_2 = FiberTree.get_event_handler(tree2, "root", 2)
+
+      assert h1_0 === h2_0
+      assert h1_1 === h2_1
+      assert h1_2 === h2_2
     end
 
     test "for-loop with handlers recomputes when items prop changes" do
