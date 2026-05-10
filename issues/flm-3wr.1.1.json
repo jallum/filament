@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "flm-3wr.1.2"
+  ],
   "created": "2026-05-10T01:39:51Z",
   "description": "Split `Filament.Renderer.render_vnode/2` into substrate-only and web-only halves; this ticket is the substrate-only half.\n\nThe substrate walker recursively visits a vnode tree, registers child fibers via `:component` nodes (calling `render_component_child/3` or `render_component_child_keyed/4`), and recurses into `:element` and `:fragment` children. It returns a vnode tree (potentially with rewritten `:component` nodes carrying child rendered output as a sub-vnode-tree — design call for the implementer).\n\nAfter this ticket, the substrate walker emits no HTML iodata, no `phx-event` attribute strings, no escape calls. Those concerns move to the web converter in flm-3wr.1.4.\n\n## Files\n\n- `lib/filament/renderer.ex` — split `render_vnode/2`; remove web bits from substrate path.\n- Existing tests for the walker should pass against the new shape.\n\n## Acceptance\n\n- Substrate walker returns a vnode tree, not iodata.\n- Side effects (fiber registration via `render_component_child*`) happen during the walk.\n- All existing renderer/reconciler tests pass.\n- Add tests for `:fragment` recursion and keyed/non-keyed `:component` registration if missing.",
   "id": "flm-3wr.1.1",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Phase 1.1: substrate vnode walker",
   "type": "task",
-  "updated_at": "2026-05-10T01:39:51Z"
+  "updated_at": "2026-05-10T01:41:29Z"
 }
