@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "flm-3wr.1.4.1"
+  ],
   "blocks": [],
   "created": "2026-05-10T02:28:26Z",
   "description": "\u003cMyComp prop={x}/\u003e in ~F templates compiles to {:component, MyComp, props, nil} vnode tuples instead of calling Filament.TagEngine.component/3. Substrate walker (Phase 1.1) already handles {:component, ...} fiber registration, so this ticket is purely about codegen.\n\n## Files\n- lib/filament/vnode_engine.ex\n- lib/filament/tag_engine.ex (component/local_component/remote_component handle_token branches)\n\n## Acceptance\n- Parent template \u003cChild prop={v}/\u003e emits a {:component, Child, %{prop: v}, nil} vnode at runtime.\n- Walker registers child fiber correctly (round-trip test through Reconciler.mount).\n- Filament.TagEngine.component/3 and component_keyed/4 still callable for the legacy path until 1.4.7.",
