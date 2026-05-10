@@ -7,14 +7,15 @@
     "flm-3wr.1.4",
     "flm-3wr.1.5"
   ],
+  "closed_at": "2026-05-10T03:31:39Z",
   "created": "2026-05-10T01:40:18Z",
   "description": "New module `Filament.Web.RenderToRendered` (working name; final location pending Phase 4 namespace decision). Takes a vnode tree + fiber tree and produces `%Phoenix.LiveView.Rendered{}` that PLV's diff engine accepts.\n\n## Owns\n\n- HTML escape and serialization for `:element` nodes.\n- Void-element handling (br, hr, img, input, etc.).\n- `:component` node translation into PLV's keyed-comprehension shape — `%Phoenix.LiveView.Comprehension{has_key?: true, entries: [{key, var_map, entry_fn}]}` with the keyed-reordering wire format intact.\n- `phx-event=\"filament:...\"` attribute rewriting from event-handler tuples.\n- Fingerprinting per static template for diff efficiency.\n\nThis is essentially extracting the Phoenix-specific bits of today's `~F` codegen target into a runtime function. The compiler (1.3) will emit vnode trees; this converter does the work the compiler used to do at compile time.\n\n## Files\n\n- New `lib/filament/web/render_to_rendered.ex` (path provisional).\n- New `test/filament/web/render_to_rendered_test.exs`.\n\n## Acceptance\n\n- `Filament.Web.RenderToRendered.convert(vnode_tree, fiber_tree, opts) :: %Phoenix.LiveView.Rendered{}`.\n- Output passes PLV's diff engine without crashes for every vnode shape.\n- Wire format byte-compatible (or smaller) for representative cases — verify by mounting the todo example and inspecting WebSocket frames the way we did for the keyed-comprehension fix.\n- Keyed comprehensions still emit `\"k\"`/`\"kc\"` structure with stable per-item fingerprints across re-renders.",
   "id": "flm-3wr.1.3",
   "labels": [],
   "parent": "flm-3wr.1",
   "priority": 1,
-  "status": "open",
+  "status": "closed",
   "title": "Phase 1.3: Filament.Web vnode-to-Rendered converter",
   "type": "task",
-  "updated_at": "2026-05-10T01:41:30Z"
+  "updated_at": "2026-05-10T03:31:39Z"
 }
