@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "flm-3wr.3.2"
+  ],
   "blocks": [],
   "created": "2026-05-10T08:43:56Z",
   "description": "`Filament.LiveView.dispatch_filament_event/3` currently does a flat `FiberTree.get_event_handler/3` lookup and invokes the handler directly. Reroute through `Filament.Core.dispatch_event/3` so the capture/bubble walk runs on web events too.\n\n## Acceptance\n- All existing examples still respond to clicks / submits / key events the same way.\n- New test: a parent component's capture handler fires before the target's handler (proves the walk runs).",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Phase 3.3: LiveView adapter delegates to Core dispatcher",
   "type": "task",
-  "updated_at": "2026-05-10T08:43:56Z"
+  "updated_at": "2026-05-10T08:43:57Z"
 }
