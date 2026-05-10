@@ -39,99 +39,23 @@ defmodule Filament.VNodeCompiler do
     end)
   end
 
-  # ─── Vnode IR memoisation pass (Phase 1.4.5) ─────────────────────────────────
+  # Closure-stability memoisation is intentionally a no-op for now.
   #
-  # Walks the AST emitted by `Filament.VNodeEngine` looking for
-  # `Filament.Hooks.register_event_handler(fn_literal)` call sites — emitted by
-  # `Filament.TagEngine.transform_event_attr_for_vnode/1` for `on_*` attrs —
-  # and wraps the fn argument with `Filament.Hooks.memo_at({:t, idx}, deps, fn
-  # -> closure end)` so re-renders return the same fn object when the
-  # closure's reactive deps haven't changed.
+  # The naive approach — wrapping each `register_event_handler(fn)` call with
+  # `memo_at({:t, N}, deps, fn -> closure end)` — is correctness-broken for
+  # closures inside `:for` comprehensions: a single compile-time slot
+  # `{:t, N}` is reused for every iteration at runtime, so the cache stores
+  # only the LAST iteration's closure. On re-render, every iteration's
+  # cache-hit returns that one closure, and all three (or N) for-loop
+  # buttons end up wired to the wrong handler.
   #
-  # Reactive-value memoisation for non-handler interpolations (`{x}` in body
-  # text) is a perf win but not behavioural and isn't done here.
+  # The legacy `assign_and_emit` avoided this by detecting comprehensions in
+  # `do_walk` and wrapping the entire for-loop with a single memo (deps =
+  # outer-scope vars). Porting that to vnode IR is tracked as a follow-up
+  # ticket. Until then we accept the loss of closure-identity stability —
+  # behaviour is correct (each render produces fresh closures with the right
+  # captured vars; wire-ref slot indexing is monotonic and stable).
   @doc false
   @spec assign_memos_vnode(Macro.t(), [atom()]) :: Macro.t()
-  def assign_memos_vnode(ast, in_scope) do
-    {result, _counter} = walk_vnode_ast(ast, in_scope, 0)
-    result
-  end
-
-  # Stop at fn literals — they're component closures and own their own scope.
-  defp walk_vnode_ast({:fn, _, _} = node, _in_scope, counter), do: {node, counter}
-
-  # `Filament.Hooks.register_event_handler(fn_literal)` — wrap the fn arg with
-  # memo_at. Don't recurse into the fn body.
-  defp walk_vnode_ast(
-         {{:., _, [{:__aliases__, _, [:Filament, :Hooks]}, :register_event_handler]} = dot,
-          call_meta, [{:fn, _, _} = fn_ast]},
-         in_scope,
-         counter
-       ) do
-    deps = compute_closure_deps(fn_ast, in_scope)
-    dep_vars = names_to_var_ast(deps)
-
-    memoised =
-      quote do
-        Filament.Hooks.memo_at(
-          {:t, unquote(counter)},
-          unquote(dep_vars),
-          fn -> unquote(fn_ast) end
-        )
-      end
-
-    {{dot, call_meta, [memoised]}, counter + 1}
-  end
-
-  defp walk_vnode_ast(list, in_scope, counter) when is_list(list) do
-    Enum.map_reduce(list, counter, fn node, c -> walk_vnode_ast(node, in_scope, c) end)
-  end
-
-  defp walk_vnode_ast({a, b}, in_scope, counter) do
-    {new_a, counter} = walk_vnode_ast(a, in_scope, counter)
-    {new_b, counter} = walk_vnode_ast(b, in_scope, counter)
-    {{new_a, new_b}, counter}
-  end
-
-  defp walk_vnode_ast({tag, meta, args}, in_scope, counter) when is_list(args) do
-    {new_args, counter} = walk_vnode_ast(args, in_scope, counter)
-    {{tag, meta, new_args}, counter}
-  end
-
-  defp walk_vnode_ast(other, _in_scope, counter), do: {other, counter}
-
-  # ─── Dependency computation ──────────────────────────────────────────────────
-
-  defp compute_closure_deps(ast, in_scope) do
-    ast
-    |> collect_variables_deep()
-    |> MapSet.new()
-    |> MapSet.intersection(MapSet.new(in_scope))
-    |> MapSet.to_list()
-  end
-
-  defp names_to_var_ast(names), do: Enum.map(names, fn name -> {name, [], nil} end)
-
-  defp collect_variables_deep(ast) do
-    {_, vars} =
-      Macro.prewalk(ast, MapSet.new(), fn
-        {name, _meta, nil} = node, acc when is_atom(name) ->
-          if valid_variable_name?(name), do: {node, MapSet.put(acc, name)}, else: {node, acc}
-
-        node, acc ->
-          {node, acc}
-      end)
-
-    MapSet.to_list(vars)
-  end
-
-  defp valid_variable_name?(name) when is_atom(name) do
-    name not in ~w[
-      fn do end after else catch rescue and or not in when
-      case cond if unless with for try receive quote unquote
-      super import require use alias defmodule def defp defmacro defmacrop
-      __MODULE__ __DIR__ __ENV__ __STACKTRACE__ __CALLER__
-      true false nil _
-    ]a
-  end
+  def assign_memos_vnode(ast, _in_scope), do: ast
 end
