@@ -20,6 +20,151 @@ defmodule Filament.Web do
   """
 
   alias Phoenix.HTML.Safe
+  alias Phoenix.LiveView.Rendered
+
+  @doc """
+  Converts a walked vnode tree into a `%Phoenix.LiveView.Rendered{}` with a
+  proper static/dynamic split, so PLV's diff engine can send only the
+  changed slots over the WebSocket instead of full HTML on every event.
+
+  Layout:
+    * `static`  — list of binary chunks (element tags, attribute names,
+      literal text). Length = `length(dynamic) + 1`.
+    * `dynamic` — list of values (scalar interpolations, dynamic attribute
+      values). Each slot is interleaved between adjacent static binaries.
+    * `fingerprint` — structural hash that is stable across renders of the
+      same template shape (different dynamic values do not change it).
+
+  Treats every attribute value and every interpolation child as a dynamic
+  slot. Element tags, attribute names, and `{:text, _}` leaves stay in
+  static. `{:wire_ref, _}` markers (post-walker `on_*` attrs) are stable
+  per fiber+slot and live in static for fingerprint efficiency.
+  """
+  @spec to_rendered(term()) :: Rendered.t()
+  def to_rendered(walked) do
+    state = %{static: [""], dynamic: [], fp: 0}
+    state = walk_rendered(walked, state)
+    static = state.static |> Enum.reverse()
+    dynamic = state.dynamic |> Enum.reverse()
+
+    %Rendered{
+      static: static,
+      dynamic: fn _track -> dynamic end,
+      fingerprint: state.fp,
+      root: false,
+      caller: :not_available
+    }
+  end
+
+  defp append_static(state, ""), do: state
+
+  defp append_static(%{static: [head | rest]} = state, text) do
+    %{state | static: [head <> text | rest]}
+  end
+
+  defp push_dynamic(state, value) do
+    %{state | static: ["" | state.static], dynamic: [value | state.dynamic]}
+  end
+
+  defp fp_mix(state, term) do
+    %{state | fp: :erlang.phash2({state.fp, term})}
+  end
+
+  defp walk_rendered({:text, content}, state) when is_binary(content) do
+    state |> append_static(content) |> fp_mix({:text, content})
+  end
+
+  defp walk_rendered({:element, tag, attrs, children}, state) do
+    tag_str = to_string(tag)
+
+    state =
+      state
+      |> append_static("<" <> tag_str)
+      |> fp_mix({:elem_open, tag_str})
+
+    state = Enum.reduce(attrs, state, &walk_attr/2)
+    state = append_static(state, ">")
+
+    state =
+      Enum.reduce(children, state, fn child, st ->
+        walk_child_rendered(child, st)
+      end)
+
+    if void_element?(tag_str) do
+      state
+    else
+      state |> append_static("</" <> tag_str <> ">") |> fp_mix({:elem_close, tag_str})
+    end
+  end
+
+  defp walk_rendered({:fragment, children}, state) do
+    state = fp_mix(state, :fragment_open)
+    state = Enum.reduce(children, state, fn child, st -> walk_child_rendered(child, st) end)
+    fp_mix(state, :fragment_close)
+  end
+
+  # Component embedding: child render is itself a `%Rendered{}` (when the
+  # child component used `~F`) or a walked vnode tree (manual). Either way,
+  # we surface it as a single dynamic slot — PLV recursively diffs nested
+  # Rendered structs, and walked subtrees fall back to opaque iodata via
+  # `Phoenix.HTML.Safe`.
+  defp walk_rendered({:component, _mod, _props, _key, child_render}, state) do
+    state |> push_dynamic(component_dynamic(child_render)) |> fp_mix(:component)
+  end
+
+  defp component_dynamic(%Rendered{} = r), do: r
+  defp component_dynamic(other) when is_tuple(other), do: to_rendered(other)
+  defp component_dynamic(other), do: other
+
+  defp walk_child_rendered(child, state) when is_tuple(child), do: walk_rendered(child, state)
+  defp walk_child_rendered(nil, state), do: state
+  defp walk_child_rendered(false, state), do: state
+
+  defp walk_child_rendered(other, state) do
+    # Scalar interpolation children get html-escaped via Safe.to_iodata to
+    # match the iodata path's behaviour. Pre-escape eagerly so the dynamic
+    # slot holds finished iodata that Phoenix can splice without re-walking.
+    state |> push_dynamic(Safe.to_iodata(other)) |> fp_mix(:dynamic_child)
+  end
+
+  defp walk_attr({_name, false}, state), do: state
+
+  defp walk_attr({name, nil}, state) do
+    state |> append_static(" " <> to_string(name)) |> fp_mix({:attr_bool, name})
+  end
+
+  defp walk_attr({name, true}, state) do
+    state |> append_static(" " <> to_string(name)) |> fp_mix({:attr_bool, name})
+  end
+
+  defp walk_attr({name, {:wire_ref, ref}}, state) do
+    name_str = to_string(name)
+    attr_key = "phx-" <> String.slice(name_str, 3..-1//1)
+
+    state
+    |> append_static(" " <> attr_key <> ~s(="filament:) <> ref <> ~s("))
+    |> fp_mix({:attr_wire_ref, attr_key})
+  end
+
+  defp walk_attr({name, value}, state) when is_binary(value) do
+    name_str = to_string(name)
+
+    state
+    |> append_static(" " <> name_str <> ~s(="))
+    |> push_dynamic(Plug.HTML.html_escape_to_iodata(value))
+    |> append_static(~s("))
+    |> fp_mix({:attr_dynamic, name_str})
+  end
+
+  defp walk_attr({name, value}, state) do
+    name_str = to_string(name)
+
+    state
+    |> append_static(" " <> name_str <> ~s(="))
+    |> push_dynamic(Safe.to_iodata(value))
+    |> append_static(~s("))
+    |> fp_mix({:attr_dynamic, name_str})
+  end
 
   @doc """
   Converts a walked vnode tree into HTML iodata.

@@ -105,7 +105,7 @@ defmodule Filament.LiveViewTest do
       assert socket.assigns._filament_tree["root"]
 
       assert Map.has_key?(socket.assigns, :_filament_rendered)
-      assert {:safe, _} = socket.assigns._filament_rendered
+      assert %Phoenix.LiveView.Rendered{} = socket.assigns._filament_rendered
 
       assert Map.has_key?(socket.assigns, :_filament_pending_effects)
       assert socket.assigns._filament_pending_effects == []
