@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-10T10:55:46Z",
+  "description": "The Subscriber path's slot state `{:subscribed, server, raw}` (hooks.ex ~267) lets `resolve_value/5` (~299) detect when the resolved server changed across renders and trigger `maybe_remove_projection` + new subscribe. The Cell slot `{:cell_subscribed, raw}` (~391) has no identity to compare against, so dynamic cell-swap on rerender silently fails.\n\nChange slot to `{:cell_subscribed, cell, raw}` and update `use_cell_subscribed`, `resolve_cell_value`, and any place that pattern-matches on the slot tag (grep for `:cell_subscribed`). Add a test that swaps the cell value across renders and asserts the old subscription is removed and a new one is established.\n\nAlternative if Q1 lands as (b) and we prefer Cell to stay totally identity-free: document explicitly that `use_cell` does not support a changing cell across renders. Pick one — don't leave it ambiguous.",
+  "id": "flm-xbb.5",
+  "labels": [],
+  "parent": "flm-xbb",
+  "priority": 2,
+  "status": "open",
+  "title": "Slot tag carries cell identity for swap detection",
+  "type": "task",
+  "updated_at": "2026-05-10T10:55:46Z"
+}
