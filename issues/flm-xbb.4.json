@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-10T10:55:46Z",
+  "description": "Decide and document the two open design questions in the epic description before further work.\n\n**Q1 — Session handoff.** Subscriber path lets a new LV pid reclaim an existing subscription via `Subscriber.session_token`. Pick:\n  (a) Add a callback to `Filament.Cell` (e.g. `claim/3`) so every transport implements handoff; OR\n  (b) Push handoff entirely into the LV adapter — web-side code maintains a (subscriber-tuple ↔ session-token) mapping and calls `subscribe`/`unsubscribe` itself; Cell stays oblivious.\n\nDefault lean: (b). Justification: not every backend reconnects (a TUI process either runs or doesn't), so pushing it up keeps the abstraction minimal and doesn't tax future transports.\n\n**Q2 — Hook name.** Once `use_observable` is deleted, do we keep the new hook as `use_cell` or rename it to `use_observable`? Default lean: rename to `use_observable`. 'Cell' is internal jargon (the behaviour module stays `Filament.Cell`); consumers shouldn't have to learn it.\n\nOutput: a short note in the epic comments capturing the decision and rationale; this unblocks T5–T8.",
+  "id": "flm-xbb.4",
+  "labels": [],
+  "parent": "flm-xbb",
+  "priority": 2,
+  "status": "open",
+  "title": "Resolve design Q1 (handoff) and Q2 (naming)",
+  "type": "task",
+  "updated_at": "2026-05-10T10:55:46Z"
+}
