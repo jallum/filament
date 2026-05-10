@@ -52,42 +52,59 @@ renders so you can compare them with `==` if needed.
 
 ## use_source/1 and use_value/2
 
-The preferred pattern separates server resolution from value projection:
+The preferred pattern separates source binding from value projection:
 
 ```elixir
-server = use_source(server_or_fn)
-value  = use_value(server, fn
+source = use_source(source_or_factory_fn)
+value  = use_value(source, fn
   :disconnected -> default_value
   state -> project(state)
 end)
 ```
 
-`use_source/1` resolves the server reference to a live pid and returns it.
-Returns `nil` during disconnected (HTTP static) renders — no subscription is
-created until the WebSocket connects.
+`use_source/1` binds a reactive source for the calling fiber and returns
+a stable `%Filament.Source{}` struct. Returns `nil` during disconnected
+(HTTP static) renders — no subscription is created until the WebSocket
+connects.
 
-`use_value/2` subscribes this fiber's hook slot to the server and returns
-the projected value. The projection function receives `:disconnected` when the
-server is `nil` or the mount is not yet live, letting it return a safe default.
+`use_value/2` subscribes this fiber's hook slot to the source and
+returns the projected value. The projection function receives
+`:disconnected` when the source is `nil` or the mount is not yet live,
+letting it return a safe default.
 
-The first argument to `use_source/1` can be:
+The argument to `use_source/1` is either:
 
-- a pid, atom, `{:via, Registry, key}`, or `{node, name}` — used directly.
-- a zero-arity function — called on the first WebSocket render (and again if the
-  process dies) to obtain a pid or `{:ok, pid}`; useful when the component owns
-  the server lifecycle.
+- A `%Filament.Source{}` struct directly — typically built via the
+  `cell/1` constructor that `use Filament.Observable.GenServer` injects
+  (or `Filament.Source.new/2` for non-GenServer transports).
+- A zero-arity factory function returning a `%Filament.Source{}` —
+  called on the first connected render (and again if the underlying
+  transport dies). Use this when the component owns the server's
+  lifecycle.
+
+The struct exposes the underlying transport-specific data (a pid,
+registered name, or via-tuple, depending on the transport) via
+`source.data` — used to invoke action functions in event handlers:
 
 ```elixir
-# Connect to a running singleton server
-server = use_source(Cart.Server)
-count  = use_value(server, fn
+# Connect to a session-keyed server (Cart.Server overrides cell/1 to take a
+# session_id and ensure-start the server)
+source = use_source(fn -> Cart.Server.cell(session_id) end)
+count  = use_value(source, fn
   :disconnected -> 0
   s -> Cart.State.item_count(s)
 end)
 
-# Component owns the server lifecycle — keep the pid for mutations
-store = use_source(fn -> Todo.Store.start_link([]) end)
-todos = use_value(store, fn
+on_click={fn -> Cart.Server.add_item(source.data, item) end}
+
+# Component owns the server lifecycle — no `cell/1` override needed; the
+# default constructor wraps any server reference
+source = use_source(fn ->
+  {:ok, pid} = Todo.Store.start_link([])
+  Todo.Store.cell(pid)
+end)
+
+todos = use_value(source, fn
   :disconnected -> []
   s -> s
 end)
@@ -98,8 +115,9 @@ title  = use_value(source, fn :disconnected -> ""; s -> s.title end)
 locked = use_value(source, fn :disconnected -> false; s -> s.locked end)
 ```
 
-Passing `source` as a prop to child components lets each child apply its own
-projection without re-resolving the underlying transport.
+Passing `source` as a prop to child components lets each child apply
+its own projection (and access `source.data` for its own mutations)
+without re-resolving the underlying transport.
 
 ### Projection runs client-side and can close over local state
 
@@ -193,10 +211,10 @@ defmodule InventoryWeb.Hooks do
     disconnected_val = Keyword.get(opts, :disconnected, :disconnected)
     sentinel = :__hold_disconnected__
 
-    srv = use_source(server)
+    source = use_source(Inventory.Server.cell(server))
 
     item =
-      use_value(srv, fn
+      use_value(source, fn
         :disconnected -> sentinel
         state -> Map.get(state, item_id)
       end)
@@ -325,18 +343,21 @@ between them.
 
 ## Transport-agnostic subscription
 
-`use_value/2` accepts any `Filament.Cell` — a
-`{transport_module, transport_data}` tagged tuple where the module
-implements the `Filament.Cell` behaviour. The
-`Filament.Observable.GenServer` transport ships with Filament;
+`use_value/2` accepts any `%Filament.Source{}` regardless of which
+transport backs it. The struct carries a `transport` module that
+implements the `Filament.Cell` behaviour and the `data` the transport
+needs (a pid, an Agent ref, a struct — whatever).
+
+The `Filament.Observable.GenServer` transport ships with Filament;
 non-GenServer transports (in-process structs, focus trackers, custom
 backends) can be added without changing the hook.
 
 ```elixir
 def render(_assigns) do
-  cell = {MyApp.AgentCell, agent_pid}
+  source = MyApp.AgentCell.cell(agent_pid)
+  # or: Filament.Source.new(MyApp.AgentCell, agent_pid)
 
-  count = use_value(cell, fn
+  count = use_value(source, fn
     :disconnected -> 0
     state -> state.count
   end)

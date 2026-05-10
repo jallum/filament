@@ -15,7 +15,7 @@ and a clear mental model of the Filament component lifecycle.
 
 ```elixir
 # mix.exs
-{:filament, "~> 0.1"}
+{:filament, "~> 0.4"}
 ```
 
 - Run `mix deps.get` and then `use Filament.Component` in any module where you
@@ -78,8 +78,12 @@ Key points:
 
 ```elixir
 def render(%{title: title}) do
-  store = use_source(fn -> Todo.Store.start_link([]) end)
-  todos = use_value(store, fn :disconnected -> []; s -> s end)
+  source = use_source(fn ->
+    {:ok, pid} = Todo.Store.start_link([])
+    Todo.Store.cell(pid)
+  end)
+
+  todos = use_value(source, fn :disconnected -> []; s -> s end)
 
   {filter, set_filter} = use_state(:all)
   filtered = apply_filter(todos, filter)
@@ -113,7 +117,7 @@ entirely through closures:
 
 ~F"""
 <form on_submit={fn %{"text" => val} ->
-  if String.trim(val) != "", do: Todo.Store.add(store, val)
+  if String.trim(val) != "", do: Todo.Store.add(source.data, val)
   set_text.("")
 end}>
   <input name="text" class="new-todo" value={text} placeholder="What needs to be done?" />
@@ -123,13 +127,19 @@ end}>
   {for todo <- filtered do}
     <TodoItem
       todo={todo}
-      on_toggle={fn -> Todo.Store.toggle(store, todo.id) end}
-      on_remove={fn -> Todo.Store.remove(store, todo.id) end}
+      on_toggle={fn -> Todo.Store.toggle(source.data, todo.id) end}
+      on_remove={fn -> Todo.Store.remove(source.data, todo.id) end}
     />
   {end}
 </ul>
 """
 ```
+
+`source.data` extracts the underlying server reference (a pid here)
+from the `%Filament.Source{}` struct returned by `use_source`. The
+mutation functions take the server as their first argument; reads
+go through `use_value(source, …)` so the projection runs on every
+update.
 
 - Zero-arity closures receive no arguments; one-arity closures receive the
   event params map (for `on_submit`, the full form data; for `on_change`, the
@@ -204,8 +214,8 @@ For lists, put `:for` and `:key` directly on the component tag:
       :for={todo <- filtered}
       :key={todo.id}
       todo={todo}
-      on_toggle={fn -> Todo.Store.toggle(store, todo.id) end}
-      on_remove={fn -> Todo.Store.remove(store, todo.id) end}
+      on_toggle={fn -> Todo.Store.toggle(source.data, todo.id) end}
+      on_remove={fn -> Todo.Store.remove(source.data, todo.id) end}
     />
   </ul>
 </section>
