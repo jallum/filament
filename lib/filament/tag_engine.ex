@@ -727,6 +727,13 @@ defmodule Filament.TagEngine do
             ast
           end
 
+        ast =
+          if state.structured? and Map.has_key?(new_meta, :if) do
+            quote do: if(unquote(new_meta.if), do: unquote(ast))
+          else
+            ast
+          end
+
         if state.structured? do
           state
           |> set_root_on_not_tag()
@@ -909,6 +916,13 @@ defmodule Filament.TagEngine do
         ast =
           if state.structured? and Map.has_key?(new_meta, :for) do
             wrap_for_with_fragment(ast, new_meta.for)
+          else
+            ast
+          end
+
+        ast =
+          if state.structured? and Map.has_key?(new_meta, :if) do
+            quote do: if(unquote(new_meta.if), do: unquote(ast))
           else
             ast
           end
@@ -1350,17 +1364,10 @@ defmodule Filament.TagEngine do
     end
   end
 
-  defp structured_special_unsupported?(meta) do
-    Map.has_key?(meta, :if)
-  end
-
-  defp raise_structured_special_unsupported!(_meta, tag_meta, state) do
-    raise_syntax_error!(
-      ":if on a component is not yet supported under Filament.VNodeEngine (Phase 1.4.4)",
-      tag_meta,
-      state
-    )
-  end
+  # Always false now: `:if`, `:for`, and `:key` all have structured-emission
+  # paths. Kept as a hook for any future special attr that needs gating.
+  defp structured_special_unsupported?(_meta), do: false
+  defp raise_structured_special_unsupported!(_meta, _tag_meta, state), do: state
 
   # Wrap a single component vnode AST in `for ..., do: vnode_ast` and then in
   # `{:fragment, list}` so the surrounding vnode tree treats the iteration
