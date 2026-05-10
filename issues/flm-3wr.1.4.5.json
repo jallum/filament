@@ -6,14 +6,15 @@
   "blocks": [
     "flm-3wr.1.4.7"
   ],
+  "closed_at": "2026-05-10T03:03:27Z",
   "created": "2026-05-10T02:28:26Z",
   "description": "Port VNodeCompiler.assign_and_emit and its dep-collection helpers to walk vnode-emitting AST instead of Phoenix.LiveView.Engine.live_to_iodata-emitting AST.\n\nToday the walker looks for live_to_iodata(expr) call sites to wrap with memo_at; under vnode IR the dynamic values appear as bare expressions in element children or attr values. New 'where does dynamic value appear' predicate needed.\n\nEvent handlers: register_event_handler(handler) calls today appear naked; under vnode IR they appear inside element attrs as {on_click: handler}. Rewrite to {on_click: {:wire_ref, event_at(N, handler)}}.\n\n## Files\n- lib/filament/vnode_compiler.ex (assign_and_emit, do_walk, emit_if_needed, compute_deps)\n\n## Acceptance\n- Reactive scope inference (Item 1b) still works under vnode IR.\n- Stale-closure memoization tests pass (lib/filament/.../memoization tests).\n- event_handler indexing remains stable across renders.",
   "id": "flm-3wr.1.4.5",
   "labels": [],
   "parent": "flm-3wr.1.4",
   "priority": 1,
-  "status": "open",
+  "status": "closed",
   "title": "Phase 1.4.5: assign_and_emit (memo_at, event_at) over vnode-emitting AST",
   "type": "task",
-  "updated_at": "2026-05-10T02:28:27Z"
+  "updated_at": "2026-05-10T03:03:27Z"
 }
