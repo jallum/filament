@@ -26,7 +26,7 @@ defmodule InventoryWeb.Hooks do
     disconnected_val = Keyword.get(opts, :disconnected, :disconnected)
     sentinel = :__hold_disconnected__
 
-    source = use_source({Filament.Observable.GenServer, server})
+    source = use_source(Inventory.Server.cell(server))
 
     item =
       use_value(source, fn

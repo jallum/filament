@@ -21,10 +21,7 @@ defmodule CartWeb.Components.Cart do
     end
 
     def render(%{session_id: session_id}) do
-      source =
-        use_source(fn ->
-          {Filament.Observable.GenServer, Cart.Server.ensure_started(session_id)}
-        end)
+      source = use_source(fn -> Cart.Server.cell(session_id) end)
 
       server =
         case source do

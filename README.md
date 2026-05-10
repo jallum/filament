@@ -13,7 +13,7 @@ defmodule CartWeb.Components.CartView do
     prop(:cart_id, :string, required: true)
 
     def render(%{cart_id: cart_id}) do
-      cart = use_value({:via, Registry, {Cart.Registry, cart_id}}, fn
+      cart = use_value(Cart.Server.cell(cart_id), fn
         :disconnected -> nil
         state -> state
       end)
@@ -46,7 +46,7 @@ defmodule CartWeb.Components.CartBadge do
     prop(:cart_id, :string, required: true)
 
     def render(%{cart_id: cart_id}) do
-      count = use_value({:via, Registry, {Cart.Registry, cart_id}}, fn
+      count = use_value(Cart.Server.cell(cart_id), fn
         :disconnected -> 0
         state -> Cart.State.item_count(state)
       end)
@@ -110,7 +110,7 @@ keeps large UIs fast without manual shouldComponentUpdate logic.
 ```elixir
 # CartBadge only re-renders when the item count changes,
 # not on every cart mutation.
-count = use_value({:via, Registry, {Cart.Registry, cart_id}}, fn
+count = use_value(Cart.Server.cell(cart_id), fn
   :disconnected -> 0
   state -> Cart.State.item_count(state)
 end)

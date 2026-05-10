@@ -93,7 +93,7 @@ todos = use_value(store, fn
 end)
 
 # Multiple projections from one source — independent slot entries per fiber
-source = use_source(fn -> {Filament.Observable.GenServer, DocumentServer.via_registry(doc_id)} end)
+source = use_source(fn -> DocumentServer.cell(doc_id) end)
 title  = use_value(source, fn :disconnected -> ""; s -> s.title end)
 locked = use_value(source, fn :disconnected -> false; s -> s.locked end)
 ```
