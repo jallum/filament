@@ -333,6 +333,94 @@ defmodule Filament.Hooks do
     end
   end
 
+  @doc """
+  Subscribe the current fiber to a `Filament.Cell` and apply a projection.
+
+  Generic over the cell's transport — works against any module that implements
+  `Filament.Cell` (the GenServer-backed observable, an in-process struct, a
+  focus tracker, etc.). The component is unaware of how the cell is fed.
+
+  The hook subscribes with identity projection (the cell delivers raw values)
+  and applies the user-supplied `projection` at render time. This matches
+  `use_observable/2`'s closure-freshness semantics: a projection that closes
+  over local component state always sees the current value.
+
+  Returns `projection.(:disconnected)` during static (HTTP) renders and when
+  the cell can't reach its source.
+
+  ## Example
+
+      defmodule Counter do
+        use Filament.Observable.GenServer
+        # ... handlers omitted ...
+      end
+
+      def render(%{counter: counter}) do
+        cell = {Filament.Observable.GenServer, counter}
+
+        count =
+          use_cell(cell, fn
+            :disconnected -> 0
+            n -> n
+          end)
+
+        ~F"<p>{count}</p>"
+      end
+
+  Must be called at the top level of `render/1` in consistent order.
+  """
+  @spec use_cell(Filament.Cell.t(), (term() | :disconnected -> term())) :: term()
+  def use_cell(cell, projection) when is_function(projection, 1) do
+    {slot_index, previous, ctx} = use_slot(:uninitialized)
+
+    if ctx.subscribe_enabled do
+      use_cell_subscribed(cell, projection, slot_index, previous, ctx)
+    else
+      commit_slot(slot_index, :uninitialized)
+      projection.(:disconnected)
+    end
+  end
+
+  defp use_cell_subscribed(cell, projection, slot_index, previous, ctx) do
+    case resolve_cell_value(cell, slot_index, previous, ctx) do
+      :disconnected ->
+        commit_slot(slot_index, :uninitialized)
+        projection.(:disconnected)
+
+      raw ->
+        commit_slot(slot_index, {:cell_subscribed, raw})
+        projection.(raw)
+    end
+  end
+
+  # Read the cell's raw value: prefer the fresher value from `new_hook_slots`
+  # (set by an in-flight `:cell_update`), fall back to the previously cached
+  # value, or subscribe fresh on first render.
+  defp resolve_cell_value(cell, slot_index, previous, ctx) do
+    case Map.get(ctx.new_hook_slots, slot_index) do
+      {:cell_subscribed, raw} ->
+        raw
+
+      _ ->
+        case previous do
+          {:cell_subscribed, raw} ->
+            raw
+
+          _ ->
+            cell_subscribe_fresh(cell, slot_index, ctx)
+        end
+    end
+  end
+
+  defp cell_subscribe_fresh(cell, slot_index, ctx) do
+    subscriber = {ctx.owner_pid, ctx.fiber_id, slot_index}
+
+    case Filament.Cell.subscribe(cell, subscriber, &Function.identity/1) do
+      {:ok, value} -> value
+      :disconnected -> :disconnected
+    end
+  end
+
   defp do_subscribe(server, project, ctx, slot_index) do
     subscriber = %Subscriber{
       pid: ctx.owner_pid,
