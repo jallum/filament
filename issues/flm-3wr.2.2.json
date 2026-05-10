@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-10T08:29:13Z",
+  "description": "Make the existing GenServer transport an implementation of the Cell behaviour. Goal: zero behaviour change for current consumers; the existing observable contract stays intact, but behind it the Cell protocol is the canonical surface.\n\n## TDD\nTests for Observable.GenServer assert it implements Cell.subscribe / unsubscribe / current correctly. Existing observable tests continue to pass without modification.\n\n## Files\n- lib/filament/observable/gen_server.ex (add Cell behaviour)\n- test/filament/observable_test.exs (add Cell-protocol assertions)",
+  "id": "flm-3wr.2.2",
+  "labels": [],
+  "parent": "flm-3wr.2",
+  "priority": 1,
+  "status": "open",
+  "title": "Phase 2.2: Filament.Observable.GenServer implements Cell",
+  "type": "task",
+  "updated_at": "2026-05-10T08:29:13Z"
+}
