@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "flm-xbb.7"
+  ],
   "blocks": [],
   "created": "2026-05-10T10:55:46Z",
   "description": "Apply the naming decision from T4. If the decision was 'rename use_cell → use_observable':\n\n1. The current `use_observable` is still alive at this point — first delete it (it has no callers after T7).\n2. Then rename `use_cell` → `use_observable` (and `use_cell_subscribed` etc. internals).\n3. Update example call sites and docstrings.\n\nIf the decision was 'keep use_cell as the public name', this task is just a docs/changelog update.\n\nDo not touch the Subscriber/`%Filament.Observable.Subscriber{}` machinery here — that is T9.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Rename hook surface per Q2 decision",
   "type": "task",
-  "updated_at": "2026-05-10T10:55:46Z"
+  "updated_at": "2026-05-10T10:55:47Z"
 }

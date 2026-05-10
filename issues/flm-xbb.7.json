@@ -4,7 +4,9 @@
     "flm-xbb.5",
     "flm-xbb.6"
   ],
-  "blocks": [],
+  "blocks": [
+    "flm-xbb.8"
+  ],
   "created": "2026-05-10T10:55:46Z",
   "description": "Rewrite all `use_observable` call sites in the example apps to `use_cell`:\n\n- `examples/cart/lib/cart_web/components/cart.ex`, `cart_badge.ex`, `cart_items.ex`\n- `examples/collaboration/lib/collaboration_web/components/document_editor.ex`\n- `examples/inventory/lib/inventory_web/hooks.ex` (this is a wrapper layer; update accordingly)\n- `examples/todo/lib/todo_web/components/todo_list.ex`, `examples/todo/lib/todo/store.ex` (docstring reference)\n\nAfter migration, each example must compile and pass its existing tests, and behave identically when checked in Chrome:\n- cart: add-to-cart, totals update\n- collaboration: edit-lock acquire/release\n- inventory: hold/release with stock decrement\n- todo: add item, toggle complete\n\nDo not delete `use_observable` yet — that happens in T9 once the rename in T8 is done.",
   "id": "flm-xbb.7",
