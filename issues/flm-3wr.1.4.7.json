@@ -8,14 +8,15 @@
     "flm-3wr.1.4.6"
   ],
   "blocks": [],
+  "closed_at": "2026-05-10T03:31:23Z",
   "created": "2026-05-10T02:28:26Z",
   "description": "Closes Phase 1.4.\n\n- sigil_F passes subengine: Filament.VNodeEngine to TagEngine.compile (or it's the default).\n- VNodeCompiler.compile pipeline runs only the vnode-AST passes.\n- Remove Renderer.unwrap_for_embedding's :rendered_struct shim.\n- Remove Filament.Web.to_iodata's {:rendered_struct, %Rendered{}} clause.\n- Remove TagEngine.wrap_rendered (and the component/component_keyed direct invocation path that returned Rendered).\n- Update tests to drop {:rendered_struct, ...} wrappers wherever they were added in Phase 1.2.\n\n## Acceptance\n- mix test green (full suite).\n- mix compile --warnings-as-errors green.\n- grep -n '%Phoenix\\.LiveView\\.Rendered{}' in lib/filament/ shows only LiveView adapter code (no compiler-emitted construction).\n- ~F evaluates to a vnode tree (or a closure returning one).",
   "id": "flm-3wr.1.4.7",
   "labels": [],
   "parent": "flm-3wr.1.4",
   "priority": 1,
-  "status": "open",
+  "status": "closed",
   "title": "Phase 1.4.7: Switch sigil_F to VNodeEngine; remove transitional shims",
   "type": "task",
-  "updated_at": "2026-05-10T02:28:27Z"
+  "updated_at": "2026-05-10T03:31:23Z"
 }
