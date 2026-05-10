@@ -244,4 +244,7 @@ observable stubs, async assertions, keyboard events, and more.
 - **[Testing guide](testing.html)** — full test API reference: bang/pipeline helpers, observable stubs, async assertions, keyboard events.
 - **[Observables guide](observables.html)** — `Observable.GenServer`, `use_observable/1` and `use_observable/2`, and the change-or-bust pattern.
 - **[Hooks guide](hooks.html)** — composing built-in hooks and writing custom hooks for domain logic.
+- **[Cells guide](cells.html)** — the abstraction underneath observables, for non-GenServer transports and custom backends.
+- **[Events guide](events.html)** — the capture/bubble dispatcher and how event sources feed into Filament's substrate.
+- **[Module organization](module-organization.html)** — the Core/Web split and how to add a non-web backend.
 - **API reference** — see `Filament.Hooks` for the full hook signatures and `Filament.Component` for the behaviour callbacks.
