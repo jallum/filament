@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-10T02:28:26Z",
+  "description": "Foundation for vnode codegen. Add a Filament.VNodeEngine subengine that implements the EEx engine callbacks plus structured tag-open/tag-close callbacks. Teach Filament.TagEngine to call structured tag callbacks on the subengine for HTML elements, alongside (or in place of) the current handle_text(\"\u003cdiv...\") emission. Keep the PLV.Engine path working via a thin wrapper subengine that maps structured calls back to handle_text. Scope: text nodes, expressions, and plain HTML elements with attrs only — components, comprehensions, slots, conditionals all DEFERRED to follow-up tickets.\n\n## Files\n- lib/filament/vnode_engine.ex (new)\n- lib/filament/tag_engine.ex (handle_tag_and_attrs / handle_token tag branches)\n\n## Acceptance\n- ~F'\u003cdiv class={x}\u003ehello {y}\u003c/div\u003e' through VNodeEngine produces vnode AST equivalent to {:element, \"div\", [class: x_expr], [{:text, \"hello \"}, y_expr]} (or shape settled during impl).\n- Existing tests still pass via the wrapper-subengine fallback path.\n- New tests for VNodeEngine cover: static text, single expr, nested elements, void elements, attr expressions, boolean attrs.",
+  "id": "flm-3wr.1.4.1",
+  "labels": [],
+  "parent": "flm-3wr.1.4",
+  "priority": 1,
+  "status": "open",
+  "title": "Phase 1.4.1: VNodeEngine subengine + TagEngine structured callbacks",
+  "type": "task",
+  "updated_at": "2026-05-10T02:28:26Z"
+}
