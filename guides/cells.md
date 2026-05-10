@@ -1,0 +1,214 @@
+# Cells
+
+A cell is the unit of reactivity in Filament — a versioned value with subscribers
+and a projection-equality check. Components consume cells via hooks
+(`use_observable`, `use_cell`); transports — GenServer-backed observables, in-process
+structs, focus trackers — provide them. The component is unaware of which transport
+delivers a cell's value, so the same component code runs against a Phoenix LiveView
+backend, an out-of-process state store, or a non-web target like a TUI.
+
+This guide is for developers who want to **author a transport** or work with
+non-default cells. Most application code uses `use_observable/2` and never thinks
+about the cell layer; if that's you, the **[Observables guide](observables.html)**
+is enough — come back here when you need to plug something more exotic in.
+
+## Shape
+
+A cell is a tagged tuple:
+
+    {transport_module, transport_data}
+
+`transport_module` implements the `Filament.Cell` behaviour. `transport_data` is
+whatever the transport needs to identify this particular cell — a GenServer pid
+or registered name, an ETS table, a struct, anything. The dispatch helpers in
+`Filament.Cell` route subscribe / unsubscribe / current calls to the transport.
+
+```elixir
+cell = {Filament.Observable.GenServer, MyApp.CartServer}
+
+# Subscribe and read the initial value.
+{:ok, value} = Filament.Cell.subscribe(cell, subscriber, projection)
+
+# Cancel a subscription. Idempotent.
+:ok = Filament.Cell.unsubscribe(cell, subscriber)
+
+# Read without subscribing.
+value = Filament.Cell.current(cell, projection)
+```
+
+## The Cell behaviour
+
+A transport implements three callbacks:
+
+```elixir
+@callback subscribe(transport_data, subscriber, projection) ::
+            {:ok, projected_value} | :disconnected
+
+@callback unsubscribe(transport_data, subscriber) :: :ok
+
+@callback current(transport_data, projection) ::
+            projected_value | :disconnected
+```
+
+`subscriber` is opaque to `Filament.Cell` — by convention the tuple
+`{owner_pid, fiber_id, slot_index}` that Filament's hooks layer uses, but a
+transport may accept any term. Two subscribes with the same identity replace
+the previous projection.
+
+`projection` is a 1-arity function the transport runs against the underlying
+value. Whether the transport applies the projection at the cell or on every
+render is a transport-internal decision — but every transport must support a
+**change-or-bust** check: deliver an update to the subscriber only when the
+projected value differs from the previously delivered one.
+
+When a transport can't reach its underlying value (the GenServer isn't
+running, the ETS table is missing) it returns `:disconnected`. The hooks
+layer translates that to `projection.(:disconnected)` so components can
+render a sane fallback.
+
+## Notification protocol
+
+When a cell's value changes, the transport sends a message to the subscriber's
+process:
+
+    {:cell_update, subscriber, projected_value}
+
+`Filament.LiveView`'s `handle_info` for `:cell_update` updates the fiber slot
+and triggers a re-render. Other backends (a TUI's `Interactive` GenServer,
+say) can implement the same handler to integrate.
+
+## Built-in transport: `Filament.Observable.GenServer`
+
+The GenServer-backed transport ships with Filament. Any module that does
+`use Filament.Observable.GenServer` is also a Cell — the `Filament.Cell`
+behaviour callbacks are implemented at the module level and route through
+`GenServer.call` / `GenServer.cast`:
+
+```elixir
+defmodule Cart.Server do
+  use Filament.Observable.GenServer
+  # ...handlers...
+end
+
+cell = {Filament.Observable.GenServer, Cart.Server}
+```
+
+The legacy `Filament.Observable.subscribe/2` API and the
+`{:filament_observable_updates, ...}` notification format are unchanged for
+backward compatibility — Cell-style and legacy subscribers coexist on the
+same GenServer, and `notify_observers/1` fans out to both.
+
+## The `use_cell/2` hook
+
+`use_cell(cell, projection)` is the generic cell-subscription primitive at
+the component level. It accepts any cell tuple and applies the projection at
+render time:
+
+```elixir
+def render(%{cart: cart_cell}) do
+  count = use_cell(cart_cell, fn
+    :disconnected -> 0
+    state -> length(state.items)
+  end)
+
+  ~F"<span class=\"badge\">{count}</span>"
+end
+```
+
+The projection runs each render with the current closure, so it can safely
+close over local component state (filter selections, current user, etc.).
+Cell change-or-bust prevents redundant message traffic; render-level diffing
+prevents redundant DOM updates.
+
+## When to use which hook
+
+| Hook                          | When                                                                      |
+|-------------------------------|---------------------------------------------------------------------------|
+| `use_state/1`                 | Fiber-local state. No subscription, no transport.                         |
+| `use_observable/2`            | Subscribing to a GenServer. Most application code.                        |
+| `use_cell/2`                  | Subscribing to any cell — non-GenServer transports, custom backends.      |
+
+`use_observable/2` and `use_cell/2` produce equivalent behaviour for
+GenServer-backed observables. Use `use_observable` when the cell is your own
+GenServer (it's slightly less typing); use `use_cell` when you're consuming a
+cell handed to you by a backend you don't own.
+
+## Authoring a transport
+
+A minimum-viable transport implements the three callbacks against whatever
+storage and notification mechanism it uses. Here's a sketch of an in-process
+transport backed by an `Agent`:
+
+```elixir
+defmodule MyApp.AgentCell do
+  @behaviour Filament.Cell
+
+  use Agent
+
+  def start_link(initial), do: Agent.start_link(fn -> %{value: initial, subs: %{}} end)
+
+  @impl Filament.Cell
+  def subscribe(agent, subscriber, projection) do
+    Agent.get_and_update(agent, fn state ->
+      projected = projection.(state.value)
+      pid = elem(subscriber, 0)
+      new_subs = Map.put(state.subs, subscriber, {pid, projection, projected})
+      {{:ok, projected}, %{state | subs: new_subs}}
+    end)
+  end
+
+  @impl Filament.Cell
+  def unsubscribe(agent, subscriber) do
+    Agent.update(agent, fn s -> %{s | subs: Map.delete(s.subs, subscriber)} end)
+  end
+
+  @impl Filament.Cell
+  def current(agent, projection) do
+    Agent.get(agent, fn s -> projection.(s.value) end)
+  end
+
+  def write(agent, new_value) do
+    Agent.update(agent, fn state ->
+      new_subs = notify_each(state.subs, new_value)
+      %{state | value: new_value, subs: new_subs}
+    end)
+  end
+
+  defp notify_each(subs, new_value) do
+    Map.new(subs, fn {sub, {pid, projection, last}} ->
+      new_projected = projection.(new_value)
+
+      if new_projected != last do
+        send(pid, {:cell_update, sub, new_projected})
+      end
+
+      {sub, {pid, projection, new_projected}}
+    end)
+  end
+end
+```
+
+Then in a component:
+
+```elixir
+{:ok, agent} = MyApp.AgentCell.start_link(0)
+cell = {MyApp.AgentCell, agent}
+
+count = use_cell(cell, & &1)
+```
+
+## Naming: `use_state` stays
+
+`use_state/1` was a candidate to be renamed `use_local` for symmetry with
+`use_cell` (where "cell" implies external; "local" implies fiber-internal).
+After review the rename was rejected:
+
+- `use_state` is the established React-family name; Filament users coming
+  from React already recognise it.
+- The hook is fiber-local by virtue of how Filament's render context works,
+  not because of the name. Renaming wouldn't make the locality clearer.
+- A rename creates churn across every component in every Filament codebase
+  for no behaviour change.
+
+The mental model stays: **`use_state` for fiber-local state, `use_cell` /
+`use_observable` for shared / transport-backed state.**

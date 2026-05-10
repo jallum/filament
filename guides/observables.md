@@ -364,5 +364,10 @@ See `Filament.Observable` for the full `@callback` specifications including the
 - **Hooks guide** — learn how to compose hooks and build custom hooks like
   `use_hold` (see `examples/inventory/lib/inventory_web/hooks.ex` for a
   worked example of resource holds built on top of `use_observable`).
+- **[Cells guide](cells.html)** — the abstraction underneath observables.
+  Read this if you're writing a non-GenServer transport (in-process struct,
+  focus tracker, custom backend) or consuming cells handed to you by a
+  backend you don't own.
 - **API reference** — see `Filament.Observable`, `Filament.Observable.GenServer`,
-  and `Filament.Hooks` (`use_observable/1`, `use_observable/2`) for full signatures.
+  `Filament.Cell`, and `Filament.Hooks` (`use_observable/1`, `use_observable/2`,
+  `use_cell/2`) for full signatures.
