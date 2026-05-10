@@ -129,7 +129,8 @@ defmodule Filament.MixProject do
     [
       description: "JSX-like LiveView components — events as closures, state as hooks, servers as observables",
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/jallum/filament"}
+      links: %{"GitHub" => "https://github.com/jallum/filament"},
+      files: ~w(lib priv .formatter.exs mix.exs README.md CHANGELOG.md LICENSE CONTRIBUTING.md guides)
     ]
   end
 end
