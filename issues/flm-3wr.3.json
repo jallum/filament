@@ -2,14 +2,15 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-10T08:59:10Z",
   "created": "2026-05-10T08:43:56Z",
   "description": "Generalise event dispatch into a target-agnostic walker. Today the LiveView adapter looks up handlers by wire ref and invokes them directly — purely flat dispatch keyed on `{fiber_id, slot_index}`. After this epic:\n\n- Handlers register for **capture** or **bubble** phase via `event_at` (or a refined API).\n- `Filament.Core.dispatch_event(tree, focused_fiber, event)` walks fiber ancestry: capture root-to-target, then bubble target-to-root. `stop_propagation` halts the walk.\n- Event SOURCES are backend-contributed (DOM events for web, terminal escape sequences for TUI). Event SEMANTICS (focus tree walk, propagation rules) live in Core.\n- `event_at` returns a backend-opaque handle. Web backend stringifies it for the wire; TUI backend uses it directly as a map key.\n\nAfter this lands, OctoPi's TUI (and any future backend) gets the same focus-walk model the web has had implicitly — without re-implementing it.\n\n## Strategy\n\nDecompose into:\n\n1. **3.1** Define the event handle + phase-aware registration API.\n2. **3.2** Implement `Filament.Core.dispatch_event/3` walker (capture + target + bubble; stop_propagation).\n3. **3.3** Wire the LiveView adapter to dispatch through the Core walker rather than the current flat lookup.\n4. **3.4** Documentation: events guide for backend authors, capture/bubble examples.",
   "id": "flm-3wr.3",
   "labels": [],
   "parent": "flm-3wr",
   "priority": 1,
-  "status": "open",
+  "status": "closed",
   "title": "[EPIC] Phase 3: capture/bubble event protocol",
   "type": "task",
-  "updated_at": "2026-05-10T08:43:56Z"
+  "updated_at": "2026-05-10T08:59:10Z"
 }
