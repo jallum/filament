@@ -277,7 +277,11 @@ defmodule Filament.LiveView do
   """
   @spec extract_props(map(), module()) :: map()
   def extract_props(assigns, component) when is_atom(component) do
-    if function_exported?(component, :__props__, 0) do
+    # Phoenix doesn't pre-load route modules on mount, so the component
+    # module may not be loaded yet — function_exported?/3 would return
+    # false and we'd silently drop every prop. ensure_loaded?/1 forces
+    # the load before we ask.
+    if Code.ensure_loaded?(component) and function_exported?(component, :__props__, 0) do
       allowed = component.__props__() |> Enum.map(fn {name, _meta} -> name end)
       Map.take(assigns, allowed)
     else
