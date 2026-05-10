@@ -105,7 +105,7 @@ defmodule Filament.LiveViewTest do
       assert socket.assigns._filament_tree["root"]
 
       assert Map.has_key?(socket.assigns, :_filament_rendered)
-      assert %Phoenix.LiveView.Rendered{} = socket.assigns._filament_rendered
+      assert %Rendered{} = socket.assigns._filament_rendered
 
       assert Map.has_key?(socket.assigns, :_filament_pending_effects)
       assert socket.assigns._filament_pending_effects == []
@@ -170,7 +170,7 @@ defmodule Filament.LiveViewTest do
         cell = {Filament.Observable.GenServer, server}
 
         value =
-          use_observable(cell, fn
+          use_value(cell, fn
             :disconnected -> :disconnected
             n -> n
           end)
@@ -280,7 +280,7 @@ defmodule Filament.LiveViewTest do
         prop(:cell, :any, required: true)
 
         def render(%{cell: cell}) do
-          count = use_observable(cell, & &1)
+          count = use_value(cell, & &1)
           ~F"<p>cell-count: {count}</p>"
         end
       end
@@ -332,8 +332,7 @@ defmodule Filament.LiveViewTest do
       {:ok, socket} = CellLiveView.mount(%{}, %{}, socket)
 
       # Find the subscriber tuple (one slot exists on root after mount).
-      [{slot_index, _}] =
-        socket.assigns._filament_tree["root"].hook_slots |> Enum.to_list()
+      [{slot_index, _}] = Enum.to_list(socket.assigns._filament_tree["root"].hook_slots)
 
       subscriber = {self(), "root", slot_index}
 
@@ -416,8 +415,7 @@ defmodule Filament.LiveViewTest do
       socket = test_socket(%{cell: cell})
       {:ok, socket} = CellLiveView.mount(%{}, %{}, socket)
 
-      [{slot_index, _}] =
-        socket.assigns._filament_tree["root"].hook_slots |> Enum.to_list()
+      [{slot_index, _}] = Enum.to_list(socket.assigns._filament_tree["root"].hook_slots)
 
       # Kill the server. The cell is now unreachable.
       ref = Process.monitor(server)
@@ -433,7 +431,7 @@ defmodule Filament.LiveViewTest do
       html_disconnected =
         socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
 
-      # The cell can't reach its (dead) source, so use_observable yields :disconnected.
+      # The cell can't reach its (dead) source, so use_value yields :disconnected.
       assert html_disconnected =~ "cell-count: disconnected"
 
       # Restart the cell against a fresh server. Component re-render via a

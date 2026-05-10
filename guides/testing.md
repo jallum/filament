@@ -140,7 +140,7 @@ Unspecified modifiers default to `false`.
 
 ## Observable stubs
 
-Components that call `use_observable` need a server to subscribe to. In tests,
+Components that call `use_value` need a server to subscribe to. In tests,
 supply a stub instead of a real process:
 
 ```elixir

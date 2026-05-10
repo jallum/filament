@@ -16,7 +16,7 @@ locally. This means projection functions can safely close over local component s
 without any coordination with the server.
 
 This guide uses the Cart & Checkout example from `examples/cart`. By the end you will
-understand `Observable.GenServer`, `use_observable/2`, the change-or-bust mechanism,
+understand `Observable.GenServer`, `use_value/2`, the change-or-bust mechanism,
 and how to test observable components.
 
 ## The Observable.GenServer macro
@@ -71,9 +71,9 @@ The default `handle_subscribe/2` returns `{:ok, state, state}` (the current stat
 as the initial value). Override it to reject subscriptions or return a different
 initial value.
 
-## Subscribing from a component: use_observable/2
+## Subscribing from a component: use_value/2
 
-`use_observable/2` takes a server reference and a projection function. The projection
+`use_value/2` takes a server reference and a projection function. The projection
 function receives either `:disconnected` (before the WebSocket is established) or the
 raw state broadcast by the server. The `CartBadge` component receives the server as a
 prop and projects the item count:
@@ -87,7 +87,7 @@ defmodule CartWeb.Components.CartBadge do
 
     def render(%{server: server}) do
       count =
-        use_observable(server, fn
+        use_value(server, fn
           :disconnected -> 0
           s -> Cart.State.item_count(s)
         end)
@@ -106,7 +106,7 @@ The parent component resolves the server once and passes it as a prop:
 
 ```elixir
 def render(%{session_id: session_id}) do
-  server = use_observable(fn -> Cart.Server.ensure_started(session_id) end)
+  server = use_source(fn -> Cart.Server.ensure_started(session_id) end)
 
   ~F"""
   <CartBadge server={server} />
@@ -115,15 +115,15 @@ def render(%{session_id: session_id}) do
 end
 ```
 
-`use_observable/1` (factory fn or pid, no projection) returns the resolved pid
-(or `nil` during disconnected renders). `use_observable/2` calls the projection
+`use_source/1` (factory fn or pid, no projection) returns the resolved pid
+(or `nil` during disconnected renders). `use_value/2` calls the projection
 function with `:disconnected` on the first HTTP render, letting it return a safe
 default.
 
 Or use a sentinel to branch on the disconnected case:
 
 ```elixir
-cart = use_observable(server, fn :disconnected -> nil; s -> s end)
+cart = use_value(server, fn :disconnected -> nil; s -> s end)
 if cart == nil, do: render_loading(), else: render_cart(cart)
 ```
 
@@ -133,11 +133,11 @@ latest raw state received from the server.
 ## Server lifecycle with a factory function
 
 When the component owns the server's lifecycle, pass a factory function directly to
-`use_observable/1`:
+`use_source/1`:
 
 ```elixir
-store = use_observable(fn -> Todo.Store.start_link([]) end)
-todos = use_observable(store, fn
+store = use_source(fn -> Todo.Store.start_link([]) end)
+todos = use_value(store, fn
   :disconnected -> []
   s -> s
 end)
@@ -166,8 +166,8 @@ defmodule TodoWeb.TodoLive do
 end
 ```
 
-On the **first render** (HTTP pre-connect), `use_observable/1` returns `nil` because
-subscribing during an HTTP render would create zombie subscribers. `use_observable/2`
+On the **first render** (HTTP pre-connect), `use_source/1` returns `nil` because
+subscribing during an HTTP render would create zombie subscribers. `use_value/2`
 calls the projection function with `:disconnected` instead.
 
 ## Projections and change-or-bust
@@ -259,7 +259,7 @@ The fix is simple:
 use Filament.LiveView, static_subscribe: false
 ```
 
-With this setting, `use_observable/2` returns the `:disconnected` value on the HTTP
+With this setting, `use_value/2` returns the `:disconnected` value on the HTTP
 render (so you might show "Connecting…" or `0` initially), then re-renders with live
 data the moment the WebSocket connects. Because no subscription is made during the
 static render, presence only ever counts real WebSocket connections — the spike
@@ -360,11 +360,11 @@ See `Filament.Observable` for the full `@callback` specifications including the
 
 - **Hooks guide** — learn how to compose hooks and build custom hooks like
   `use_hold` (see `examples/inventory/lib/inventory_web/hooks.ex` for a
-  worked example of resource holds built on top of `use_observable`).
+  worked example of resource holds built on top of `use_value`).
 - **[Cells guide](cells.html)** — the abstraction underneath observables.
   Read this if you're writing a non-GenServer transport (in-process struct,
   focus tracker, custom backend) or consuming cells handed to you by a
   backend you don't own.
 - **API reference** — see `Filament.Observable`, `Filament.Observable.GenServer`,
-  `Filament.Cell`, and `Filament.Hooks` (`use_observable/1`, `use_observable/2`,
-  `use_observable/2`) for full signatures.
+  `Filament.Cell`, and `Filament.Hooks` (`use_source/1`, `use_value/2`,
+  `use_value/2`) for full signatures.

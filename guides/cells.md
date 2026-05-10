@@ -2,13 +2,14 @@
 
 A cell is the unit of reactivity in Filament — a versioned value with subscribers
 and a projection-equality check. Components consume cells via hooks
-(`use_observable`); transports — GenServer-backed observables, in-process
+(`use_source` to bind, `use_value` to read); transports — GenServer-backed
+observables, in-process
 structs, focus trackers — provide them. The component is unaware of which transport
 delivers a cell's value, so the same component code runs against a Phoenix LiveView
 backend, an out-of-process state store, or a non-web target like a TUI.
 
 This guide is for developers who want to **author a transport** or work with
-non-default cells. Most application code uses `use_observable/2` and never thinks
+non-default cells. Most application code uses `use_value/2` and never thinks
 about the cell layer; if that's you, the **[Observables guide](observables.html)**
 is enough — come back here when you need to plug something more exotic in.
 
@@ -93,15 +94,15 @@ end
 cell = {Filament.Observable.GenServer, Cart.Server}
 ```
 
-## The `use_observable/2` hook
+## The `use_value/2` hook
 
-`use_observable(cell, projection)` is the generic cell-subscription primitive at
+`use_value(cell, projection)` is the generic cell-subscription primitive at
 the component level. It accepts any cell tuple and applies the projection at
 render time:
 
 ```elixir
 def render(%{cart: cart_cell}) do
-  count = use_observable(cart_cell, fn
+  count = use_value(cart_cell, fn
     :disconnected -> 0
     state -> length(state.items)
   end)
@@ -120,8 +121,8 @@ prevents redundant DOM updates.
 | Hook                | When                                                              |
 |---------------------|-------------------------------------------------------------------|
 | `use_state/1`       | Fiber-local state. No subscription, no transport.                 |
-| `use_observable/1`  | Resolve a cell once for the calling fiber (factory or passthrough). |
-| `use_observable/2`  | Subscribe to any cell and project its current value.              |
+| `use_source/1`  | Resolve a cell once for the calling fiber (factory or passthrough). |
+| `use_value/2`  | Subscribe to any cell and project its current value.              |
 
 ## Authoring a transport
 
@@ -184,13 +185,13 @@ Then in a component:
 {:ok, agent} = MyApp.AgentCell.start_link(0)
 cell = {MyApp.AgentCell, agent}
 
-count = use_observable(cell, & &1)
+count = use_value(cell, & &1)
 ```
 
 ## Naming: `use_state` stays
 
 `use_state/1` was a candidate to be renamed `use_local` for symmetry with
-`use_observable` (where "cell" implies external; "local" implies fiber-internal).
+the source hooks (where "source" implies external; "local" implies fiber-internal).
 After review the rename was rejected:
 
 - `use_state` is the established React-family name; Filament users coming
@@ -200,5 +201,5 @@ After review the rename was rejected:
 - A rename creates churn across every component in every Filament codebase
   for no behaviour change.
 
-The mental model stays: **`use_state` for fiber-local state, `use_observable` /
-`use_observable` for shared / transport-backed state.**
+The mental model stays: **`use_state` for fiber-local state, `use_source` /
+`use_value` for shared / transport-backed state.**

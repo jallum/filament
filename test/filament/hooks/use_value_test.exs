@@ -1,15 +1,14 @@
-defmodule Filament.Hooks.UseObservableTest do
+defmodule Filament.Hooks.UseValueTest do
   @moduledoc """
-  Phase 2.3: `use_observable(cell, projection)` is the generic cell-subscription
-  hook. It accepts any `Filament.Cell` tuple — GenServer-backed observable,
+  `use_value(source, projection)` is the generic source-subscription hook.
+  It accepts any `Filament.Cell` tuple — GenServer-backed observable,
   in-process struct, focus tracker, etc. — and projects the current value
   for the calling fiber. The component is unaware of the transport.
 
-  The hook subscribes with identity projection (delivers raw cell values)
-  and applies the user's projection at render time, mirroring
-  `use_observable`'s closure-freshness semantics. Cell's change-or-bust
-  fires on raw value changes; render-level projection then determines
-  whether the diff engine has anything to send.
+  The hook subscribes with identity projection (delivers raw source values)
+  and applies the user's projection at render time, giving closure-freshness
+  semantics. Cell's change-or-bust fires on raw value changes; render-level
+  projection then determines whether the diff engine has anything to send.
   """
   use ExUnit.Case, async: true
 
@@ -42,13 +41,13 @@ defmodule Filament.Hooks.UseObservableTest do
       prop(:cell, :any, required: true)
 
       def render(%{cell: cell}) do
-        count = use_observable(cell, & &1)
+        count = use_value(cell, & &1)
         ~F"<p>{count}</p>"
       end
     end
   end
 
-  describe "use_observable/2" do
+  describe "use_value/2" do
     test "delivers the initial projected value on first mount" do
       {:ok, server} = Counter.start_link(7)
       cell = {Filament.Observable.GenServer, server}
@@ -66,13 +65,14 @@ defmodule Filament.Hooks.UseObservableTest do
       cell = {Filament.Observable.GenServer, server}
 
       defmodule ProjectedComp do
+        @moduledoc false
         use Filament.Component
 
         defcomponent ProjectedComp do
           prop(:cell, :any, required: true)
 
           def render(%{cell: cell}) do
-            doubled = use_observable(cell, &(&1 * 2))
+            doubled = use_value(cell, &(&1 * 2))
             ~F"<p>{doubled}</p>"
           end
         end
@@ -95,10 +95,11 @@ defmodule Filament.Hooks.UseObservableTest do
       assert pid == self()
     end
 
-    test "use_observable returns :disconnected projection when the cell is unreachable" do
+    test "use_value returns :disconnected projection when the source is unreachable" do
       cell = {Filament.Observable.GenServer, :nonexistent_server}
 
       defmodule DisconnectedComp do
+        @moduledoc false
         use Filament.Component
 
         defcomponent DisconnectedComp do
@@ -106,7 +107,7 @@ defmodule Filament.Hooks.UseObservableTest do
 
           def render(%{cell: cell}) do
             value =
-              use_observable(cell, fn
+              use_value(cell, fn
                 :disconnected -> "no-server"
                 v -> "v=#{v}"
               end)
@@ -124,11 +125,12 @@ defmodule Filament.Hooks.UseObservableTest do
   end
 
   describe "subscribe_enabled = false (HTTP static mount)" do
-    test "use_observable returns :disconnected projection during static render" do
+    test "use_value returns :disconnected projection during static render" do
       {:ok, server} = Counter.start_link(42)
       cell = {Filament.Observable.GenServer, server}
 
       defmodule StaticComp do
+        @moduledoc false
         use Filament.Component
 
         defcomponent StaticComp do
@@ -136,7 +138,7 @@ defmodule Filament.Hooks.UseObservableTest do
 
           def render(%{cell: cell}) do
             value =
-              use_observable(cell, fn
+              use_value(cell, fn
                 :disconnected -> "no-server"
                 v -> "v=#{v}"
               end)
@@ -156,7 +158,7 @@ defmodule Filament.Hooks.UseObservableTest do
     end
   end
 
-  describe "use_observable + Reconciler.update reflect cell changes" do
+  describe "use_value + Reconciler.update reflect cell changes" do
     test "re-render after cell update reads the latest value via fiber slot" do
       {:ok, server} = Counter.start_link(0)
       cell = {Filament.Observable.GenServer, server}
@@ -201,12 +203,12 @@ defmodule Filament.Hooks.UseObservableTest do
       assert walked2 |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>20</p>"
 
       # server_a now has zero subscribers; server_b has one.
-      assert cell_subscribers_in(server_a) |> map_size() == 0
-      assert cell_subscribers_in(server_b) |> map_size() == 1
+      assert server_a |> cell_subscribers_in() |> map_size() == 0
+      assert server_b |> cell_subscribers_in() |> map_size() == 1
     end
   end
 
-  describe "use_observable/1 (factory form)" do
+  describe "use_source/1 (factory form)" do
     defmodule FactoryCellComp do
       @moduledoc false
       use Filament.Component
@@ -215,20 +217,18 @@ defmodule Filament.Hooks.UseObservableTest do
         prop(:server, :any, required: true)
 
         def render(%{server: server}) do
-          cell = use_observable(fn -> {Filament.Observable.GenServer, server} end)
-          count = use_observable(cell, & &1)
+          cell = use_source(fn -> {Filament.Observable.GenServer, server} end)
+          count = use_value(cell, & &1)
           ~F"<p>{count}</p>"
         end
       end
     end
 
-    test "factory fn resolves to a cell tuple and feeds use_observable/2" do
+    test "factory fn resolves to a source tuple and feeds use_value/2" do
       {:ok, server} = Counter.start_link(3)
 
       {_tree, walked, _} =
-        Reconciler.mount(FactoryCellComp.FactoryCellComp, %{server: server},
-          owner_pid: self()
-        )
+        Reconciler.mount(FactoryCellComp.FactoryCellComp, %{server: server}, owner_pid: self())
 
       assert walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>3</p>"
     end
@@ -237,20 +237,22 @@ defmodule Filament.Hooks.UseObservableTest do
       {:ok, server} = Counter.start_link(0)
 
       counter = :counters.new(1, [])
+
       factory = fn ->
         :counters.add(counter, 1, 1)
         {Filament.Observable.GenServer, server}
       end
 
       defmodule SpyComp do
+        @moduledoc false
         use Filament.Component
 
         defcomponent SpyComp do
           prop(:factory, :any, required: true)
 
           def render(%{factory: factory}) do
-            cell = use_observable(factory)
-            count = use_observable(cell, & &1)
+            cell = use_source(factory)
+            count = use_value(cell, & &1)
             ~F"<p>{count}</p>"
           end
         end
@@ -281,14 +283,15 @@ defmodule Filament.Hooks.UseObservableTest do
       end
 
       defmodule LiveSpyComp do
+        @moduledoc false
         use Filament.Component
 
         defcomponent LiveSpyComp do
           prop(:factory, :any, required: true)
 
           def render(%{factory: factory}) do
-            cell = use_observable(factory)
-            count = use_observable(cell, & &1)
+            cell = use_source(factory)
+            count = use_value(cell, & &1)
             ~F"<p>{count}</p>"
           end
         end
@@ -320,14 +323,15 @@ defmodule Filament.Hooks.UseObservableTest do
       cell = {Filament.Observable.GenServer, server}
 
       defmodule PassthroughComp do
+        @moduledoc false
         use Filament.Component
 
         defcomponent PassthroughComp do
           prop(:cell, :any, required: true)
 
           def render(%{cell: cell}) do
-            resolved = use_observable(cell)
-            value = use_observable(resolved, & &1)
+            resolved = use_source(cell)
+            value = use_value(resolved, & &1)
             ~F"<p>{value}</p>"
           end
         end
@@ -344,5 +348,4 @@ defmodule Filament.Hooks.UseObservableTest do
     {:dictionary, dict} = Process.info(server, :dictionary)
     Keyword.get(dict, :__filament_cell_subscribers__, %{})
   end
-
 end

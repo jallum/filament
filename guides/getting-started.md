@@ -78,8 +78,8 @@ Key points:
 
 ```elixir
 def render(%{title: title}) do
-  store = use_observable(fn -> Todo.Store.start_link([]) end)
-  todos = use_observable(store, fn :disconnected -> []; s -> s end)
+  store = use_source(fn -> Todo.Store.start_link([]) end)
+  todos = use_value(store, fn :disconnected -> []; s -> s end)
 
   {filter, set_filter} = use_state(:all)
   filtered = apply_filter(todos, filter)
@@ -242,7 +242,7 @@ observable stubs, async assertions, keyboard events, and more.
 ## Next steps
 
 - **[Testing guide](testing.html)** — full test API reference: bang/pipeline helpers, observable stubs, async assertions, keyboard events.
-- **[Observables guide](observables.html)** — `Observable.GenServer`, `use_observable/1` and `use_observable/2`, and the change-or-bust pattern.
+- **[Observables guide](observables.html)** — `Observable.GenServer`, `use_source/1` and `use_value/2`, and the change-or-bust pattern.
 - **[Hooks guide](hooks.html)** — composing built-in hooks and writing custom hooks for domain logic.
 - **[Cells guide](cells.html)** — the abstraction underneath observables, for non-GenServer transports and custom backends.
 - **[Events guide](events.html)** — the capture/bubble dispatcher and how event sources feed into Filament's substrate.

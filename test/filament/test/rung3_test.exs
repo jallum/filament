@@ -29,7 +29,7 @@ defmodule Filament.Test.Rung3Test do
         cell = {Filament.Observable.GenServer, server}
 
         count =
-          use_observable(cell, fn
+          use_value(cell, fn
             :disconnected -> nil
             s -> s
           end)

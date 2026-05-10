@@ -54,7 +54,7 @@ defmodule Filament.TestTest do
         cell = {Filament.Observable.GenServer, server}
 
         value =
-          use_observable(cell, fn
+          use_value(cell, fn
             :disconnected -> nil
             s -> s
           end)
@@ -95,7 +95,8 @@ defmodule Filament.TestTest do
 
         ~F"""
         <div>
-          <input id="field"
+          <input
+            id="field"
             on_change={fn params -> set_last_change.(params["value"]) end}
             on_blur={fn -> set_last_blur.("blurred") end}
             on_keydown={fn params -> set_last_key.(params["key"]) end}
@@ -133,7 +134,7 @@ defmodule Filament.TestTest do
   end
 
   test "click updates state and re-renders" do
-    view = mount!(CounterComp.Counter, %{initial: 0}) |> click!("button")
+    view = CounterComp.Counter |> mount!(%{initial: 0}) |> click!("button")
     assert render_text(view) =~ "Count: 1"
 
     view = click!(view, "button")
@@ -183,7 +184,7 @@ defmodule Filament.TestTest do
   end
 
   test "key_down delivers key string and %Filament.KeyModifiers{} to the handler" do
-    view = mount!(KeyModalComp.KeyModal, %{}) |> key_down!("Escape")
+    view = KeyModalComp.KeyModal |> mount!(%{}) |> key_down!("Escape")
     assert render_text(view) =~ ~s({"Escape", %Filament.KeyModifiers{)
 
     view = key_down!(view, "s", ctrl: true)
@@ -192,17 +193,17 @@ defmodule Filament.TestTest do
   end
 
   test "change delivers params to handler and re-renders" do
-    view = mount!(InputComp.Input, %{}) |> change!("#field", %{"value" => "hello"})
+    view = InputComp.Input |> mount!(%{}) |> change!("#field", %{"value" => "hello"})
     assert render_text(view) =~ "hello"
   end
 
   test "blur fires handler and re-renders" do
-    view = mount!(InputComp.Input, %{}) |> blur!("#field")
+    view = InputComp.Input |> mount!(%{}) |> blur!("#field")
     assert render_text(view) =~ "blurred"
   end
 
   test "key_down (element-scoped) delivers key string and re-renders" do
-    view = mount!(InputComp.Input, %{}) |> key_down!("#field", "Tab")
+    view = InputComp.Input |> mount!(%{}) |> key_down!("#field", "Tab")
     assert render_text(view) =~ "Tab"
   end
 
@@ -228,14 +229,15 @@ defmodule Filament.TestTest do
       send(test_pid, {:submitted, params})
     end
 
-    mount!(FormComp.Form, %{on_submit: handler}) |> submit!("form", %{"name" => "Alice"})
+    FormComp.Form |> mount!(%{on_submit: handler}) |> submit!("form", %{"name" => "Alice"})
 
     assert_receive {:submitted, %{"name" => "Alice"}}
   end
 
   test "bang variants return view directly and enable pipelining" do
     view =
-      mount!(CounterComp.Counter, %{initial: 0})
+      CounterComp.Counter
+      |> mount!(%{initial: 0})
       |> click!("button")
       |> click!("button")
       |> click!("button")

@@ -114,7 +114,7 @@ defmodule MyApp.CartComponent do
     prop(:server, :any, default: MyApp.CartServer)
 
     def render(%{server: server}) do
-      cart = use_observable(server, fn :disconnected -> nil; s -> s end)
+      cart = use_value(server, fn :disconnected -> nil; s -> s end)
       items = if cart == nil, do: [], else: cart.items
       total = if cart == nil, do: 0, else: cart.total
 
@@ -135,7 +135,7 @@ end
 
 Key differences from the LiveView template:
 
-- `use_observable(server, fn :disconnected -> nil; s -> s end)` subscribes this
+- `use_value(server, fn :disconnected -> nil; s -> s end)` subscribes this
   component to the server and returns the current projected value. The function
   receives `:disconnected` during HTTP renders and returns a safe default.
 - `~F"""` templates use `{expression}` interpolation and `{for ... do}` / `{end}`
@@ -151,9 +151,9 @@ efficient — each `{parent_pid, request}` pair shares a single subscriber entry
 server regardless of how many projections it has:
 
 ```elixir
-# Parent: resolve once with use_observable/1
+# Parent: resolve once with use_source/1
 def render(%{session_id: session_id}) do
-  server = use_observable(fn -> MyApp.CartServer.start_link(session_id) end)
+  server = use_source(fn -> MyApp.CartServer.start_link(session_id) end)
 
   ~F"""
   <CartBadge server={server} />
@@ -161,9 +161,9 @@ def render(%{session_id: session_id}) do
   """
 end
 
-# Child: project with use_observable/2 — no redundant subscription
+# Child: project with use_value/2 — no redundant subscription
 def render(%{server: server}) do
-  count = use_observable(server, fn :disconnected -> 0; s -> Cart.State.item_count(s) end)
+  count = use_value(server, fn :disconnected -> 0; s -> Cart.State.item_count(s) end)
   ...
 end
 ```
@@ -198,7 +198,7 @@ end
 This is a Phase 1 limitation described in `Filament.LiveComponent`. You only need
 this forwarding while the component is hosted inside a regular LiveView.
 
-For components that use only `use_state` (no `use_observable`), no forwarding is
+For components that use only `use_state` (no `use_value`), no forwarding is
 needed because state updates are handled internally within the same process.
 
 ## Phase 6: Full migration (optional)
@@ -221,7 +221,7 @@ for the full `Filament.LiveView` explanation.
 
 If your application has checkout flows, pessimistic locks, or reservation UX, holds
 are not part of Filament core — but they are straightforward to build as a custom
-hook on top of `use_observable`. See
+hook on top of `use_value`. See
 `examples/inventory/lib/inventory_web/hooks.ex` for a complete `use_hold/3`
 implementation that acquires and releases quantity-based holds, with automatic
 release when the LiveView disconnects via `handle_unsubscribe/2` on the server.
@@ -234,26 +234,26 @@ introduced after the initial 0.1 release. If you are starting fresh from the
 current release you can skip this section — the examples in Phases 3–6 above
 already reflect the new API.
 
-### `use_projection/3` removed — use `use_observable/2` instead
+### `use_projection/3` removed — use `use_value/2` instead
 
-`use_projection/3` no longer exists. Replace every call with `use_observable/2`,
+`use_projection/3` no longer exists. Replace every call with `use_value/2`,
 passing a two-clause function that handles the `:disconnected` case and projects
 the live state. The function runs client-side at render time and can close over
 local component assigns.
 
 ```elixir
 # Before
-server = use_observable(CartServer)
+server = use_source(CartServer)
 count = use_projection(server, fn state -> Cart.State.item_count(state) end, disconnected: 0)
 
 # After
-count = use_observable(CartServer, fn
+count = use_value(CartServer, fn
   :disconnected -> 0
   state -> Cart.State.item_count(state)
 end)
 ```
 
-The old `disconnected:` keyword option form of `use_observable/2` is also gone —
+The old `disconnected:` keyword option form of `use_value/2` is also gone —
 use the function-argument form shown above for all cases.
 
 ### `handle_subscribe/3` → `handle_subscribe/2`
@@ -312,7 +312,7 @@ update. The server now sends raw state to all subscribers and each subscriber
 compares the raw value (`new_raw !== last_raw`) independently. Projection
 functions are applied at render time on the client side. The practical effect:
 
-- The projection function passed to `use_observable/2` can safely close over
+- The projection function passed to `use_value/2` can safely close over
   component-local state without needing the server to know about it.
 - All subscribers to the same server share one raw-state broadcast; there is no
   per-projection diffing on the server.
