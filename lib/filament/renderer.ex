@@ -197,6 +197,23 @@ defmodule Filament.Renderer do
     {:fragment, walked}
   end
 
+  def walk_vnode({:slot, _name, [], nil}, _context) do
+    {:fragment, []}
+  end
+
+  def walk_vnode({:slot, _name, [], default_mod}, context) when not is_nil(default_mod) do
+    walk_vnode({:component, default_mod, %{}, nil}, context)
+  end
+
+  def walk_vnode({:slot, _name, entries, _default}, context) do
+    children =
+      Enum.map(entries, fn %Filament.Slot.Entry{render_fn: f} ->
+        walk_child(f.(), context)
+      end)
+
+    {:fragment, children}
+  end
+
   def walk_vnode(invalid, _context) do
     raise ArgumentError, "invalid vnode: #{inspect(invalid)}"
   end
