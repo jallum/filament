@@ -535,6 +535,25 @@ defmodule Filament.TagEngine do
     |> continue(tokens)
   end
 
+  # Provider render site: <:slot_name /> inside a component's own render/1 template
+
+  defp handle_token([{:slot, slot_name, attrs, %{closing: :self} = tag_meta} | tokens], state) do
+    slot_atom = String.to_atom(slot_name)
+    default_ast = parse_slot_default(attrs, state)
+    assigns_var = Macro.var(:assigns, nil)
+
+    vnode_ast =
+      quote line: tag_meta.line do
+        {:slot, unquote(slot_atom), Map.get(unquote(assigns_var), unquote(slot_atom), []),
+         unquote(default_ast)}
+      end
+
+    state
+    |> set_root_on_not_tag()
+    |> update_subengine(:handle_expr, ["=", vnode_ast])
+    |> continue(tokens)
+  end
+
   # Slot sub-tag consumer: <:slot_name>...</:slot_name> inside a component tag
 
   defp handle_token([{:slot, slot_name, attrs, tag_meta} | tokens], state) do
@@ -1210,6 +1229,13 @@ defmodule Filament.TagEngine do
 
   defp merge_assigns_with_slots(regular_assigns, slot_assigns_ast, line) do
     quote line: line, do: Map.merge(unquote(regular_assigns), unquote(slot_assigns_ast))
+  end
+
+  defp parse_slot_default(attrs, state) do
+    case List.keyfind(attrs, "default", 0) do
+      {"default", {:expr, _, _} = expr, _attr_meta} -> parse_expr!(expr, state.file)
+      _ -> nil
+    end
   end
 
   # True when we're directly inside a component's body (not inside a slot capture substate).
