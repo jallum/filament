@@ -457,13 +457,26 @@ defmodule Filament.TagEngine do
   # Text
 
   defp handle_token([{:text, text, %{line_end: line, column_end: column}} | tokens], state) do
-    if text == "" do
-      continue(state, tokens)
-    else
-      state
-      |> set_root_on_not_tag()
-      |> update_subengine(:handle_text, [[line: line, column: column], text])
-      |> continue(tokens)
+    cond do
+      text == "" ->
+        continue(state, tokens)
+
+      in_component_toplevel?(state) and String.match?(text, ~r/\A\s*\z/) ->
+        continue(state, tokens)
+
+      in_component_toplevel?(state) ->
+        raise_syntax_error!(
+          "unexpected content inside component. " <>
+            "Wrap it in a named slot: `<:slot_name>content</:slot_name>`",
+          %{line: line, column: column},
+          state
+        )
+
+      true ->
+        state
+        |> set_root_on_not_tag()
+        |> update_subengine(:handle_text, [[line: line, column: column], text])
+        |> continue(tokens)
     end
   end
 
@@ -506,24 +519,72 @@ defmodule Filament.TagEngine do
     end
   end
 
-  # Remote function component (with inner content)
+  # Remote function component (with inner content — slot consumer form)
 
-  defp handle_token([{:remote_component, _name, _attrs, tag_meta} | _tokens], state) do
-    raise_syntax_error!(
-      "components with inner content (`<Module>...</Module>`) are not supported. " <>
-        "Use a self-closing form (`<Module ... />`) and pass children as props.",
-      tag_meta,
-      state
-    )
+  defp handle_token([{:remote_component, name, attrs, tag_meta} | tokens], state) do
+    attrs = postprocess_attrs(attrs, state)
+    {mod_ast, _mod_size, fun} = decompose_remote_component_tag!(name, tag_meta, state)
+
+    {regular_assigns, _attr_info} =
+      build_self_close_component_assigns({"remote component", name}, attrs, tag_meta.line, state)
+
+    state
+    |> set_root_on_not_tag()
+    |> push_tag({:remote_component, name, {mod_ast, fun, regular_assigns}, tag_meta})
+    |> push_slots_frame()
+    |> continue(tokens)
   end
 
-  defp handle_token([{:slot, slot_name, _attrs, tag_meta} | _tokens], state) do
-    raise_syntax_error!(
-      "slot syntax `<:#{slot_name}>` is not supported. " <>
-        "Pass slot content as a prop instead.",
-      tag_meta,
-      state
-    )
+  # Slot sub-tag consumer: <:slot_name>...</:slot_name> inside a component tag
+
+  defp handle_token([{:slot, slot_name, attrs, tag_meta} | tokens], state) do
+    if state.slots == [] do
+      raise_syntax_error!(
+        "slot syntax `<:#{slot_name}>` is only valid inside a component tag",
+        tag_meta,
+        state
+      )
+    end
+
+    slot_atom = String.to_atom(slot_name)
+    slot_attrs_ast = parse_slot_attrs(attrs, state)
+
+    state
+    |> push_substate_to_stack()
+    |> push_stack_item({:slot_capture, slot_atom, slot_attrs_ast})
+    |> update_subengine(:handle_begin, [])
+    |> continue(tokens)
+  end
+
+  # Close slot sub-tag
+
+  defp handle_token([{:close, :slot, _slot_name, _tag_meta} | tokens], state) do
+    [{:slot_capture, slot_atom, slot_attrs_ast} | rest_stack] = state.stack
+    state_trimmed = %{state | stack: rest_stack}
+    body_ast = invoke_subengine(state_trimmed, :handle_end, [])
+    entry_ast = build_slot_entry_ast(body_ast, slot_attrs_ast)
+
+    state_trimmed
+    |> pop_substate_from_stack()
+    |> add_slot_entry(slot_atom, entry_ast)
+    |> continue(tokens)
+  end
+
+  # Close remote component — emit the component vnode with accumulated slot assigns
+
+  defp handle_token([{:close, :remote_component, _name, _close_meta} = token | tokens], state) do
+    {{:remote_component, _name, {mod_ast, fun, regular_assigns}, open_meta}, state} =
+      pop_tag!(state, token)
+
+    {slots_map, state} = pop_slots_frame(state)
+    slot_assigns_ast = build_slot_assigns_ast(slots_map)
+    full_assigns = merge_assigns_with_slots(regular_assigns, slot_assigns_ast, open_meta.line)
+    vnode_ast = build_filament_component_ast(state, mod_ast, fun, full_assigns, nil, open_meta.line)
+
+    state
+    |> set_root_on_not_tag()
+    |> update_subengine(:handle_expr, ["=", vnode_ast])
+    |> continue(tokens)
   end
 
   # Local function component (self close)
@@ -1105,6 +1166,61 @@ defmodule Filament.TagEngine do
   end
 
   defp maybe_keyed(%{for: for_expr}), do: for_expr
+
+  ## Slot helpers
+
+  defp push_slots_frame(state), do: %{state | slots: [%{} | state.slots]}
+
+  defp pop_slots_frame(%{slots: [current | rest]} = state), do: {current, %{state | slots: rest}}
+
+  defp add_slot_entry(%{slots: [current | rest]} = state, slot_name, entry_ast) do
+    updated = Map.update(current, slot_name, [entry_ast], &(&1 ++ [entry_ast]))
+    %{state | slots: [updated | rest]}
+  end
+
+  defp build_slot_entry_ast(body_ast, slot_attrs_ast) do
+    quote do
+      %Filament.Slot.Entry{
+        render_fn: fn -> unquote(body_ast) end,
+        attrs: unquote(slot_attrs_ast)
+      }
+    end
+  end
+
+  defp parse_slot_attrs(attrs, state) do
+    pairs =
+      for {name, value, _attr_meta} <- attrs, not String.starts_with?(name, ":") do
+        value_ast =
+          case value do
+            {:expr, _, _} = expr -> parse_expr!(expr, state.file)
+            {:string, str, _} -> str
+            nil -> true
+          end
+
+        {String.to_atom(name), value_ast}
+      end
+
+    {:%{}, [], pairs}
+  end
+
+  defp build_slot_assigns_ast(slots_map) do
+    pairs = Enum.map(slots_map, fn {name, entries} -> {name, entries} end)
+    {:%{}, [], pairs}
+  end
+
+  defp merge_assigns_with_slots(regular_assigns, slot_assigns_ast, line) do
+    quote line: line, do: Map.merge(unquote(regular_assigns), unquote(slot_assigns_ast))
+  end
+
+  # True when we're directly inside a component's body (not inside a slot capture substate).
+  defp in_component_toplevel?(state) do
+    state.slots != [] and not in_slot_substate?(state.stack)
+  end
+
+  defp in_slot_substate?([{:slot_capture, _, _} | _]), do: true
+  defp in_slot_substate?([{:substate, _} | _]), do: false
+  defp in_slot_substate?([_ | rest]), do: in_slot_substate?(rest)
+  defp in_slot_substate?([]), do: false
 
   ## build_self_close_component_assigns/build_component_assigns
 
