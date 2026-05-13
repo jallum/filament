@@ -156,6 +156,11 @@ defmodule Filament.Web do
     |> fp_mix({:attr_dynamic, name_str})
   end
 
+  defp walk_attr({name, value}, state) when is_list(value) do
+    joined = value |> Enum.filter(& &1) |> Enum.join(" ")
+    walk_attr({name, joined}, state)
+  end
+
   defp walk_attr({name, value}, state) do
     name_str = to_string(name)
 

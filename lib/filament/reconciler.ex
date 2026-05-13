@@ -39,7 +39,8 @@ defmodule Filament.Reconciler do
     }
 
     # Render the component
-    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers, new_capture_handlers} =
+    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers,
+     new_capture_handlers, new_event_handler_kinds, new_capture_handler_kinds} =
       Renderer.render(root_component, props, context)
 
     # Build initial tree with root and any discovered children
@@ -48,6 +49,8 @@ defmodule Filament.Reconciler do
       | hook_slots: new_hook_slots,
         event_handlers: new_event_handlers,
         capture_handlers: new_capture_handlers,
+        event_handler_kinds: new_event_handler_kinds,
+        capture_handler_kinds: new_capture_handler_kinds,
         status: :stable
     }
 
@@ -83,7 +86,8 @@ defmodule Filament.Reconciler do
     }
 
     # Re-render component
-    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers, new_capture_handlers} =
+    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers,
+     new_capture_handlers, new_event_handler_kinds, new_capture_handler_kinds} =
       Renderer.render(fiber.component, new_props, context)
 
     # Commit hook slots and event handlers
@@ -91,7 +95,9 @@ defmodule Filament.Reconciler do
       updated_fiber
       | hook_slots: new_hook_slots,
         event_handlers: new_event_handlers,
-        capture_handlers: new_capture_handlers
+        capture_handlers: new_capture_handlers,
+        event_handler_kinds: new_event_handler_kinds,
+        capture_handler_kinds: new_capture_handler_kinds
     }
 
     # Create new tree with updated fiber

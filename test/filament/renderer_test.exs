@@ -60,7 +60,7 @@ defmodule Filament.RendererTest do
         fiber_tree: %{}
       }
 
-      {result, hook_slots, pending_effects, new_fibers, event_handlers, _capture_handlers} =
+      {result, hook_slots, pending_effects, new_fibers, event_handlers, _capture_handlers, _evt_kinds, _cap_kinds} =
         Renderer.render(TestHello.TestHello, %{name: "world"}, context)
 
       assert is_tuple(result)
@@ -76,7 +76,7 @@ defmodule Filament.RendererTest do
         fiber_tree: %{}
       }
 
-      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers, _capture_handlers} =
+      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers, _capture_handlers, _evt_kinds, _cap_kinds} =
         Renderer.render(TestHello.TestHello, %{name: "Alice"}, context)
 
       iodata = Filament.Web.to_iodata(result)
@@ -102,7 +102,7 @@ defmodule Filament.RendererTest do
         fiber_tree: %{}
       }
 
-      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers, _capture_handlers} =
+      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers, _capture_handlers, _evt_kinds, _cap_kinds} =
         Renderer.render(TestHello.TestHello, %{name: "Bob"}, context)
 
       iodata = Filament.Web.to_iodata(result)

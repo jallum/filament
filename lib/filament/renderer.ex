@@ -17,7 +17,9 @@ defmodule Filament.Renderer do
   """
   @spec render(module(), map(), RenderContext.t()) ::
           {term(), %{non_neg_integer() => term()}, list(), %{String.t() => Fiber.t()},
-           %{non_neg_integer() => function()}, %{non_neg_integer() => function()}}
+           %{non_neg_integer() => function()}, %{non_neg_integer() => function()},
+           %{non_neg_integer() => :all | MapSet.t(atom())},
+           %{non_neg_integer() => :all | MapSet.t(atom())}}
   def render(component_module, props, %RenderContext{} = context) do
     # Apply prop defaults for any props not supplied.
     # Code.ensure_loaded is required because function_exported?/3 returns false
@@ -46,6 +48,8 @@ defmodule Filament.Renderer do
         new_event_handlers: %{},
         capture_handler_index: 0,
         new_capture_handlers: %{},
+        new_event_handler_kinds: %{},
+        new_capture_handler_kinds: %{},
         hook_slots: hook_slots
     })
 
@@ -63,7 +67,8 @@ defmodule Filament.Renderer do
       final_ctx = Process.get(:filament_render_context)
 
       {rendered, final_ctx.new_hook_slots, final_ctx.pending_effects, final_ctx.new_fibers,
-       final_ctx.new_event_handlers, final_ctx.new_capture_handlers}
+       final_ctx.new_event_handlers, final_ctx.new_capture_handlers,
+       final_ctx.new_event_handler_kinds, final_ctx.new_capture_handler_kinds}
     after
       Process.delete(:filament_render_context)
     end
@@ -95,8 +100,9 @@ defmodule Filament.Renderer do
       hook_slots: hook_slots
     }
 
-    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers, child_event_handlers,
-     child_capture_handlers} =
+    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers,
+     child_event_handlers, child_capture_handlers, child_event_handler_kinds,
+     child_capture_handler_kinds} =
       render(mod, props, child_ctx)
 
     child_fiber = %Fiber{
@@ -107,6 +113,8 @@ defmodule Filament.Renderer do
       hook_slots: Map.merge(hook_slots, child_new_hook_slots),
       event_handlers: child_event_handlers,
       capture_handlers: child_capture_handlers,
+      event_handler_kinds: child_event_handler_kinds,
+      capture_handler_kinds: child_capture_handler_kinds,
       children: Map.keys(grandchild_fibers),
       parent_id: parent_ctx.fiber_id,
       status: if(existing_fiber, do: :stable, else: :mounting)

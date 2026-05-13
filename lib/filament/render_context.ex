@@ -28,6 +28,12 @@ defmodule Filament.RenderContext do
     # %{non_neg_integer() => function()} - capture-phase event handlers
     # registered this render
     new_capture_handlers: %{},
+    # %{non_neg_integer() => :all | MapSet.t(atom())} - per-slot kinds
+    # filter for bubble handlers registered this render
+    new_event_handler_kinds: %{},
+    # %{non_neg_integer() => :all | MapSet.t(atom())} - per-slot kinds
+    # filter for capture handlers registered this render
+    new_capture_handler_kinds: %{},
     # boolean() - false during disconnected (HTTP) mounts to skip subscriptions
     subscribe_enabled: true,
     # %{non_neg_integer() => term()} - existing hook slot state for new child fibers
@@ -50,6 +56,8 @@ defmodule Filament.RenderContext do
           new_event_handlers: %{non_neg_integer() => function()},
           capture_handler_index: non_neg_integer(),
           new_capture_handlers: %{non_neg_integer() => function()},
+          new_event_handler_kinds: %{non_neg_integer() => :all | MapSet.t(atom())},
+          new_capture_handler_kinds: %{non_neg_integer() => :all | MapSet.t(atom())},
           subscribe_enabled: boolean(),
           hook_slots: %{non_neg_integer() => term()},
           child_component_indices: %{module() => non_neg_integer()}

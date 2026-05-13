@@ -124,7 +124,7 @@ defmodule Filament.RendererSlotTest do
       body_entry = %Entry{render_fn: fn -> {:element, "p", [], [{:text, "Content"}]} end}
       props = %{body: [body_entry]}
 
-      {walked, _, _, _, _, _} = Renderer.render(Panel.Panel, props, root_ctx())
+      {walked, _, _, _, _, _, _, _} = Renderer.render(Panel.Panel, props, root_ctx())
 
       # The walked vnode should contain the slot content somewhere in its tree
       assert vnode_contains?(walked, {:element, "p", [], [{:text, "Content"}]})
@@ -134,7 +134,7 @@ defmodule Filament.RendererSlotTest do
       body_entry = %Entry{render_fn: fn -> {:text, "body"} end}
       props = %{body: [body_entry]}
 
-      {walked, _, _, _, _, _} = Renderer.render(Panel.Panel, props, root_ctx())
+      {walked, _, _, _, _, _, _, _} = Renderer.render(Panel.Panel, props, root_ctx())
 
       # No header provided — the header slot should be an empty fragment
       assert vnode_contains?(walked, {:fragment, []})
@@ -144,7 +144,7 @@ defmodule Filament.RendererSlotTest do
       body_entry = %Entry{render_fn: fn -> {:text, "body"} end}
       props = %{body: [body_entry]}
 
-      {walked, _, _, _, _, _} = Renderer.render(DefaultPanel.DefaultPanel, props, root_ctx())
+      {walked, _, _, _, _, _, _, _} = Renderer.render(DefaultPanel.DefaultPanel, props, root_ctx())
 
       # DefaultHeader.DefaultHeader should appear as a rendered component child in the tree
       assert vnode_has_component?(walked, DefaultPanel.DefaultHeader.DefaultHeader)
