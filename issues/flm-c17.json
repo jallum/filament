@@ -2,13 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-13T17:01:14Z",
+  "close_reason": "Kinds-aware register + dispatch landed. 5 new tests + 450 existing pass.",
   "created": "2026-05-13T16:55:35Z",
   "description": "Today `register_event_handler/1,2` and `dispatch_event/4` are kind-blind. Components register handlers, dispatcher invokes every handler at the target slot regardless of what kind of event arrived. The web target gets kind-routing implicitly via separate DOM event names (keydown/keyup/click...) and HTMLEngine's per-attr wrapping; the TUI target has no such layer and ends up either swallowing release events globally or running every handler on every event_type.\n\n## Goal\n\nMake Filament Core model events as carrying a kind, and let handlers declare which kinds they want. Web-side HTML attrs and TUI-side hook sugar both compile down to the same Core primitive.\n\n## API\n\n### Registration\n\n```elixir\n@spec register_event_handler(function(), :bubble | :capture, kinds) :: String.t()\n      when kinds: :all | MapSet.t(atom())\n\n# Default kinds: :all (every event reaches this handler — backwards compatible)\ndef register_event_handler(handler, phase \\\\ :bubble, kinds \\\\ :all)\n```\n\nExisting 1- and 2-arity calls keep working with kinds = :all.\n\n### Storage\n\n`Filament.Fiber` gains two new fields:\n\n```elixir\nevent_handler_kinds: %{non_neg_integer() =\u003e :all | MapSet.t(atom())}\ncapture_handler_kinds: %{non_neg_integer() =\u003e :all | MapSet.t(atom())}\n```\n\nDefaults to %{} (interpreted as 'no entry means :all' for backwards-compat with fibers built outside this API).\n\n### Dispatch\n\n```elixir\n@spec dispatch_event(tree, fiber_id, slot, params, kind :: atom()) :: ...\ndef dispatch_event(tree, target_fiber_id, target_slot, params \\\\ %{}, kind \\\\ :all)\n```\n\nCapture-phase walk and target invocation both check: if the fiber's recorded kinds-set for that slot is :all or contains kind, run; else skip.\n\nExisting 4-arity calls keep working with kind = :all (handlers fire as today).\n\n## Done when\n\n- Filament test suite green\n- New tests cover: register with [:press], dispatch :press → fires; dispatch :release → skipped; dispatch :all → fires\n- New tests cover capture-phase kind filtering symmetric to bubble\n- Backwards-compat tests: 1-arity register + 4-arity dispatch behave identically to today\n\n## Out of scope\n\n- Updating HTMLEngine's `on_keydown` / `on_keyup` transforms to use the new kinds-set (existing components keep their current behavior).\n- Defining what 'kind' atoms are — that's a backend concern; Core is agnostic.\n- TUI integration (separate octo_pi ticket consumes this API).",
   "id": "flm-c17",
   "labels": [],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Event handler kinds: register with a kind-set, dispatch filters by kind",
   "type": "task",
-  "updated_at": "2026-05-13T16:55:41Z"
+  "updated_at": "2026-05-13T17:01:14Z"
 }
