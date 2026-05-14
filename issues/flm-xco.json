@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-14T21:51:13Z",
+  "description": "Today, dispatchers that want to feed on_key handlers must hand-build the string-keyed params map (\"key\" / \"ctrl\" / \"shift\" / \"alt\" / \"meta\") that html_engine.ex:61 expects. The wire format is documented only by reading the codegen.\n\nAdd:\n\n  defmodule Filament.KeyEvent do\n    defstruct [:key, modifiers: %Filament.KeyModifiers{}]\n  end\n\nPlus either:\n  a) Filament.KeyEvent.to_params/1 → string-keyed map, OR\n  b) Filament.Core.dispatch_event/5 accepts %KeyEvent{} as params directly and converts internally.\n\nWhy: octo_pi_tui2's KeyDispatcher currently dispatches %{key: %OctoPi.TUI.Key{}} — incompatible with the on_key wire. Surfaced during opi-4x0 (tui2 cleanup epic) audit of key handling.\n\nHow to apply: callers (octo_pi_tui2, future external integrators) build %KeyEvent{} and dispatch; Filament owns the on_key params shape end-to-end. Down-stream impact: opi-4x0.1 lands much cleaner once this exists.",
+  "id": "flm-xco",
+  "labels": [],
+  "priority": 3,
+  "status": "open",
+  "title": "%Filament.KeyEvent{} struct + helper to build the on_key params map",
+  "type": "task",
+  "updated_at": "2026-05-14T21:51:13Z"
+}
