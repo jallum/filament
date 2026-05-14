@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-14T21:51:13Z",
+  "description": "Filament.Renderer.render/3 returns an 8-tuple:\n\n  {walked, hooks, effects, fibers, evt_handlers, cap_handlers, evt_kinds, cap_kinds}\n\nCallers unpack it positionally (octo_pi_tui2/render_pipeline.ex:89–104 calls this out as 'order-dependent, fragile'). Adding a 9th return — for example a per-render min_periodic_ms surfaced from a future use_periodic hook — means changing every caller.\n\nReplace with:\n\n  defmodule Filament.RenderResult do\n    defstruct [\n      :walked,\n      :hooks,\n      :effects,\n      :fibers,\n      :event_handlers,\n      :capture_handlers,\n      :event_handler_kinds,\n      :capture_handler_kinds\n    ]\n  end\n\nCallers pattern-match the fields they care about; new fields can be added without breaking existing consumers.\n\nWhy: surfaced during opi-4x0 (tui2 cleanup) audit. opi-4x0.20 wants to plumb periodic-tick min-interval back through the renderer instead of through the process dictionary side channel; doing so cleanly requires a structural return shape.\n\nHow to apply: extend Filament.Renderer.render/3 to return %RenderResult{}; downstream consumers (octo_pi_tui2, any external user) migrate one site each.",
+  "id": "flm-3up",
+  "labels": [],
+  "priority": 3,
+  "status": "open",
+  "title": "%Filament.RenderResult{} struct replacing the 8-tuple return from Renderer.render/3",
+  "type": "task",
+  "updated_at": "2026-05-14T21:51:13Z"
+}
