@@ -5,7 +5,7 @@ defmodule Filament.MixProject do
     [
       app: :filament,
       version: "0.5.0",
-      elixir: "~> 1.17",
+      elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       dialyzer: [plt_add_apps: [:mix]],

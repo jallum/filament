@@ -10,13 +10,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - {elixir: "1.17",   otp: "26"}
-          - {elixir: "1.17",   otp: "27"}
-          - {elixir: "1.18",   otp: "27"}
-          - {elixir: "1.18",   otp: "28"}
-          - {elixir: "1.19.5", otp: "28"}
+          # Oldest supported toolchain (mix.exs requires ~> 1.18)
+          - {elixir: "1.18.4", otp: "27.3"}
+          # Newest toolchain; matches local development. The lint cell runs
+          # the version-independent checks (credo) once.
+          - {elixir: "1.20.3", otp: "29.0", lint: true}
 
     steps:
       - uses: actions/checkout@v6
@@ -33,9 +34,9 @@ jobs:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-${{ matrix.elixir }}-${{ matrix.otp }}-mix-${{ hashFiles('**/mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-mix-
+            ${{ runner.os }}-${{ matrix.elixir }}-${{ matrix.otp }}-mix-
 
       - name: Install dependencies
         run: mix deps.get
@@ -47,6 +48,7 @@ jobs:
         run: mix test
 
       - name: Credo
+        if: matrix.lint
         run: mix credo --strict
 
       - name: Dialyzer
