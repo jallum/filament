@@ -11,9 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Breaking:** raised the minimum Elixir requirement from `~> 1.17` to
-  `~> 1.18`. CI now tests against Elixir 1.18 (floor) through 1.20 (latest).
-
 ### Deprecated
 
 ### Removed
@@ -30,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `~> 1.0` to `~> 1.2`. Filament no longer supports `phoenix_live_view`
   1.1.x; upgrade `phoenix_live_view` to `~> 1.2` (1.2.12+ recommended)
   before upgrading to this release.
+- **Breaking:** raised the minimum Elixir requirement from `~> 1.17` to
+  `~> 1.18`. CI now tests against Elixir 1.18 (floor) through 1.20 (latest).
 
 ### Fixed
 
