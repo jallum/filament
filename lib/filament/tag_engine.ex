@@ -4,8 +4,8 @@ defmodule Filament.TagEngine do
   @behaviour EEx.Engine
 
   alias Phoenix.Component.MacroComponent
-  alias Phoenix.LiveView.Tokenizer
-  alias Phoenix.LiveView.Tokenizer.ParseError
+  alias Phoenix.LiveView.TagEngine.Tokenizer
+  alias Phoenix.LiveView.TagEngine.Tokenizer.ParseError
 
   @doc """
   Compiles the given string into Elixir AST.
@@ -1013,7 +1013,7 @@ defmodule Filament.TagEngine do
 
   defp handle_token([], state), do: state
 
-  defp handle_macro_component([{:tag, _name, _attrs, tag_meta} | _] = tokens, module_string, state) do
+  defp handle_macro_component([{:tag, name, attrs, tag_meta} | after_open], module_string, state) do
     # Macro components work by converting the HEEx tokens into an AST
     # (see Phoenix.Component.MacroComponent) and then calling the transform
     # function on the macro component module, which can return a transformed
@@ -1021,18 +1021,30 @@ defmodule Filament.TagEngine do
     #
     # The AST is limited in functionality and we handle it separately in
     # the handle_ast function.
-
+    #
+    # Since Phoenix.LiveView 1.2, `MacroComponent.build_ast/2` no longer
+    # scans a raw token stream to find the matching close tag itself: it
+    # only accepts an already-finalized `{:block, :tag, ...}` /
+    # `{:self_close, :tag, ...}` tree node (the shape
+    # `Phoenix.LiveView.TagEngine.Parser` builds internally). Filament's
+    # engine doesn't build such a tree for ordinary tags (it streams tags
+    # directly to the subengine, tracking open tags with `push_tag`/
+    # `pop_tag!` instead), so for macro components specifically we assemble
+    # that single finalized node ourselves before calling `build_ast/2`,
+    # and compute `rest` (the tokens after the macro component) ourselves
+    # too, since `build_ast/2` no longer returns it.
     (Macro.Env.required?(state.caller, Phoenix.Component) or
        Macro.Env.required?(state.caller, Filament.Component)) ||
       raise ArgumentError,
             "macro components are only supported in modules that `use Phoenix.Component` or `use Filament.Component`"
 
     module = validate_module!(module_string, tag_meta, state)
+    {tree_node, rest} = build_macro_component_tree(name, attrs, tag_meta, after_open, state)
 
     try do
-      {ast, rest} =
-        case MacroComponent.build_ast(tokens, state.caller) do
-          {:ok, ast, rest} -> {ast, rest}
+      ast =
+        case MacroComponent.build_ast(tree_node, state.caller) do
+          {:ok, ast} -> ast
           {:error, message, meta} -> raise_syntax_error!(message, meta, state)
         end
 
@@ -1061,6 +1073,83 @@ defmodule Filament.TagEngine do
         raise ArgumentError,
               "a macro component must return {:ok, ast} or {:ok, ast, data}, got: #{inspect(other)}"
     end
+  end
+
+  # Builds the finalized `{:block, :tag, name, attrs, children, meta, close_meta}`
+  # tree node that `MacroComponent.build_ast/2` expects for a macro-component
+  # tag, by scanning forward through the (still-flat) token stream for the
+  # matching close tag - the same kind of pairing `pop_tag!/2` does for
+  # ordinary tags, except here we also have to recurse into any nested plain
+  # HTML tags to finalize them too, since children must already be in tree
+  # form.
+  #
+  # Self-closing/void macro-component tags never reach `handle_macro_component/3`
+  # (they're handled by the self-close clause of `handle_token/2` before the
+  # `:type` attribute is ever inspected), so only the block form is built here.
+  defp build_macro_component_tree(name, attrs, tag_meta, tokens, state) do
+    {children, close_meta, rest} = take_macro_component_children(tokens, name, tag_meta, [], state)
+    {{:block, :tag, name, attrs, children, tag_meta, close_meta}, rest}
+  end
+
+  defp take_macro_component_children([{:close, :tag, name, close_meta} | rest], name, _open_meta, acc, _state) do
+    {Enum.reverse(acc), close_meta, rest}
+  end
+
+  defp take_macro_component_children([{:text, text, meta} | rest], name, open_meta, acc, state) do
+    take_macro_component_children(rest, name, open_meta, [{:text, text, meta} | acc], state)
+  end
+
+  defp take_macro_component_children([{:body_expr, value, meta} | rest], name, open_meta, acc, state) do
+    take_macro_component_children(rest, name, open_meta, [{:body_expr, value, meta} | acc], state)
+  end
+
+  defp take_macro_component_children(
+         [{:tag, nested_name, nested_attrs, %{closing: _} = nested_meta} | rest],
+         name,
+         open_meta,
+         acc,
+         state
+       ) do
+    node = {:self_close, :tag, nested_name, nested_attrs, nested_meta}
+    take_macro_component_children(rest, name, open_meta, [node | acc], state)
+  end
+
+  defp take_macro_component_children(
+         [{:tag, nested_name, nested_attrs, nested_meta} | rest],
+         name,
+         open_meta,
+         acc,
+         state
+       ) do
+    {node, rest} = build_macro_component_tree(nested_name, nested_attrs, nested_meta, rest, state)
+    take_macro_component_children(rest, name, open_meta, [node | acc], state)
+  end
+
+  defp take_macro_component_children([{:expr, _marker, _expr} | _rest], name, open_meta, _acc, state) do
+    message = "EEx is not currently supported in macro components (inside <#{name}>)"
+    raise_syntax_error!(message, open_meta, state)
+  end
+
+  defp take_macro_component_children([{type, _tag_name, _attrs, meta} | _rest], _name, _open_meta, _acc, state)
+       when type in [:remote_component, :local_component] do
+    raise_syntax_error!("function components cannot be nested inside a macro component", meta, state)
+  end
+
+  defp take_macro_component_children([{:slot, _slot_name, _attrs, meta} | _rest], _name, _open_meta, _acc, state) do
+    raise_syntax_error!("slots cannot be nested inside a macro component", meta, state)
+  end
+
+  defp take_macro_component_children([{:close, _type, tag_name, meta} | _rest], name, _open_meta, _acc, state) do
+    raise_syntax_error!(
+      "unmatched closing tag. Expected </#{name}> for macro component <#{name}>, got: </#{tag_name}>",
+      meta,
+      state
+    )
+  end
+
+  defp take_macro_component_children([], name, open_meta, _acc, state) do
+    message = "end of template reached without closing tag for <#{name}>"
+    raise_syntax_error!(message, open_meta, state)
   end
 
   # self closing / void tags cannot have children
@@ -1105,7 +1194,7 @@ defmodule Filament.TagEngine do
   defp handle_ast_attrs(state, attrs, tag_open_meta) do
     Enum.reduce(attrs, state, fn
       {name, value}, state when is_binary(value) ->
-        attr = MacroComponent.encode_binary_attribute(name, value)
+        attr = encode_binary_attribute(name, value)
         update_subengine(state, :handle_text, [[], attr])
 
       {name, nil}, state ->
@@ -1114,6 +1203,30 @@ defmodule Filament.TagEngine do
       {name, ast}, state ->
         handle_tag_expr_attrs(state, tag_open_meta, [{name, ast}])
     end)
+  end
+
+  # `Phoenix.Component.MacroComponent.encode_binary_attribute/2` was public
+  # in phoenix_live_view 1.1.x but became a private helper of that module in
+  # 1.2.x (used internally by `ast_to_string/2`). It has no public
+  # replacement, so we inline the same HTML-attribute-encoding logic here:
+  # pick whichever quote character isn't already used inside the value, and
+  # raise if the value contains both.
+  defp encode_binary_attribute(key, value) when is_binary(key) and is_binary(value) do
+    case {:binary.match(value, ~s(")), :binary.match(value, "'")} do
+      {:nomatch, _} ->
+        ~s( #{key}="#{value}")
+
+      {_, :nomatch} ->
+        ~s( #{key}='#{value}')
+
+      _ ->
+        raise ArgumentError, """
+        invalid attribute value for "#{key}".
+        Attribute values must not contain single and double quotes at the same time.
+
+        You need to escape your attribute before using it in the MacroComponent AST. You can use `Phoenix.HTML.attributes_escape/1` to do so.
+        """
+    end
   end
 
   defp validate_module!(module_string, tag_meta, state) do

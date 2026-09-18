@@ -312,7 +312,7 @@ defmodule Filament.VNodeCompilerTest do
       end
       """
 
-      assert_raise Phoenix.LiveView.Tokenizer.ParseError, ~r/:key/, fn ->
+      assert_raise Phoenix.LiveView.TagEngine.Tokenizer.ParseError, ~r/:key/, fn ->
         Code.compile_string(src)
       end
     end

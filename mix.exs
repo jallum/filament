@@ -4,7 +4,7 @@ defmodule Filament.MixProject do
   def project do
     [
       app: :filament,
-      version: "0.4.1",
+      version: "0.5.0",
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -60,7 +60,7 @@ defmodule Filament.MixProject do
       {:floki, ">= 0.0.0", optional: true},
       # Phoenix LiveView dependencies for runtime and testing
       {:phoenix, "~> 1.7"},
-      {:phoenix_live_view, "~> 1.0"},
+      {:phoenix_live_view, "~> 1.2"},
       {:phoenix_html, "~> 4.0"},
       {:plug, "~> 1.16"},
       {:plug_cowboy, "~> 2.7", only: :test}
