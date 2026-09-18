@@ -2,6 +2,7 @@ defmodule Filament.ColocatedHookTest do
   use ExUnit.Case, async: true
 
   alias Phoenix.HTML.Safe
+  alias Phoenix.LiveView.ColocatedHook
 
   describe "colocated hook support in ~F templates" do
     test "compiles without error when module uses Filament.Component" do
@@ -57,7 +58,7 @@ defmodule Filament.ColocatedHookTest do
       """
 
       [{mod, _}] = Code.compile_string(code)
-      html = mod.render(%{}) |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = %{} |> mod.render() |> Safe.to_iodata() |> IO.iodata_to_binary()
       refute html =~ "<script"
       assert html =~ "phx-hook="
     end
@@ -86,9 +87,13 @@ defmodule Filament.ColocatedHookTest do
       assert function_exported?(mod, :__phoenix_macro_components__, 0)
       result = mod.__phoenix_macro_components__()
       assert is_map(result)
-      assert Map.has_key?(result, Phoenix.LiveView.ColocatedHook)
+      assert Map.has_key?(result, ColocatedHook)
 
-      [{_js_file, meta}] = result[Phoenix.LiveView.ColocatedHook]
+      # phoenix_live_view 1.2 changed `Phoenix.LiveView.ColocatedJS.extract/3`
+      # (invoked internally by `ColocatedHook.transform/2`) to return a
+      # `%Phoenix.LiveView.ColocatedAssets.Entry{}` struct instead of the
+      # `{js_file, meta}` tuple it returned in 1.1.x.
+      [%Phoenix.LiveView.ColocatedAssets.Entry{data: meta}] = result[ColocatedHook]
       assert meta[:name] =~ "DataHook"
       assert meta[:key] == "hooks"
     end

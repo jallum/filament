@@ -5,9 +5,16 @@ defmodule Collaboration.Test do
 
   alias CollaborationWeb.Components.DocumentEditor
 
+  # Collaboration.Registry is already running here when this file is exercised
+  # as part of the collaboration app's own test suite (started by
+  # Collaboration.Application), but not when compiled/run as filament's own
+  # test fixture (elixirc_paths(:test)/test_paths(:test) in the root mix.exs),
+  # where no Collaboration.Application ever boots. Tolerate both.
   setup do
-    start_supervised!({Registry, keys: :unique, name: Collaboration.Registry})
-    :ok
+    case start_supervised({Registry, keys: :unique, name: Collaboration.Registry}) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _pid}} -> :ok
+    end
   end
 
   # ── Rung 1: DocumentServer ───────────────────────────────────────────────────

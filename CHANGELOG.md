@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** raised the minimum Elixir requirement from `~> 1.17` to
+  `~> 1.18`. CI now tests against Elixir 1.18 (floor) through 1.20 (latest).
+
 ### Deprecated
 
 ### Removed
@@ -18,6 +21,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 ### Security
+
+## [0.5.0] - 2026-09-18
+
+### Changed
+
+- **Breaking:** raised the minimum `phoenix_live_view` requirement from
+  `~> 1.0` to `~> 1.2`. Filament no longer supports `phoenix_live_view`
+  1.1.x; upgrade `phoenix_live_view` to `~> 1.2` (1.2.12+ recommended)
+  before upgrading to this release.
+
+### Fixed
+
+- Compatibility with `phoenix_live_view` 1.2.x, which made two internal,
+  `@moduledoc false` contract changes with no deprecation path:
+
+  - `Phoenix.LiveView.Tokenizer` and `Phoenix.LiveView.Tokenizer.ParseError`
+    were renamed to `Phoenix.LiveView.TagEngine.Tokenizer` and
+    `Phoenix.LiveView.TagEngine.Tokenizer.ParseError`. Filament's aliases
+    now point at the new module names.
+  - `Phoenix.Component.MacroComponent.build_ast/2` (used to implement
+    `:type={...}` macro components, e.g. `Phoenix.LiveView.ColocatedHook`)
+    no longer accepts a raw, unfinalized token stream and hunts for its own
+    closing tag; it now only accepts an already-finalized `{:block, ...}` /
+    `{:self_close, ...}` tree node and returns `{:ok, ast}` instead of
+    `{:ok, ast, rest}`. Filament's `~F` compiler now assembles that
+    finalized node itself (mirroring how it already pairs open/close tags
+    for ordinary tags) before calling `build_ast/2`, and computes the
+    remaining token stream on its own. The now-removed
+    `MacroComponent.encode_binary_attribute/2` helper (used when rendering
+    a macro component's transformed attributes back to HTML) is also
+    inlined locally.
 
 ## [0.4.1] - 2026-05-09
 

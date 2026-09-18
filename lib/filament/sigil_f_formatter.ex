@@ -14,8 +14,8 @@ defmodule Filament.SigilFFormatter do
 
   alias Mix.Tasks.Format
   alias Phoenix.LiveView.HTMLAlgebra
-  alias Phoenix.LiveView.Tokenizer
-  alias Phoenix.LiveView.Tokenizer.ParseError
+  alias Phoenix.LiveView.TagEngine.Tokenizer
+  alias Phoenix.LiveView.TagEngine.Tokenizer.ParseError
 
   require Logger
 
