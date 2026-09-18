@@ -112,7 +112,7 @@ defmodule Filament.TagEngine.SlotConsumerTest do
     end
 
     test "non-whitespace bare content inside component raises CompileError" do
-      assert_raise Phoenix.LiveView.Tokenizer.ParseError, ~r/unexpected content inside component/, fn ->
+      assert_raise Phoenix.LiveView.TagEngine.Tokenizer.ParseError, ~r/unexpected content inside component/, fn ->
         compile("""
         <Filament.TagEngine.SlotConsumerTest.Layout.Layout>
           bare text
