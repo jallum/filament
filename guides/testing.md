@@ -140,63 +140,66 @@ Unspecified modifiers default to `false`.
 
 ## Observable stubs
 
-Components that call `use_observable` need a server to subscribe to. In tests,
-supply a stub instead of a real process:
+Components that call `use_value` need a source to subscribe to. In
+tests, start an in-process stub via `Filament.Test.Stub.start/1` and
+wrap it in a `%Filament.Source{}`:
 
 ```elixir
+alias Filament.Test.Stub
+
 test "shows item count" do
-  view =
-    mount!(CartBadge, %{server: :cart},
-      stub: [{:cart, fn _req -> %{items: ["a", "b", "c"]} end}]
-    )
+  {:ok, stub} = Stub.start(fn _req -> %{items: ["a", "b", "c"]} end)
+
+  source = Filament.Source.new(Filament.Observable.GenServer, stub)
+  view = mount!(CartBadge, %{source: source})
 
   assert render_text(view) =~ "3 items"
 end
 ```
 
-The stub function receives the subscription request and returns the initial
-state. Stubs are identified by any term — atoms work well.
+`Stub.start/1` takes a function that returns the initial state (the
+arg passed in is the subscription request, typically unused). It
+returns `{:ok, pid}` where the pid implements the same
+`Filament.Cell` callbacks as `Filament.Observable.GenServer` — so any
+component that subscribes via `use_value/2` receives the stub's
+state.
 
 ### Pushing updates
 
-`Filament.Test.Stub.push/2` sends a new value to a stub, simulating a server
-`notify_observers/1` call. Call `Filament.Test.update/1` afterward to flush the
-message and re-render:
+`Filament.Test.Stub.push/2` sends a new value to a stub, simulating a
+server's `notify_observers/1` call. Call `Filament.Test.update/1`
+afterward to drain the resulting `:cell_update` message and re-render:
 
 ```elixir
 test "re-renders when server state changes" do
-  {:ok, view} =
-    mount(CartBadge, %{server: :cart},
-      stub: [{:cart, fn _req -> %{items: []} end}]
-    )
+  {:ok, stub} = Stub.start(fn _req -> %{items: []} end)
+  source = Filament.Source.new(Filament.Observable.GenServer, stub)
+  view = mount!(CartBadge, %{source: source})
 
   assert render_text(view) =~ "0 items"
 
-  Filament.Test.Stub.push(view.stubs[:cart], %{items: ["a", "b"]})
+  Stub.push(stub, %{items: ["a", "b"]})
   view = Filament.Test.update(view)
 
   assert render_text(view) =~ "2 items"
 end
 ```
 
-Note: `mount/3` (non-bang) is used here so `view.stubs` is accessible before
-entering the pipeline.
-
 ## Async assertions with eventually/2
 
 Some state changes happen asynchronously — a spawned process, a delayed
-`notify_observers`, an effect with a timer. `eventually/2` retries an assertion
-until it passes or a timeout is reached:
+`notify_observers`, an effect with a timer. `eventually/2` retries an
+assertion until it passes or a timeout is reached:
 
 ```elixir
 test "count updates after async server push" do
-  {:ok, view} = mount(CartBadge, %{server: :cart},
-    stub: [{:cart, fn _req -> %{items: []} end}]
-  )
+  {:ok, stub} = Stub.start(fn _req -> %{items: []} end)
+  source = Filament.Source.new(Filament.Observable.GenServer, stub)
+  view = mount!(CartBadge, %{source: source})
 
   spawn(fn ->
     Process.sleep(50)
-    Filament.Test.Stub.push(view.stubs[:cart], %{items: ["a"]})
+    Stub.push(stub, %{items: ["a"]})
   end)
 
   Filament.Test.eventually(fn ->

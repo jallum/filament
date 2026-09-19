@@ -64,7 +64,7 @@ defmodule Cart.Test do
   describe "CartBadge (rung-2)" do
     test "renders item count from stub observable" do
       {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
-      view = mount!(CartBadge, %{server: stub})
+      view = mount!(CartBadge, %{source: Filament.Source.new(Filament.Observable.GenServer, stub)})
 
       assert view.rendered_html =~ "cart-badge"
       refute view.rendered_html =~ "data-count=\"1\""
@@ -72,7 +72,7 @@ defmodule Cart.Test do
 
     test "badge updates when count changes" do
       {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
-      view = mount!(CartBadge, %{server: stub})
+      view = mount!(CartBadge, %{source: Filament.Source.new(Filament.Observable.GenServer, stub)})
       assert view.rendered_html =~ "data-count=\"0\""
 
       new_state =
@@ -86,15 +86,12 @@ defmodule Cart.Test do
       assert view.rendered_html =~ "data-count=\"1\""
     end
 
-    test "no update sent when raw state is unchanged (change-or-bust)" do
+    test "no update sent when projected value is unchanged (change-or-bust)" do
       {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
+      cell = Filament.Source.new(Filament.Observable.GenServer, stub)
+      subscriber = {self(), :badge_test_fiber, 0}
 
-      sub = %Filament.Observable.Subscriber{
-        pid: self(),
-        proj_keys: %{{:badge_test_fiber, 0} => true}
-      }
-
-      {:ok, _initial} = Filament.Observable.subscribe(stub, sub)
+      {:ok, _initial} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
 
       state1 =
         Cart.State.add_item(
@@ -103,11 +100,11 @@ defmodule Cart.Test do
         )
 
       Stub.push(stub, state1)
-      assert_receive {:filament_observable_updates, [{:badge_test_fiber, 0, ^state1}]}, 500
+      assert_receive {:cell_update, ^subscriber, ^state1}, 500
 
       # Same raw state — no update
       Stub.push(stub, state1)
-      refute_receive {:filament_observable_updates, _}, 100
+      refute_receive {:cell_update, _, _}, 100
     end
   end
 
@@ -116,7 +113,7 @@ defmodule Cart.Test do
   describe "CartItems (rung-3)" do
     setup do
       server = start_supervised!(%{id: Cart.Server, start: {Cart.Server, :start_link, [[name: nil]]}})
-      view = mount!(CartWeb.Components.CartItems, %{server: server})
+      view = mount!(CartWeb.Components.CartItems, %{source: Filament.Source.new(Filament.Observable.GenServer, server)})
       %{server: server, view: view}
     end
 

@@ -18,7 +18,6 @@ defmodule Filament.Test do
       assert render_text(view) =~ "Count: 1"
   """
 
-  alias Filament.Test.Stub
   alias Phoenix.HTML.Engine, as: HTMLEngine
   alias Phoenix.LiveView.Rendered
 
@@ -67,20 +66,15 @@ defmodule Filament.Test do
   @spec mount(component :: module(), props :: map(), opts :: keyword()) ::
           {:ok, t()} | {:error, term()}
   def mount(component, props, opts \\ []) do
-    stub_specs = Keyword.get(opts, :stub, [])
-    {stubs_map, _pids} = Stub.build(stub_specs)
-
+    _opts = opts
     owner_pid = self()
 
     {tree, rendered, pending_effects} =
-      Filament.Reconciler.mount(component, props,
-        owner_pid: owner_pid,
-        observable_stubs: stubs_map
-      )
+      Filament.Reconciler.mount(component, props, owner_pid: owner_pid)
 
     tree = run_effects(tree, pending_effects)
 
-    html = rendered_to_string(rendered)
+    html = walked_to_string(rendered)
 
     view = %__MODULE__{
       component: component,
@@ -89,7 +83,7 @@ defmodule Filament.Test do
       rendered: rendered,
       rendered_html: html,
       owner_pid: owner_pid,
-      stubs: stubs_map
+      stubs: %{}
     }
 
     {:ok, view}
@@ -355,33 +349,11 @@ defmodule Filament.Test do
 
   @doc false
   def rendered_to_string(%Rendered{static: static, dynamic: dynamic}) do
-    old_ctx = Process.get(:filament_render_context)
-
-    # Set up a minimal context so register_event_handler works during string
-    # conversion. The handlers registered here are dummies; the wire refs
-    # produced will match the real handlers because both sequences start at 0.
-    Process.put(:filament_render_context, %Filament.RenderContext{
-      fiber_id: "root",
-      fiber_tree: %{},
-      hook_index: 0,
-      new_hook_slots: %{},
-      pending_effects: [],
-      event_handler_index: 0,
-      new_event_handlers: %{},
-      observable_stubs: %{},
-      owner_pid: nil
-    })
-
-    try do
-      parts = dynamic.(false)
-      static |> interleave(parts) |> IO.iodata_to_binary()
-    after
-      if old_ctx do
-        Process.put(:filament_render_context, old_ctx)
-      else
-        Process.delete(:filament_render_context)
-      end
-    end
+    # Walk the static/dynamic split into iodata. Event-handler registration
+    # was already done at render time (Filament.Web.to_rendered bakes wire
+    # refs into the static list), so no render-context shim is needed here.
+    parts = dynamic.(false)
+    static |> interleave(parts) |> IO.iodata_to_binary()
   end
 
   defp interleave([s | statics], [d | dynamics]) do
@@ -397,6 +369,18 @@ defmodule Filament.Test do
   defp part_to_iodata(%Rendered{} = r), do: rendered_to_string(r)
   defp part_to_iodata(list) when is_list(list), do: list
   defp part_to_iodata(other), do: HTMLEngine.encode_to_iodata!(other)
+
+  # Phase 1.2: Reconciler now returns a walked vnode tree (typically
+  # `{:rendered_struct, %Rendered{}}` for `~F` components). Unwrap and reuse
+  # the existing `rendered_to_string/1` machinery, or convert walked vnodes
+  # via `Filament.Web.to_iodata/1` for HTML extraction.
+  defp walked_to_string({:rendered_struct, %Rendered{} = r}), do: rendered_to_string(r)
+
+  defp walked_to_string(walked) when is_tuple(walked) do
+    walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
+  end
+
+  defp walked_to_string(%Rendered{} = r), do: rendered_to_string(r)
 
   # ── Event dispatch helpers ────────────────────────────────────────────────
 
@@ -453,37 +437,52 @@ defmodule Filament.Test do
   defp flush_messages(view) do
     receive do
       {:filament_set_state, fiber_id, slot_index, new_value} ->
-        view = apply_hook_slot_update(view, fiber_id, slot_index, new_value)
+        view = apply_state_slot_update(view, fiber_id, slot_index, new_value)
         flush_messages(view)
 
-      {:filament_observable_updates, updates} ->
-        tree = Filament.LiveView.apply_observable_updates(view.fiber_tree, updates)
-        flush_messages(%{view | fiber_tree: tree})
+      {:cell_update, {_owner_pid, fiber_id, slot_index}, value} ->
+        view = apply_cell_slot_update(view, fiber_id, slot_index, value)
+        flush_messages(view)
 
-      {:filament_observable_resubscribe, fiber_id, slot_index} ->
-        view = apply_hook_slot_update(view, fiber_id, slot_index, :needs_resubscribe)
+      {:cell_resubscribe, {_owner_pid, fiber_id, slot_index}} ->
+        view = apply_resubscribe_slot(view, fiber_id, slot_index)
         flush_messages(view)
     after
       0 -> rerender(view)
     end
   end
 
-  defp apply_hook_slot_update(view, fiber_id, slot_index, new_value) do
+  defp apply_cell_slot_update(view, fiber_id, slot_index, value) do
     tree =
       Filament.FiberTree.update_hook_slot(
         view.fiber_tree,
         fiber_id,
         slot_index,
-        fn existing ->
-          # Preserve existing setter when updating use_state value
-          setter =
-            case existing do
-              {_, s} when is_function(s, 1) -> s
-              _ -> nil
-            end
+        &Filament.HookSlot.put_cell_value(&1, value)
+      )
 
-          {new_value, setter}
-        end
+    %{view | fiber_tree: tree}
+  end
+
+  defp apply_state_slot_update(view, fiber_id, slot_index, new_value) do
+    tree =
+      Filament.FiberTree.update_hook_slot(
+        view.fiber_tree,
+        fiber_id,
+        slot_index,
+        &Filament.HookSlot.put_state_value(&1, new_value)
+      )
+
+    %{view | fiber_tree: tree}
+  end
+
+  defp apply_resubscribe_slot(view, fiber_id, slot_index) do
+    tree =
+      Filament.FiberTree.update_hook_slot(
+        view.fiber_tree,
+        fiber_id,
+        slot_index,
+        fn _ -> :needs_resubscribe end
       )
 
     %{view | fiber_tree: tree}
@@ -495,12 +494,11 @@ defmodule Filament.Test do
         view.fiber_tree,
         "root",
         view.props,
-        owner_pid: view.owner_pid,
-        observable_stubs: view.stubs
+        owner_pid: view.owner_pid
       )
 
     new_tree = run_effects(new_tree, pending_effects)
-    html = rendered_to_string(new_rendered)
+    html = walked_to_string(new_rendered)
 
     %{view | fiber_tree: new_tree, rendered: new_rendered, rendered_html: html}
   end

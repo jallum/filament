@@ -13,7 +13,9 @@ defmodule CartWeb.Components.CartView do
     prop(:cart_id, :string, required: true)
 
     def render(%{cart_id: cart_id}) do
-      cart = use_observable({:via, Registry, {Cart.Registry, cart_id}}, fn
+      source = use_source(fn -> Cart.Server.cell(cart_id) end)
+
+      cart = use_value(source, fn
         :disconnected -> nil
         state -> state
       end)
@@ -21,13 +23,13 @@ defmodule CartWeb.Components.CartView do
       ~F"""
       <div class="cart">
         <header>
-          <CartBadge cart_id={cart_id} />
+          <CartBadge source={source} />
         </header>
         {if cart do}
           {for item <- cart.items do}
             <div class="item">
               <span>{item.name}</span>
-              <button on_click={fn -> Cart.Server.remove(cart_id, item.id) end}>
+              <button on_click={fn -> Cart.Server.remove_item(source.data, item.id) end}>
                 Remove
               </button>
             </div>
@@ -43,10 +45,10 @@ defmodule CartWeb.Components.CartBadge do
   use Filament.Component
 
   defcomponent do
-    prop(:cart_id, :string, required: true)
+    prop(:source, :any, required: true)
 
-    def render(%{cart_id: cart_id}) do
-      count = use_observable({:via, Registry, {Cart.Registry, cart_id}}, fn
+    def render(%{source: source}) do
+      count = use_value(source, fn
         :disconnected -> 0
         state -> Cart.State.item_count(state)
       end)
@@ -81,7 +83,7 @@ socket. Calling the setter re-renders only the affected fiber.
 
 **Observable GenServers.** Wrap any GenServer with
 `use Filament.Observable.GenServer` and components can subscribe to it with
-`use_observable/2`. Call `notify_observers(new_state)` after a mutation and
+`use_value/2`. Call `notify_observers(new_state)` after a mutation and
 every subscribed component re-renders automatically — no PubSub, no
 `handle_info` wiring in the LiveView.
 
@@ -100,7 +102,7 @@ re-fetching or re-running `handle_subscribe`.
 > briefly until the WebSocket is established.
 
 **Projections and change-or-bust.** Pass a projection function as the second
-argument to `use_observable/2` to extract only the slice of state the component
+argument to `use_value/2` to extract only the slice of state the component
 cares about. The function receives `:disconnected` or the raw server state and
 runs on the client at render time, so it can safely close over local component
 state such as filters or selections. If the projected value is unchanged after a
@@ -110,7 +112,8 @@ keeps large UIs fast without manual shouldComponentUpdate logic.
 ```elixir
 # CartBadge only re-renders when the item count changes,
 # not on every cart mutation.
-count = use_observable({:via, Registry, {Cart.Registry, cart_id}}, fn
+source = use_source(fn -> Cart.Server.cell(cart_id) end)
+count  = use_value(source, fn
   :disconnected -> 0
   state -> Cart.State.item_count(state)
 end)
@@ -121,12 +124,12 @@ expressions and child component renders in `memo_at` calls. Stable subtrees
 skip re-evaluation without any annotation from the component author.
 
 **Composable custom hooks.** Any function that calls `use_state`,
-`use_observable`, or `use_effect` is a custom hook. Domain behaviour — holds,
+`use_value`, or `use_effect` is a custom hook. Domain behaviour — holds,
 presence, pagination, debounce — lives in a plain module function rather than
 scattered across mount/event/info callbacks.
 
 ```elixir
-# examples/inventory — use_hold composes use_observable + use_state
+# examples/inventory — use_hold composes use_value + use_state
 {held_qty, item, hold, release} = use_hold(server, item_id)
 ```
 
@@ -194,7 +197,7 @@ refute render_text(view) =~ "Search commands"
 
 | Example | What it demonstrates |
 |---------|----------------------|
-| `examples/todo` | `defcomponent`, `use_state`, `use_observable` with factory fn, rung-2 tests |
+| `examples/todo` | `defcomponent`, `use_state`, `use_source` with factory fn, rung-2 tests |
 | `examples/cart` | Observable.GenServer, projections, change-or-bust, rung-3 integration tests |
 | `examples/inventory` | Custom `use_hold` hook, `handle_unsubscribe` auto-release, per-item projections |
 | `examples/collaboration` | Multiple concurrent subscribers, real-time presence UI |
@@ -203,6 +206,6 @@ refute render_text(view) =~ "Search commands"
 
 - [Getting Started](guides/getting-started.md) — `defcomponent`, props, `use_state`, events, testing
 - [Testing](guides/testing.md) — bang helpers, pipelines, observable stubs, keyboard events, async assertions
-- [Observables](guides/observables.md) — `Observable.GenServer`, `use_observable`, projections
+- [Observables](guides/observables.md) — `Observable.GenServer`, `use_source` / `use_value`, projections
 - [Hooks](guides/hooks.md) — built-in hooks, `use_effect`, composing custom hooks
 - [Migration Guide](guides/migration-guide.md) — incrementally adopting Filament in an existing LiveView app

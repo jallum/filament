@@ -16,7 +16,7 @@ locally. This means projection functions can safely close over local component s
 without any coordination with the server.
 
 This guide uses the Cart & Checkout example from `examples/cart`. By the end you will
-understand `Observable.GenServer`, `use_observable/2`, the change-or-bust mechanism,
+understand `Observable.GenServer`, `use_value/2`, the change-or-bust mechanism,
 and how to test observable components.
 
 ## The Observable.GenServer macro
@@ -58,36 +58,45 @@ end
 
 What the macro injects:
 
-- `handle_call({:filament_subscribe, ...})` — registers a subscriber and monitors
-  its process. Calls your `handle_subscribe/2` callback.
-- `handle_cast({:filament_unsubscribe, ...})` — removes a subscriber.
-- `handle_info({:DOWN, ...})` — automatically drops subscribers whose LiveView
-  process terminates.
-- `notify_observers/1` — call this after every mutation. It compares the new raw
-  state against the last raw state sent to each subscriber and delivers
-  `{:filament_observable_updates, ...}` only when the raw state changed.
+- `Filament.Cell` callbacks (`subscribe/3`, `unsubscribe/2`, `current/2`,
+  optional `reachable?/1`) at the module level — the GenServer becomes a
+  usable transport.
+- `handle_call({:filament_cell_subscribe, …})` and
+  `handle_cast({:filament_cell_unsubscribe, …})` — registers/removes
+  subscribers and monitors their pids. Subscribe calls your
+  `handle_subscribe/2` callback.
+- `handle_info({:DOWN, …})` — automatically drops subscribers whose
+  LiveView process terminates and runs your `handle_unsubscribe/2`.
+- `cell/1` — default constructor returning
+  `%Filament.Source{transport: __MODULE__, data: server_ref}`. Override
+  for session-keyed lookups.
+- `notify_observers/1` — call this after every mutation. For each
+  subscriber, applies the subscriber's projection and delivers a
+  `{:cell_update, subscriber, projected_value}` message *only* when the
+  projected value differs from the previously delivered one.
 
 The default `handle_subscribe/2` returns `{:ok, state, state}` (the current state
 as the initial value). Override it to reject subscriptions or return a different
 initial value.
 
-## Subscribing from a component: use_observable/2
+## Subscribing from a component: use_value/2
 
-`use_observable/2` takes a server reference and a projection function. The projection
-function receives either `:disconnected` (before the WebSocket is established) or the
-raw state broadcast by the server. The `CartBadge` component receives the server as a
-prop and projects the item count:
+`use_value/2` takes a `%Filament.Source{}` (returned by `use_source/1`) and
+a projection function. The projection receives either `:disconnected`
+(before the WebSocket is established) or the raw state broadcast by the
+server. The `CartBadge` component receives the source as a prop and
+projects the item count:
 
 ```elixir
 defmodule CartWeb.Components.CartBadge do
   use Filament.Component
 
   defcomponent do
-    prop(:server, :any, default: nil)
+    prop(:source, :any, default: nil)
 
-    def render(%{server: server}) do
+    def render(%{source: source}) do
       count =
-        use_observable(server, fn
+        use_value(source, fn
           :disconnected -> 0
           s -> Cart.State.item_count(s)
         end)
@@ -102,49 +111,65 @@ defmodule CartWeb.Components.CartBadge do
 end
 ```
 
-The parent component resolves the server once and passes it as a prop:
+The parent component binds the source once and passes it as a prop:
 
 ```elixir
 def render(%{session_id: session_id}) do
-  server = use_observable(fn -> Cart.Server.ensure_started(session_id) end)
+  source = use_source(fn -> Cart.Server.cell(session_id) end)
 
   ~F"""
-  <CartBadge server={server} />
-  <CartItems server={server} />
+  <CartBadge source={source} />
+  <CartItems source={source} />
   """
 end
 ```
 
-`use_observable/1` (factory fn or pid, no projection) returns the resolved pid
-(or `nil` during disconnected renders). `use_observable/2` calls the projection
-function with `:disconnected` on the first HTTP render, letting it return a safe
-default.
+`use_source/1` accepts a `%Filament.Source{}` directly or a 0-arity
+factory fn that builds one (and is called on first connected render —
+useful when an `ensure_started` lookup or a `start_link` is needed).
+Returns `nil` during disconnected (HTTP) renders. `use_value/2` then
+calls the projection with `:disconnected` so callers can return a
+safe initial value.
+
+Components that need to invoke server actions in event handlers reach
+through `source.data` for the underlying transport reference:
+
+```elixir
+on_click={fn -> Cart.Server.add_item(source.data, item) end}
+```
 
 Or use a sentinel to branch on the disconnected case:
 
 ```elixir
-cart = use_observable(server, fn :disconnected -> nil; s -> s end)
+cart = use_value(source, fn :disconnected -> nil; s -> s end)
 if cart == nil, do: render_loading(), else: render_cart(cart)
 ```
 
-On subsequent renders (WebSocket-connected), the hook applies the projection to the
-latest raw state received from the server.
+On subsequent renders (WebSocket-connected), the hook applies the
+projection to the latest raw state received from the server.
 
 ## Server lifecycle with a factory function
 
-When the component owns the server's lifecycle, pass a factory function directly to
-`use_observable/1`:
+When the component owns the server's lifecycle, pass a factory function
+to `use_source/1`. The factory must return a `%Filament.Source{}` —
+typically by starting the server and wrapping the pid via the
+`cell/1` constructor that `use Filament.Observable.GenServer` injects:
 
 ```elixir
-store = use_observable(fn -> Todo.Store.start_link([]) end)
-todos = use_observable(store, fn
+source = use_source(fn ->
+  {:ok, pid} = Todo.Store.start_link([])
+  Todo.Store.cell(pid)
+end)
+
+todos = use_value(source, fn
   :disconnected -> []
   s -> s
 end)
 ```
 
-The server starts when the component mounts and can stop itself in
-`handle_unsubscribe/2` when the last subscriber leaves:
+The server starts when the component first mounts in a connected
+render and can stop itself in `handle_unsubscribe/2` when the last
+subscriber leaves:
 
 ```elixir
 @impl Filament.Observable
@@ -166,8 +191,8 @@ defmodule TodoWeb.TodoLive do
 end
 ```
 
-On the **first render** (HTTP pre-connect), `use_observable/1` returns `nil` because
-subscribing during an HTTP render would create zombie subscribers. `use_observable/2`
+On the **first render** (HTTP pre-connect), `use_source/1` returns `nil` because
+subscribing during an HTTP render would create zombie subscribers. `use_value/2`
 calls the projection function with `:disconnected` instead.
 
 ## Projections and change-or-bust
@@ -205,15 +230,12 @@ directly:
 
 ```elixir
 test "projection suppresses update when count is unchanged" do
-  {:ok, stub} = Filament.Test.Stub.start(fn -> %Cart.State{} end)
+  {:ok, stub} = Filament.Test.Stub.start(fn _req -> %Cart.State{} end)
 
-  sub = %Filament.Observable.Subscriber{
-    pid: self(),
-    fiber_id: :badge_test_fiber,
-    slot_index: 0
-  }
+  source = Filament.Source.new(Filament.Observable.GenServer, stub)
+  subscriber = {self(), :badge_test_fiber, 0}
 
-  {:ok, _initial} = Filament.Observable.subscribe(stub, sub)
+  {:ok, _initial} = Filament.Cell.subscribe(source, subscriber, &Function.identity/1)
 
   # Push a state with count 0 → 1
   state1 =
@@ -223,11 +245,11 @@ test "projection suppresses update when count is unchanged" do
     )
 
   Filament.Test.Stub.push(stub, state1)
-  assert_receive {:filament_observable_updates, [_]}, 500
+  assert_receive {:cell_update, ^subscriber, ^state1}, 500
 
-  # Push the same state again — raw state unchanged, no notification
+  # Push the same state again — projected value unchanged, no notification
   Filament.Test.Stub.push(stub, state1)
-  refute_receive {:filament_observable_updates, _}, 100
+  refute_receive {:cell_update, _, _}, 100
 end
 ```
 
@@ -262,7 +284,7 @@ The fix is simple:
 use Filament.LiveView, static_subscribe: false
 ```
 
-With this setting, `use_observable/2` returns the `:disconnected` value on the HTTP
+With this setting, `use_value/2` returns the `:disconnected` value on the HTTP
 render (so you might show "Connecting…" or `0` initially), then re-renders with live
 data the moment the WebSocket connects. Because no subscription is made during the
 static render, presence only ever counts real WebSocket connections — the spike
@@ -294,10 +316,11 @@ Rung-3 tests use a **real** GenServer (not a stub) and `Filament.Test.update/1` 
 drain the observable update message and re-render:
 
 ```elixir
-describe "CartView (rung-3, real Cart.Server)" do
+describe "CartItems (rung-3, real Cart.Server)" do
   setup do
-    server = start_supervised!(Cart.Server)
-    {:ok, view} = mount(CartWeb.Components.CartView, %{server: server})
+    server = start_supervised!(%{id: Cart.Server, start: {Cart.Server, :start_link, [[name: nil]]}})
+    source = Filament.Source.new(Filament.Observable.GenServer, server)
+    view = mount!(CartWeb.Components.CartItems, %{source: source})
     %{server: server, view: view}
   end
 
@@ -363,6 +386,11 @@ See `Filament.Observable` for the full `@callback` specifications including the
 
 - **Hooks guide** — learn how to compose hooks and build custom hooks like
   `use_hold` (see `examples/inventory/lib/inventory_web/hooks.ex` for a
-  worked example of resource holds built on top of `use_observable`).
+  worked example of resource holds built on top of `use_value`).
+- **[Cells guide](cells.html)** — the abstraction underneath observables.
+  Read this if you're writing a non-GenServer transport (in-process struct,
+  focus tracker, custom backend) or consuming cells handed to you by a
+  backend you don't own.
 - **API reference** — see `Filament.Observable`, `Filament.Observable.GenServer`,
-  and `Filament.Hooks` (`use_observable/1`, `use_observable/2`) for full signatures.
+  `Filament.Cell`, `Filament.Source`, and `Filament.Hooks` (`use_source/1`,
+  `use_value/2`, `use_effect/2`) for full signatures.
