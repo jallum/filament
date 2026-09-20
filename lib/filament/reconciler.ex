@@ -135,10 +135,12 @@ defmodule Filament.Reconciler do
   # Private reconciliation functions
 
   defp reconcile_children(tree, parent_id, parent_fiber, new_fibers, owner_pid) do
-    new_children =
+    new_fibers =
       new_fibers
       |> Enum.reject(fn {_id, fiber} -> fiber.status == :unmounting end)
-      |> Map.new(fn {id, fiber} -> {id, %{fiber | parent_id: parent_id, status: :stable}} end)
+      |> Map.new(fn {id, fiber} -> {id, %{fiber | status: :stable}} end)
+
+    new_children = Map.filter(new_fibers, fn {_id, fiber} -> fiber.parent_id == parent_id end)
 
     old_child_ids = parent_fiber.children || []
     new_child_ids = Map.keys(new_children)
@@ -153,7 +155,7 @@ defmodule Filament.Reconciler do
       end)
 
     tree_after_unmount
-    |> Map.merge(new_children)
+    |> Map.merge(new_fibers)
     |> Map.update!(parent_id, &%{&1 | children: new_child_ids})
   end
 

@@ -6,6 +6,30 @@ defmodule Filament.ReconcilerTest do
   alias Filament.Reconciler
   alias Filament.ReconcilerError
 
+  defmodule Leaf do
+    @moduledoc false
+    use Filament.Component
+    defcomponent do
+      def render(_), do: ~F"<span>leaf</span>"
+    end
+  end
+
+  defmodule Mid do
+    @moduledoc false
+    use Filament.Component
+    defcomponent do
+      def render(_), do: ~F"<Filament.ReconcilerTest.Leaf />"
+    end
+  end
+
+  defmodule Root do
+    @moduledoc false
+    use Filament.Component
+    defcomponent do
+      def render(_), do: ~F"<Filament.ReconcilerTest.Mid />"
+    end
+  end
+
   defmodule StubCellTransport do
     @moduledoc false
     @behaviour Filament.Cell
@@ -69,6 +93,16 @@ defmodule Filament.ReconcilerTest do
         Reconciler.mount(CounterComponent, %{count: 0})
 
       assert true
+    end
+
+    test "preserves nested component ancestry" do
+      {tree, _rendered, _effects} = Reconciler.mount(Root, %{}, owner_pid: self())
+      [mid_id] = tree["root"].children
+      [leaf_id] = tree[mid_id].children
+
+      assert tree[mid_id].parent_id == "root"
+      assert tree[leaf_id].parent_id == mid_id
+      refute leaf_id in tree["root"].children
     end
   end
 
