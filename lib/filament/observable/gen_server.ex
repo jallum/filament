@@ -251,20 +251,28 @@ defmodule Filament.Observable.GenServer do
 
   @doc false
   def notify_cell_each(cell_subs, new_state, max_mailbox_depth) do
-    cell_subs
-    |> Enum.flat_map(fn {sub, %{pid: pid} = entry} ->
-      depth_result = Process.info(pid, :message_queue_len)
+    {updated_subs, deliveries} =
+      Enum.reduce(cell_subs, {%{}, %{}}, fn {subscriber, entry}, {updated, deliveries} ->
+        case update_cell_subscriber(subscriber, entry, new_state, max_mailbox_depth) do
+          :drop ->
+            {updated, deliveries}
 
-      case notify_cell_subscriber(sub, entry, new_state, depth_result, max_mailbox_depth) do
-        :drop -> []
-        kept -> [{sub, kept}]
-      end
-    end)
-    |> Map.new()
+          {updated_entry, nil} ->
+            {Map.put(updated, subscriber, updated_entry), deliveries}
+
+          {updated_entry, value} ->
+            next_deliveries = Map.update(deliveries, updated_entry.pid, [{subscriber, value}], &[{subscriber, value} | &1])
+            {Map.put(updated, subscriber, updated_entry), next_deliveries}
+        end
+      end)
+
+    Enum.each(deliveries, fn {pid, updates} -> deliver_cell_updates(pid, Enum.reverse(updates)) end)
+    updated_subs
   end
 
-  defp notify_cell_subscriber(sub, entry, new_state, depth_result, max_mailbox_depth) do
+  defp update_cell_subscriber(sub, entry, new_state, max_mailbox_depth) do
     %{pid: pid, projection: proj, last: last} = entry
+    depth_result = Process.info(pid, :message_queue_len)
 
     cond do
       is_nil(depth_result) ->
@@ -272,19 +280,21 @@ defmodule Filament.Observable.GenServer do
 
       saturated_depth?(depth_result, max_mailbox_depth) ->
         log_and_resubscribe_cell(sub, pid, depth_result, max_mailbox_depth)
-        entry
+        {entry, nil}
 
       true ->
         new_projected = proj.(new_state)
 
         if new_projected === last do
-          entry
+          {entry, nil}
         else
-          send(pid, {:cell_update, sub, new_projected})
-          %{entry | last: new_projected}
+          {%{entry | last: new_projected}, new_projected}
         end
     end
   end
+
+  defp deliver_cell_updates(pid, [{subscriber, value}]), do: send(pid, {:cell_update, subscriber, value})
+  defp deliver_cell_updates(pid, updates), do: send(pid, {:cell_updates, updates})
 
   defp saturated_depth?({:message_queue_len, n}, max) when n >= max, do: true
   defp saturated_depth?(_, _), do: false

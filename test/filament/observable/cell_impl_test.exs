@@ -141,5 +141,18 @@ defmodule Filament.Observable.CellImplTest do
       GenServer.call(server, :increment)
       refute_receive {:cell_update, {_, :unsub_test}, _}, 100
     end
+
+    test "batches updates for one owner" do
+      {:ok, server} = Counter.start_link()
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+
+      Cell.subscribe(cell, {self(), :first}, & &1)
+      Cell.subscribe(cell, {self(), :second}, & &1)
+      GenServer.call(server, :increment)
+
+      assert_receive {:cell_updates, updates}, 200
+      assert Enum.sort(updates) == Enum.sort([{{self(), :first}, 1}, {{self(), :second}, 1}])
+      refute_receive {:cell_update, _, _}
+    end
   end
 end

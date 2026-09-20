@@ -444,6 +444,16 @@ defmodule Filament.Test do
         view = apply_cell_slot_update(view, fiber_id, slot_index, value)
         flush_messages(view)
 
+      {:cell_updates, updates} ->
+        view = Enum.reduce(updates, view, fn {subscriber, value}, acc ->
+          case subscriber do
+            {_owner_pid, fiber_id, slot_index} -> apply_cell_slot_update(acc, fiber_id, slot_index, value)
+            _ -> acc
+          end
+        end)
+
+        flush_messages(view)
+
       {:cell_resubscribe, {_owner_pid, fiber_id, slot_index}} ->
         view = apply_resubscribe_slot(view, fiber_id, slot_index)
         flush_messages(view)

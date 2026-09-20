@@ -244,6 +244,11 @@ defmodule Filament.LiveView do
         Filament.LiveView.handle_cell_update(tree, subscriber, value, socket, &rerender_from_root/2)
       end
 
+      def handle_info({:cell_updates, updates}, socket) do
+        tree = socket.assigns._filament_tree
+        Filament.LiveView.handle_cell_updates(tree, updates, socket, &rerender_from_root/2)
+      end
+
       @doc """
       Phoenix LiveView info handler for `Filament.Cell` resubscribe signals.
       Sent by a cell transport when it can't deliver an update — typically because
@@ -455,6 +460,21 @@ defmodule Filament.LiveView do
       :ignore -> {:noreply, socket}
     end
   end
+
+  @doc false
+  def handle_cell_updates(tree, updates, socket, rerender_fn) when is_list(updates) do
+    {new_tree, changed?} =
+      Enum.reduce(updates, {tree, false}, fn {subscriber, value}, {current_tree, changed?} ->
+        case apply_cell_update(current_tree, subscriber, value) do
+          {:ok, updated_tree, _fiber_id} -> {updated_tree, true}
+          :ignore -> {current_tree, changed?}
+        end
+      end)
+
+    if changed?, do: {:noreply, rerender_fn.(socket, new_tree)}, else: {:noreply, socket}
+  end
+
+  def handle_cell_updates(_tree, _updates, socket, _rerender_fn), do: {:noreply, socket}
 
   @doc false
   def handle_cell_resubscribe(tree, subscriber, socket, rerender_fn) do
