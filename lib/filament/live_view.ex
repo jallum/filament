@@ -364,7 +364,7 @@ defmodule Filament.LiveView do
       {:noreply,
        socket
        |> Phoenix.Component.assign(:_filament_tree, new_tree)
-       |> Phoenix.Component.assign(:_filament_rendered, rendered)
+       |> Phoenix.Component.assign(:_filament_rendered, Filament.Web.to_rendered(rendered))
        |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
     else
       {:noreply, socket}

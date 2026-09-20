@@ -41,9 +41,11 @@ defmodule Filament.Web do
   per fiber+slot and live in static for fingerprint efficiency.
   """
   @spec to_rendered(term()) :: Rendered.t()
+  def to_rendered(%Rendered{} = rendered), do: rendered
+
   def to_rendered(walked) do
     state = %{static: [""], dynamic: [], fp: 0}
-    state = walk_rendered(walked, state)
+    state = walk_child_rendered(walked, state)
     static = Enum.reverse(state.static)
     dynamic = Enum.reverse(state.dynamic)
 
@@ -114,8 +116,9 @@ defmodule Filament.Web do
 
   defp component_dynamic(%Rendered{} = r), do: r
   defp component_dynamic(other) when is_tuple(other), do: to_rendered(other)
-  defp component_dynamic(other), do: other
+  defp component_dynamic(other), do: Safe.to_iodata(other)
 
+  defp walk_child_rendered({:safe, iodata}, state), do: push_dynamic(state, iodata)
   defp walk_child_rendered(child, state) when is_tuple(child), do: walk_rendered(child, state)
   defp walk_child_rendered(nil, state), do: state
   defp walk_child_rendered(false, state), do: state

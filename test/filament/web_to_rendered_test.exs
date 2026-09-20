@@ -167,5 +167,24 @@ defmodule Filament.WebToRenderedTest do
       walked = {:element, "div", [{"title", "a\"b"}], []}
       assert html(walked) == ~s(<div title="a&quot;b"></div>)
     end
+
+    test "root scalar is escaped" do
+      assert html("<script>") == "&lt;script&gt;"
+    end
+
+    test "safe values remain safe" do
+      assert html({:safe, "<strong>ok</strong>"}) == "<strong>ok</strong>"
+    end
+
+    test "component scalar output is escaped" do
+      walked = {:component, Example, %{}, nil, "<script>"}
+      assert html(walked) == "&lt;script&gt;"
+    end
+
+    test "rendered roots pass through" do
+      rendered = %Rendered{static: ["<p>ok</p>"], dynamic: fn _ -> [] end, fingerprint: 1}
+      assert Web.to_rendered(rendered).static == rendered.static
+      assert html(rendered) == "<p>ok</p>"
+    end
   end
 end

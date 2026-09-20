@@ -41,6 +41,18 @@ defmodule Filament.LiveViewTest do
     def root_component, do: CounterComponent
   end
 
+  defmodule EventComponent do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      prop(:count, :integer, required: true)
+
+      def render(%{count: count}), do: ~F"<p>{count}</p>"
+      def handle_event("increment", _params, props), do: Map.update!(props, :count, &(&1 + 1))
+    end
+  end
+
   describe "module injection" do
     test "injects mount/3 function" do
       assert function_exported?(CounterLiveView, :mount, 3)
@@ -117,6 +129,24 @@ defmodule Filament.LiveViewTest do
       {:ok, socket} = CounterLiveView.mount(%{}, %{}, socket)
 
       assert socket.assigns._filament_tree["root"].props == %{count: 42}
+    end
+  end
+
+  describe "dispatch_component_event/4" do
+    test "converts updated vnode output for LiveView" do
+      {tree, walked, _} = Filament.Reconciler.mount(EventComponent, %{count: 0}, owner_pid: self())
+
+      socket =
+        test_socket(%{
+          _filament_tree: tree,
+          _filament_rendered: Filament.Web.to_rendered(walked),
+          _filament_pending_effects: []
+        })
+
+      {:noreply, socket} = Filament.LiveView.dispatch_component_event("increment", %{}, socket, nil)
+
+      html = socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+      assert html == "<p>1</p>"
     end
   end
 
