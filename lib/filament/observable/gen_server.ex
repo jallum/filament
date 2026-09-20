@@ -57,7 +57,7 @@ defmodule Filament.Observable.GenServer do
 
   @impl Filament.Cell
   def unsubscribe(server, subscriber) do
-    GenServer.cast(server, {:filament_cell_unsubscribe, subscriber})
+    GenServer.call(server, {:filament_cell_unsubscribe, subscriber})
     :ok
   catch
     :exit, _ -> :ok
@@ -77,7 +77,7 @@ defmodule Filament.Observable.GenServer do
   (their lookup happens at call time anyway).
   """
   def reachable?(server) when is_pid(server), do: Process.alive?(server)
-  def reachable?(_), do: true
+  def reachable?(server), do: not is_nil(GenServer.whereis(server))
 
   defmacro __using__(_opts) do
     quote do
@@ -93,7 +93,10 @@ defmodule Filament.Observable.GenServer do
       @impl Filament.Observable
       def handle_unsubscribe(_subscriber, state), do: {:ok, state}
 
-      defoverridable handle_subscribe: 2, handle_unsubscribe: 2
+      @impl Filament.Observable
+      def handle_current(state), do: {:ok, state, state}
+
+      defoverridable handle_subscribe: 2, handle_unsubscribe: 2, handle_current: 1
 
       # ── Cell constructor ────────────────────────────────────────────────
 
@@ -141,7 +144,7 @@ defmodule Filament.Observable.GenServer do
       end
 
       @impl true
-      def handle_cast({:filament_cell_unsubscribe, subscriber}, state) do
+      def handle_call({:filament_cell_unsubscribe, subscriber}, _from, state) do
         Filament.Observable.GenServer.handle_cell_unsubscribe(__MODULE__, subscriber, state)
       end
 
@@ -186,6 +189,8 @@ defmodule Filament.Observable.GenServer do
     cell_subs = Process.get(:__filament_cell_subscribers__, %{})
     projected = projection.(raw)
     send_pid = subscriber_pid(subscriber)
+    old_entry = Map.get(cell_subs, subscriber)
+    if old_entry && old_entry.monitor_ref, do: Process.demonitor(old_entry.monitor_ref, [:flush])
     ref = if is_pid(send_pid) and send_pid != self(), do: Process.monitor(send_pid)
 
     entry = %{pid: send_pid, projection: projection, last: projected, monitor_ref: ref}
@@ -196,7 +201,7 @@ defmodule Filament.Observable.GenServer do
 
   @doc false
   def handle_cell_current(mod, projection, _from, state) do
-    {:ok, raw, new_state} = mod.handle_subscribe(:__filament_current__, state)
+    {:ok, raw, new_state} = mod.handle_current(state)
     {:reply, projection.(raw), new_state}
   end
 
@@ -206,13 +211,13 @@ defmodule Filament.Observable.GenServer do
 
     case Map.fetch(cell_subs, subscriber) do
       :error ->
-        {:noreply, state}
+        {:reply, :ok, state}
 
       {:ok, entry} ->
         if entry.monitor_ref, do: Process.demonitor(entry.monitor_ref, [:flush])
         Process.put(:__filament_cell_subscribers__, Map.delete(cell_subs, subscriber))
         {:ok, new_state} = mod.handle_unsubscribe(subscriber, state)
-        {:noreply, new_state}
+        {:reply, :ok, new_state}
     end
   end
 

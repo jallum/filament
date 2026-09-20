@@ -206,6 +206,16 @@ defmodule Filament.Hooks.UseValueTest do
       assert server_a |> cell_subscribers_in() |> map_size() == 0
       assert server_b |> cell_subscribers_in() |> map_size() == 1
     end
+
+    test "clearing the cell unsubscribes from the old transport" do
+      {:ok, server} = Counter.start_link(10)
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+
+      {tree, _walked, _} = Reconciler.mount(CellComp.CellComp, %{cell: cell}, owner_pid: self())
+      {_tree, _walked, _} = Reconciler.update(tree, "root", %{cell: nil}, owner_pid: self())
+
+      assert server |> cell_subscribers_in() |> map_size() == 0
+    end
   end
 
   describe "use_source/1 (factory form)" do

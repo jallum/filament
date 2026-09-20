@@ -8,7 +8,7 @@ defmodule Filament.Observable do
   """
 
   @doc """
-  Called when a new subscriber registers (and to read the current value).
+  Called when a new subscriber registers.
 
   Return `{:ok, initial_value, new_state}` to accept. `initial_value` is the
   raw value passed to the subscriber's projection function.
@@ -25,5 +25,7 @@ defmodule Filament.Observable do
   @callback handle_unsubscribe(subscriber :: term(), state :: term()) ::
               {:ok, new_state :: term()}
 
-  @optional_callbacks handle_subscribe: 2, handle_unsubscribe: 2
+  @callback handle_current(state :: term()) :: {:ok, value :: term(), new_state :: term()}
+
+  @optional_callbacks handle_subscribe: 2, handle_unsubscribe: 2, handle_current: 1
 end

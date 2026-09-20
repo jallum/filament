@@ -29,6 +29,24 @@ defmodule Filament.Observable.CellImplTest do
     end
   end
 
+  defmodule ReadOnlyCounter do
+    @moduledoc false
+    use Filament.Observable.GenServer
+
+    def start_link, do: GenServer.start_link(__MODULE__, %{value: 7, subscriptions: 0})
+
+    @impl GenServer
+    def init(state), do: {:ok, state}
+
+    @impl Filament.Observable
+    def handle_subscribe(_subscriber, state) do
+      {:ok, state.value, %{state | subscriptions: state.subscriptions + 1}}
+    end
+
+    @impl Filament.Observable
+    def handle_current(state), do: {:ok, state.value, state}
+  end
+
   describe "Cell.subscribe/3 against a GenServer-backed observable" do
     test "delivers the current projected value on subscribe" do
       {:ok, server} = Counter.start_link()
@@ -47,6 +65,14 @@ defmodule Filament.Observable.CellImplTest do
     test "returns :disconnected when the server isn't running" do
       cell = Filament.Source.new(Filament.Observable.GenServer, :nonexistent_server_name)
       assert :disconnected = Cell.subscribe(cell, self(), & &1)
+    end
+
+    test "does not invoke the subscription callback" do
+      {:ok, server} = ReadOnlyCounter.start_link()
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+
+      assert Cell.current(cell, & &1) == 7
+      assert :sys.get_state(server).subscriptions == 0
     end
   end
 

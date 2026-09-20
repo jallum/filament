@@ -288,10 +288,12 @@ defmodule Filament.Hooks do
 
     cond do
       not ctx.subscribe_enabled ->
+        maybe_unsubscribe_observable(ctx, previous, slot_index)
         commit_slot(slot_index, :uninitialized)
         projection.(:disconnected)
 
       is_nil(cell) ->
+        maybe_unsubscribe_observable(ctx, previous, slot_index)
         commit_slot(slot_index, :uninitialized)
         projection.(:disconnected)
 
@@ -340,12 +342,18 @@ defmodule Filament.Hooks do
     end
   end
 
-  defp maybe_unsubscribe_observable(ctx, old_cell, slot_index) do
+  defp maybe_unsubscribe_observable(ctx, %Filament.Source{} = old_cell, slot_index) do
+    maybe_unsubscribe_observable(ctx, {:cell_subscribed, old_cell, nil}, slot_index)
+  end
+
+  defp maybe_unsubscribe_observable(ctx, {:cell_subscribed, old_cell, _raw}, slot_index) do
     if is_map_key(ctx.fiber_tree, ctx.fiber_id) do
       subscriber = {ctx.owner_pid, ctx.fiber_id, slot_index}
       Filament.Cell.unsubscribe(old_cell, subscriber)
     end
   end
+
+  defp maybe_unsubscribe_observable(_ctx, _previous, _slot_index), do: :ok
 
   defp observable_subscribe_fresh(cell, slot_index, ctx) do
     subscriber = {ctx.owner_pid, ctx.fiber_id, slot_index}
