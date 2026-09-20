@@ -96,6 +96,33 @@ defmodule Filament.TagEngine.SlotConsumerTest do
       assert [%Entry{attrs: %{label: "main"}}] = assigns.body
     end
 
+    test "slot honours :if" do
+      ast =
+        compile("""
+        <Filament.TagEngine.SlotConsumerTest.Layout.Layout>
+          <:body :if={show}><div>Body</div></:body>
+        </Filament.TagEngine.SlotConsumerTest.Layout.Layout>
+        """)
+
+      {:component, _, assigns, nil} = eval(ast, show: false)
+      assert assigns.body == []
+    end
+
+    test "slot honours :for" do
+      ast =
+        compile("""
+        <Filament.TagEngine.SlotConsumerTest.Layout.Layout>
+          <:body :for={item <- items}><div>{item}</div></:body>
+        </Filament.TagEngine.SlotConsumerTest.Layout.Layout>
+        """)
+
+      {:component, _, assigns, nil} = eval(ast, items: ["one", "two"])
+      assert Enum.map(assigns.body, & &1.render_fn.()) == [
+               {:element, "div", [], ["one"]},
+               {:element, "div", [], ["two"]}
+             ]
+    end
+
     test "whitespace between slot tags is silently ignored" do
       # This should compile without error even though there is whitespace text
       # at the component's top level.

@@ -566,11 +566,12 @@ defmodule Filament.TagEngine do
     end
 
     slot_atom = String.to_atom(slot_name)
+    {has_special?, special, attrs} = pop_special_attrs!(attrs, tag_meta, state)
     slot_attrs_ast = parse_slot_attrs(attrs, state)
 
     state
     |> push_substate_to_stack()
-    |> push_stack_item({:slot_capture, slot_atom, slot_attrs_ast})
+    |> push_stack_item({:slot_capture, slot_atom, slot_attrs_ast, has_special?, special})
     |> update_subengine(:handle_begin, [])
     |> continue(tokens)
   end
@@ -578,7 +579,7 @@ defmodule Filament.TagEngine do
   # Close slot sub-tag
 
   defp handle_token([{:close, :slot, slot_name, tag_meta} | tokens], state) do
-    [{:slot_capture, slot_atom, slot_attrs_ast} | rest_stack] = state.stack
+    [{:slot_capture, slot_atom, slot_attrs_ast, has_special?, special} | rest_stack] = state.stack
 
     if slot_name != Atom.to_string(slot_atom) do
       raise_syntax_error!("unmatched closing slot </:#{slot_name}>", tag_meta, state)
@@ -586,7 +587,7 @@ defmodule Filament.TagEngine do
 
     state_trimmed = %{state | stack: rest_stack}
     body_ast = invoke_subengine(state_trimmed, :handle_end, [])
-    entry_ast = build_slot_entry_ast(body_ast, slot_attrs_ast)
+    entry_ast = build_slot_entry_ast(body_ast, slot_attrs_ast, has_special?, special)
 
     state_trimmed
     |> pop_substate_from_stack()
@@ -1209,14 +1210,29 @@ defmodule Filament.TagEngine do
     %{state | slots: [updated | rest]}
   end
 
-  defp build_slot_entry_ast(body_ast, slot_attrs_ast) do
-    quote do
+  defp build_slot_entry_ast(body_ast, slot_attrs_ast, has_special?, special) do
+    entry =
+      quote do
       %Filament.Slot.Entry{
         render_fn: fn -> unquote(body_ast) end,
         attrs: unquote(slot_attrs_ast)
       }
     end
+
+    if has_special? do
+      entry |> wrap_slot_for(special) |> maybe_wrap_if(special)
+    else
+      entry
+    end
   end
+
+  defp wrap_slot_for(entry, %{for: for_expr}) do
+    quote do
+      for unquote(for_expr), do: unquote(entry)
+    end
+  end
+
+  defp wrap_slot_for(entry, _special), do: entry
 
   defp parse_slot_attrs(attrs, state) do
     pairs =
@@ -1235,7 +1251,12 @@ defmodule Filament.TagEngine do
   end
 
   defp build_slot_assigns_ast(slots_map) do
-    pairs = Enum.map(slots_map, fn {name, entries} -> {name, entries} end)
+    pairs =
+      Enum.map(slots_map, fn {name, entries} ->
+        entries_ast = quote(do: Enum.flat_map([unquote_splicing(entries)], &List.wrap/1))
+        {name, entries_ast}
+      end)
+
     {:%{}, [], pairs}
   end
 
@@ -1255,7 +1276,7 @@ defmodule Filament.TagEngine do
     state.slots != [] and not in_slot_substate?(state.stack)
   end
 
-  defp in_slot_substate?([{:slot_capture, _, _} | _]), do: true
+  defp in_slot_substate?([{:slot_capture, _, _, _, _} | _]), do: true
   defp in_slot_substate?([{:substate, _} | _]), do: false
   defp in_slot_substate?([_ | rest]), do: in_slot_substate?(rest)
   defp in_slot_substate?([]), do: false
