@@ -159,6 +159,14 @@ defmodule Filament.Web do
     |> fp_mix({:attr_dynamic, name_str})
   end
 
+  defp walk_attr({name, value}, state) when name in ["class", :class] do
+    state
+    |> append_static(" class=\"")
+    |> push_dynamic(Filament.HTMLEngine.class_attribute_encode(value))
+    |> append_static("\"")
+    |> fp_mix({:attr_dynamic, "class"})
+  end
+
   defp walk_attr({name, value}, state) when is_list(value) do
     joined = value |> Enum.filter(& &1) |> Enum.join(" ")
     walk_attr({name, joined}, state)
@@ -272,6 +280,10 @@ defmodule Filament.Web do
   defp render_attr_value(key_str, true), do: [" ", key_str]
   # `nil` is emitted by VNodeEngine for bare boolean attrs (`<input disabled>`).
   defp render_attr_value(key_str, nil), do: [" ", key_str]
+
+  defp render_attr_value("class", value) do
+    [" class=\"", Filament.HTMLEngine.class_attribute_encode(value), "\""]
+  end
 
   defp render_attr_value(key_str, value) do
     escaped_value = Plug.HTML.html_escape_to_iodata(to_string(value))

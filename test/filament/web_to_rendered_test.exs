@@ -74,6 +74,11 @@ defmodule Filament.WebToRenderedTest do
       assert r.static == ["<input disabled>"]
       assert r.dynamic.(false) == []
     end
+
+    test "class lists follow HEEx class semantics" do
+      walked = {:element, "div", [class: ["base", nil, ["nested", false], :active]], []}
+      assert html(walked) == ~s(<div class="base nested active"></div>)
+    end
   end
 
   describe "to_rendered/1: fingerprint stability" do
