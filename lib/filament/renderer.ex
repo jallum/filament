@@ -41,7 +41,8 @@ defmodule Filament.Renderer do
     # Save current context (if any) and set new context with reset state
     Process.put(:filament_render_context, %{
       context
-      | hook_index: 0,
+      | props: props,
+        hook_index: 0,
         new_hook_slots: %{},
         pending_effects: [],
         event_handler_index: 0,
@@ -268,6 +269,14 @@ defmodule Filament.Renderer do
   @spec current_context() :: RenderContext.t() | nil
   def current_context do
     Process.get(:filament_render_context)
+  end
+
+  @doc false
+  def current_props do
+    case current_context() do
+      %RenderContext{props: props} -> props
+      nil -> raise "render props requested outside render context"
+    end
   end
 
   @doc """

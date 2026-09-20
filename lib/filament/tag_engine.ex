@@ -528,9 +528,11 @@ defmodule Filament.TagEngine do
     {regular_assigns, _attr_info} =
       build_self_close_component_assigns({"remote component", name}, attrs, tag_meta.line, state)
 
+    {has_special?, special, _attrs} = pop_special_attrs!(attrs, tag_meta, state)
+
     state
     |> set_root_on_not_tag()
-    |> push_tag({:remote_component, name, {mod_ast, fun, regular_assigns}, tag_meta})
+    |> push_tag({:remote_component, name, {mod_ast, fun, regular_assigns, has_special?, special}, tag_meta})
     |> push_slots_frame()
     |> continue(tokens)
   end
@@ -540,11 +542,9 @@ defmodule Filament.TagEngine do
   defp handle_token([{:slot, slot_name, attrs, %{closing: :self} = tag_meta} | tokens], state) do
     slot_atom = String.to_atom(slot_name)
     default_ast = parse_slot_default(attrs, state)
-    assigns_var = Macro.var(:assigns, nil)
-
     vnode_ast =
       quote line: tag_meta.line do
-        {:slot, unquote(slot_atom), Map.get(unquote(assigns_var), unquote(slot_atom), []),
+        {:slot, unquote(slot_atom), Map.get(Filament.Renderer.current_props(), unquote(slot_atom), []),
          unquote(default_ast)}
       end
 
@@ -577,8 +577,13 @@ defmodule Filament.TagEngine do
 
   # Close slot sub-tag
 
-  defp handle_token([{:close, :slot, _slot_name, _tag_meta} | tokens], state) do
+  defp handle_token([{:close, :slot, slot_name, tag_meta} | tokens], state) do
     [{:slot_capture, slot_atom, slot_attrs_ast} | rest_stack] = state.stack
+
+    if slot_name != Atom.to_string(slot_atom) do
+      raise_syntax_error!("unmatched closing slot </:#{slot_name}>", tag_meta, state)
+    end
+
     state_trimmed = %{state | stack: rest_stack}
     body_ast = invoke_subengine(state_trimmed, :handle_end, [])
     entry_ast = build_slot_entry_ast(body_ast, slot_attrs_ast)
@@ -592,13 +597,20 @@ defmodule Filament.TagEngine do
   # Close remote component — emit the component vnode with accumulated slot assigns
 
   defp handle_token([{:close, :remote_component, _name, _close_meta} = token | tokens], state) do
-    {{:remote_component, _name, {mod_ast, fun, regular_assigns}, open_meta}, state} =
+    {{:remote_component, _name, {mod_ast, fun, regular_assigns, has_special?, special}, open_meta}, state} =
       pop_tag!(state, token)
 
     {slots_map, state} = pop_slots_frame(state)
     slot_assigns_ast = build_slot_assigns_ast(slots_map)
     full_assigns = merge_assigns_with_slots(regular_assigns, slot_assigns_ast, open_meta.line)
-    vnode_ast = build_filament_component_ast(state, mod_ast, fun, full_assigns, nil, open_meta.line)
+    vnode_ast =
+      if has_special? do
+        build_self_close_component_with_special(state, special, open_meta, fn key_ast ->
+          build_filament_component_ast(state, mod_ast, fun, full_assigns, key_ast, open_meta.line)
+        end)
+      else
+        build_filament_component_ast(state, mod_ast, fun, full_assigns, nil, open_meta.line)
+      end
 
     state
     |> set_root_on_not_tag()

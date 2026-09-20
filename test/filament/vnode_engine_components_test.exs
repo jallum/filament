@@ -93,6 +93,16 @@ defmodule Filament.VNodeEngineComponentsTest do
       assert eval(ast) ==
                {:element, "div", [], [{:component, Item.Item, %{}, nil}]}
     end
+
+    test "block component honours :if" do
+      ast = compile("<Filament.VNodeEngineComponentsTest.Item.Item :if={show}><:body>body</:body></Filament.VNodeEngineComponentsTest.Item.Item>")
+      assert eval(ast, show: false) == nil
+    end
+
+    test "attribute spreads become ordinary attributes" do
+      ast = compile("<div {attrs}>ok</div>")
+      assert eval(ast, attrs: [class: "box"]) == {:element, "div", [class: "box"], [{:text, "ok"}]}
+    end
   end
 
   describe "round-trip through walker and web converter" do

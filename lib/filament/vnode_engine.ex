@@ -130,15 +130,12 @@ defmodule Filament.VNodeEngine do
     {:{}, [], [:element, name, attrs_ast(attrs), children]}
   end
 
-  # Build attrs AST. If any attr is an `:__attr_group__` marker (introduced by
-  # multi-attr `on_*` codegen — e.g. `on_key` expands into 3 attrs sharing a
-  # runtime wire-ref binding), emit a runtime-flattening expression. Otherwise
-  # return a literal list of pairs.
   defp attrs_ast(attrs) do
-    if Enum.any?(attrs, &match?({:__attr_group__, _}, &1)) do
+    if Enum.any?(attrs, &match?({kind, _} when kind in [:__attr_group__, :__root__], &1)) do
       parts =
         Enum.map(attrs, fn
           {:__attr_group__, group_ast} -> group_ast
+          {:__root__, attrs_ast} -> quote(do: Enum.to_list(unquote(attrs_ast)))
           pair -> [pair]
         end)
 

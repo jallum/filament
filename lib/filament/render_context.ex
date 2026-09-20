@@ -7,6 +7,7 @@ defmodule Filament.RenderContext do
     :fiber_id,
     # %{String.t() => Filament.Fiber.t()} - full tree (read-only)
     :fiber_tree,
+    props: %{},
     # non_neg_integer() - current hook slot index
     hook_index: 0,
     # %{String.t() => Filament.Fiber.t()} - fibers discovered this pass
@@ -47,6 +48,7 @@ defmodule Filament.RenderContext do
   @type t :: %__MODULE__{
           fiber_id: String.t(),
           fiber_tree: %{String.t() => Filament.Fiber.t()},
+          props: map(),
           hook_index: non_neg_integer(),
           new_fibers: %{String.t() => Filament.Fiber.t()},
           owner_pid: pid() | nil,

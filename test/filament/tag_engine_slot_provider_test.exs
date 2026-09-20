@@ -22,8 +22,15 @@ defmodule Filament.TagEngine.SlotProviderTest do
   end
 
   defp eval(ast, bindings \\ []) do
-    {result, _} = Code.eval_quoted(ast, bindings, __ENV__)
-    result
+    context = %Filament.RenderContext{fiber_id: "root", fiber_tree: %{}, props: Keyword.get(bindings, :props, %{})}
+    Process.put(:filament_render_context, context)
+
+    try do
+      {result, _} = Code.eval_quoted(ast, bindings, __ENV__)
+      result
+    after
+      Process.delete(:filament_render_context)
+    end
   end
 
   describe "<:slot_name /> — provider render site" do
@@ -31,28 +38,28 @@ defmodule Filament.TagEngine.SlotProviderTest do
       ast = compile("<:header />")
 
       entry = %Entry{render_fn: fn -> {:text, "hi"} end}
-      result = eval(ast, assigns: %{header: [entry]})
+      result = eval(ast, props: %{header: [entry]})
       assert {:slot, :header, [^entry], nil} = result
     end
 
     test "emits empty entries list when slot is absent from assigns" do
       ast = compile("<:body />")
-      assert {:slot, :body, [], nil} = eval(ast, assigns: %{})
+      assert {:slot, :body, [], nil} = eval(ast)
     end
 
     test "default: attr sets the fallback module" do
       ast = compile("<:footer default={String} />")
-      assert {:slot, :footer, [], String} = eval(ast, assigns: %{})
+      assert {:slot, :footer, [], String} = eval(ast)
     end
 
     test "default: attr is nil when not specified" do
       ast = compile("<:header />")
-      assert {:slot, :header, [], nil} = eval(ast, assigns: %{})
+      assert {:slot, :header, [], nil} = eval(ast)
     end
 
     test "slot name is atomised from the template tag" do
       ast = compile("<:body_content />")
-      {:slot, name, [], nil} = eval(ast, assigns: %{})
+      {:slot, name, [], nil} = eval(ast)
       assert name == :body_content
     end
   end
