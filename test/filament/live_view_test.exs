@@ -53,6 +53,18 @@ defmodule Filament.LiveViewTest do
     end
   end
 
+  defmodule SlotComponent do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      prop(:label, :string, required: true)
+      slot(:body, required: true)
+
+      def render(_), do: ~F"<div />"
+    end
+  end
+
   describe "module injection" do
     test "injects mount/3 function" do
       assert function_exported?(CounterLiveView, :mount, 3)
@@ -147,6 +159,15 @@ defmodule Filament.LiveViewTest do
 
       html = socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
       assert html == "<p>1</p>"
+    end
+  end
+
+  describe "extract_props/2" do
+    test "includes declared slot entries" do
+      entry = %Filament.Slot.Entry{render_fn: fn -> {:text, "body"} end}
+      props = Filament.LiveView.extract_props(%{label: "x", body: [entry], flash: %{}}, SlotComponent)
+
+      assert props == %{label: "x", body: [entry]}
     end
   end
 

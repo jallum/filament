@@ -298,7 +298,9 @@ defmodule Filament.LiveView do
     # false and we'd silently drop every prop. ensure_loaded?/1 forces
     # the load before we ask.
     if Code.ensure_loaded?(component) and function_exported?(component, :__props__, 0) do
-      allowed = Enum.map(component.__props__(), fn {name, _meta} -> name end)
+      props = Enum.map(component.__props__(), fn {name, _meta} -> name end)
+      slots = if function_exported?(component, :__slots__, 0), do: Enum.map(component.__slots__(), & &1.name), else: []
+      allowed = props ++ slots
       Map.take(assigns, allowed)
     else
       %{}
