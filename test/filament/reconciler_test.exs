@@ -9,6 +9,7 @@ defmodule Filament.ReconcilerTest do
   defmodule Leaf do
     @moduledoc false
     use Filament.Component
+
     defcomponent do
       def render(_), do: ~F"<span>leaf</span>"
     end
@@ -17,6 +18,7 @@ defmodule Filament.ReconcilerTest do
   defmodule Mid do
     @moduledoc false
     use Filament.Component
+
     defcomponent do
       def render(_), do: ~F"<Filament.ReconcilerTest.Leaf />"
     end
@@ -25,6 +27,7 @@ defmodule Filament.ReconcilerTest do
   defmodule Root do
     @moduledoc false
     use Filament.Component
+
     defcomponent do
       def render(_), do: ~F"<Filament.ReconcilerTest.Mid />"
     end
@@ -399,5 +402,70 @@ defmodule Filament.ReconcilerTest do
       assert KeyedTrackingObservable.proj_key_count(server) == 1
       assert KeyedTrackingObservable.subscriber_count(server) == 1
     end
+  end
+
+  defmodule LifecycleLeaf do
+    @moduledoc false
+    use Filament.Component
+
+    def render(%{server: server, observer: observer}) do
+      use_value(KeyedTrackingObservable.cell(server), &Function.identity/1)
+      {value, _} = use_state(0)
+      use_effect(fn -> fn -> send(observer, :leaf_cleanup) end end, [])
+      {:text, to_string(value)}
+    end
+  end
+
+  defmodule LifecycleList do
+    @moduledoc false
+    def render(%{items: items} = props) do
+      {:fragment, Enum.map(items, &{:component, LifecycleLeaf, props, &1})}
+    end
+  end
+
+  defmodule LifecycleBranch do
+    @moduledoc false
+    def render(props), do: {:component, LifecycleList, props, nil}
+  end
+
+  defmodule LifecycleRoot do
+    @moduledoc false
+    def render(props), do: {:component, LifecycleBranch, props, nil}
+  end
+
+  test "removed descendants clean up once under retained ancestors and remount fresh" do
+    server = start_supervised!(KeyedTrackingObservable)
+    props = %{server: server, observer: self(), items: [:a, :b]}
+    {tree, _, effects} = Reconciler.mount(LifecycleRoot, props, owner_pid: self())
+    {tree, _} = Filament.LiveView.apply_effects(effects, tree)
+    [branch] = tree["root"].children
+    [list] = tree[branch].children
+    [a, b] = Enum.sort(tree[list].children)
+    assert length(tree[list].children) == 2
+    {:ok, tree, _} = Filament.LiveView.apply_set_state(tree, a, 1, 7)
+    {:ok, tree, _} = Filament.LiveView.apply_set_state(tree, b, 1, 9)
+
+    {tree, _, _} = Reconciler.update(tree, "root", %{props | items: [:a]}, owner_pid: self())
+    refute Map.has_key?(tree, b)
+    assert {7, _} = tree[a].hook_slots[1]
+    assert KeyedTrackingObservable.subscriber_count(server) == 1
+    assert_receive :leaf_cleanup
+    refute_receive :leaf_cleanup
+
+    {tree, _, effects} = Reconciler.update(tree, "root", props, owner_pid: self())
+    {tree, _} = Filament.LiveView.apply_effects(effects, tree)
+    assert {0, _} = tree[b].hook_slots[1]
+    assert KeyedTrackingObservable.subscriber_count(server) == 2
+
+    {tree, _, _} = Reconciler.update(tree, branch, %{props | items: []}, owner_pid: self())
+    assert Map.has_key?(tree, "root")
+    assert Map.has_key?(tree, branch)
+    assert tree[list].children == []
+    refute Map.has_key?(tree, a)
+    refute Map.has_key?(tree, b)
+    assert KeyedTrackingObservable.subscriber_count(server) == 0
+    assert_receive :leaf_cleanup
+    assert_receive :leaf_cleanup
+    refute_receive :leaf_cleanup
   end
 end

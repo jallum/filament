@@ -39,8 +39,8 @@ defmodule Filament.Reconciler do
     }
 
     # Render the component
-    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers,
-     new_capture_handlers, new_event_handler_kinds, new_capture_handler_kinds} =
+    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers, new_capture_handlers,
+     new_event_handler_kinds, new_capture_handler_kinds} =
       Renderer.render(root_component, props, context)
 
     # Build initial tree with root and any discovered children
@@ -86,8 +86,8 @@ defmodule Filament.Reconciler do
     }
 
     # Re-render component
-    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers,
-     new_capture_handlers, new_event_handler_kinds, new_capture_handler_kinds} =
+    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers, new_capture_handlers,
+     new_event_handler_kinds, new_capture_handler_kinds} =
       Renderer.render(fiber.component, new_props, context)
 
     # Commit hook slots and event handlers
@@ -142,12 +142,12 @@ defmodule Filament.Reconciler do
 
     new_children = Map.filter(new_fibers, fn {_id, fiber} -> fiber.parent_id == parent_id end)
 
-    old_child_ids = parent_fiber.children || []
+    old_child_ids = descendant_ids(tree, parent_fiber)
     new_child_ids = Map.keys(new_children)
 
     tree_after_unmount =
       Enum.reduce(old_child_ids, tree, fn child_id, acc ->
-        if child_id in new_child_ids do
+        if Map.has_key?(new_fibers, child_id) do
           acc
         else
           unmount_fiber(acc, child_id, owner_pid)
@@ -157,6 +157,15 @@ defmodule Filament.Reconciler do
     tree_after_unmount
     |> Map.merge(new_fibers)
     |> Map.update!(parent_id, &%{&1 | children: new_child_ids})
+  end
+
+  defp descendant_ids(tree, fiber) do
+    Enum.flat_map(fiber.children || [], fn id ->
+      case Map.get(tree, id) do
+        nil -> []
+        child -> [id | descendant_ids(tree, child)]
+      end
+    end)
   end
 
   defp unmount_fiber(tree, fiber_id, owner_pid) do
