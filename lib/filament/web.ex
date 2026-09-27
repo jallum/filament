@@ -2,9 +2,9 @@ defmodule Filament.Web do
   @moduledoc """
   Web target for Filament's substrate vnode IR.
 
-  Consumes a walked vnode tree produced by `Filament.Renderer.walk_vnode/2`
-  and converts it into HTML iodata suitable for embedding in a
-  `Phoenix.LiveView.Rendered` struct.
+  Builds `Phoenix.LiveView.Rendered` output directly during reconciliation when
+  selected with `target: Filament.Web`. It also converts portable walked vnode
+  output through `to_rendered/1` and `to_iodata/1`.
 
   This module owns all web-shaped concerns:
 
@@ -19,6 +19,9 @@ defmodule Filament.Web do
   escapes — those concerns live here.
   """
 
+  @behaviour Filament.RenderTarget
+
+  alias Filament.Renderer
   alias Phoenix.HTML.Safe
   alias Phoenix.LiveView.Rendered
 
@@ -43,9 +46,15 @@ defmodule Filament.Web do
   @spec to_rendered(term()) :: Rendered.t()
   def to_rendered(%Rendered{} = rendered), do: rendered
 
-  def to_rendered(walked) do
+  def to_rendered(walked), do: build_rendered(walked, :walked)
+
+  @impl Filament.RenderTarget
+  def render(output, _context) when is_tuple(output) or is_list(output), do: build_rendered(output, :reconcile)
+  def render(output, _context), do: output
+
+  defp build_rendered(walked, mode) do
     state = {[""], [], 0}
-    {static, dynamic, fingerprint} = walk_child_rendered(walked, state)
+    {static, dynamic, fingerprint} = walk_child_rendered(walked, state, mode)
     static = Enum.reverse(static)
     dynamic = Enum.reverse(dynamic)
 
@@ -72,11 +81,11 @@ defmodule Filament.Web do
     {static, dynamic, :erlang.phash2({fp, term})}
   end
 
-  defp walk_rendered({:text, content}, state) when is_binary(content) do
+  defp walk_rendered({:text, content}, state, _mode) when is_binary(content) do
     state |> append_static(content) |> fp_mix({:text, content})
   end
 
-  defp walk_rendered({:element, tag, attrs, children}, state) do
+  defp walk_rendered({:element, tag, attrs, children}, state, mode) do
     tag_str = to_string(tag)
 
     state =
@@ -84,12 +93,17 @@ defmodule Filament.Web do
       |> append_static("<" <> tag_str)
       |> fp_mix({:elem_open, tag_str})
 
-    state = Enum.reduce(attrs, state, &walk_attr/2)
+    state =
+      Enum.reduce(attrs, state, fn attr, acc ->
+        attr = if mode == :reconcile, do: Renderer.resolve_event_attr(attr), else: attr
+        walk_attr(attr, acc)
+      end)
+
     state = append_static(state, ">")
 
     state =
       Enum.reduce(children, state, fn child, st ->
-        walk_child_rendered(child, st)
+        walk_child_rendered(child, st, mode)
       end)
 
     if void_element?(tag_str) do
@@ -99,9 +113,9 @@ defmodule Filament.Web do
     end
   end
 
-  defp walk_rendered({:fragment, children}, state) do
+  defp walk_rendered({:fragment, children}, state, mode) do
     state = fp_mix(state, :fragment_open)
-    state = Enum.reduce(children, state, fn child, st -> walk_child_rendered(child, st) end)
+    state = Enum.reduce(children, state, fn child, st -> walk_child_rendered(child, st, mode) end)
     fp_mix(state, :fragment_close)
   end
 
@@ -110,30 +124,58 @@ defmodule Filament.Web do
   # we surface it as a single dynamic slot — PLV recursively diffs nested
   # Rendered structs, and walked subtrees fall back to opaque iodata via
   # `Phoenix.HTML.Safe`.
-  defp walk_rendered({:component, _mod, _props, _key, child_render}, state) do
+  defp walk_rendered({:component, _mod, _props, _key, child_render}, state, :walked) do
     state |> push_dynamic(component_dynamic(child_render)) |> fp_mix(:component)
+  end
+
+  defp walk_rendered({:component, mod, props, key}, state, :reconcile) do
+    child = Renderer.render_component_child(Renderer.current_context(), mod, props, key)
+    state |> push_dynamic(component_dynamic(child)) |> fp_mix(:component)
+  end
+
+  defp walk_rendered({:slot, _name, [], nil}, state, :reconcile) do
+    walk_rendered({:fragment, []}, state, :reconcile)
+  end
+
+  defp walk_rendered({:slot, _name, [], default}, state, :reconcile) do
+    walk_rendered({:component, default, %{}, nil}, state, :reconcile)
+  end
+
+  defp walk_rendered({:slot, _name, entries, _default}, state, :reconcile) do
+    state = fp_mix(state, :fragment_open)
+
+    state =
+      Enum.reduce(entries, state, fn %Filament.Slot.Entry{render_fn: render}, acc ->
+        walk_child_rendered(render.(), acc, :reconcile)
+      end)
+
+    fp_mix(state, :fragment_close)
+  end
+
+  defp walk_rendered(invalid, _state, :reconcile) do
+    raise ArgumentError, "invalid vnode: #{inspect(invalid)}"
   end
 
   defp component_dynamic(%Rendered{} = r), do: r
   defp component_dynamic(other) when is_tuple(other) or is_list(other), do: to_rendered(other)
   defp component_dynamic(other), do: Safe.to_iodata(other)
 
-  defp walk_child_rendered(children, state) when is_list(children) do
+  defp walk_child_rendered(children, state, mode) when is_list(children) do
     Enum.reduce(children, state, fn
       codepoint, acc when is_integer(codepoint) ->
         acc |> push_dynamic(Safe.to_iodata([codepoint])) |> fp_mix(:dynamic_child)
 
       child, acc ->
-        walk_child_rendered(child, acc)
+        walk_child_rendered(child, acc, mode)
     end)
   end
 
-  defp walk_child_rendered({:safe, iodata}, state), do: state |> push_dynamic(iodata) |> fp_mix(:dynamic_child)
-  defp walk_child_rendered(child, state) when is_tuple(child), do: walk_rendered(child, state)
-  defp walk_child_rendered(nil, state), do: state
-  defp walk_child_rendered(false, state), do: state
+  defp walk_child_rendered({:safe, iodata}, state, _mode), do: state |> push_dynamic(iodata) |> fp_mix(:dynamic_child)
+  defp walk_child_rendered(child, state, mode) when is_tuple(child), do: walk_rendered(child, state, mode)
+  defp walk_child_rendered(nil, state, _mode), do: state
+  defp walk_child_rendered(false, state, _mode), do: state
 
-  defp walk_child_rendered(other, state) do
+  defp walk_child_rendered(other, state, _mode) do
     # Scalar interpolation children get html-escaped via Safe.to_iodata to
     # match the iodata path's behaviour. Pre-escape eagerly so the dynamic
     # slot holds finished iodata that Phoenix can splice without re-walking.

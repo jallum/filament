@@ -168,7 +168,8 @@ defmodule Filament.LiveView do
         {tree, rendered, pending_effects} =
           Reconciler.mount(component, props,
             owner_pid: self(),
-            connected: subscribe_enabled
+            connected: subscribe_enabled,
+            target: Filament.Web
           )
 
         socket =
@@ -266,7 +267,7 @@ defmodule Filament.LiveView do
         root_fiber = tree["root"]
 
         {new_tree, rendered, pending_effects} =
-          Reconciler.update(tree, "root", root_fiber.props, owner_pid: self())
+          Reconciler.update(tree, "root", root_fiber.props, owner_pid: self(), target: Filament.Web)
 
         socket
         |> Phoenix.Component.assign(:_filament_tree, new_tree)
@@ -366,7 +367,7 @@ defmodule Filament.LiveView do
       new_props = root_fiber.component.handle_event(event, params, root_fiber.props)
 
       {new_tree, rendered, pending_effects} =
-        Reconciler.update(tree, "root", new_props, owner_pid: self())
+        Reconciler.update(tree, "root", new_props, owner_pid: self(), target: Filament.Web)
 
       {:noreply,
        socket

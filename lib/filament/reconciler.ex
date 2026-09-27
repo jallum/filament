@@ -14,7 +14,8 @@ defmodule Filament.Reconciler do
   Mounts the root component and creates the initial fiber tree.
 
   ## Options
-    * `:owner_pid` - the LiveView process that owns this render tree (default: nil)
+    * `:owner_pid` - the process that owns this render tree (default: nil)
+    * `:target` - optional `Filament.RenderTarget` adapter; nil returns walked vnodes
   """
   @spec mount(module(), map(), keyword()) ::
           {fiber_tree(), walked_vnode(), list()}
@@ -35,7 +36,8 @@ defmodule Filament.Reconciler do
       fiber_id: "root",
       fiber_tree: %{},
       owner_pid: owner_pid,
-      subscribe_enabled: Keyword.get(opts, :connected, true)
+      subscribe_enabled: Keyword.get(opts, :connected, true),
+      target: Keyword.get(opts, :target)
     }
 
     # Render the component
@@ -63,7 +65,8 @@ defmodule Filament.Reconciler do
   Updates a fiber with new props and reconciles children.
 
   ## Options
-    * `:owner_pid` - the LiveView process that owns this render tree (default: nil)
+    * `:owner_pid` - the process that owns this render tree (default: nil)
+    * `:target` - optional `Filament.RenderTarget` adapter; nil returns walked vnodes
   """
   @spec update(fiber_tree(), String.t(), map(), keyword()) ::
           {fiber_tree(), walked_vnode(), list()}
@@ -82,7 +85,8 @@ defmodule Filament.Reconciler do
     context = %RenderContext{
       fiber_id: fiber_id,
       fiber_tree: tree,
-      owner_pid: owner_pid
+      owner_pid: owner_pid,
+      target: Keyword.get(opts, :target)
     }
 
     # Re-render component

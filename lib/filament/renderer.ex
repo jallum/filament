@@ -54,11 +54,10 @@ defmodule Filament.Renderer do
     })
 
     try do
-      # `~F` emits walked vnode tuples via `Filament.VNodeEngine`. A component's
-      # render/1 either returns a vnode tuple (which we walk for fiber
-      # registration) or a scalar value (passed through as-is for the
-      # embedder/web converter to render).
-      rendered = walk_child(component_module.render(props), context)
+      # A target can reconcile raw output while building its final structure.
+      # The default path materializes portable walked vnodes.
+      output = component_module.render(props)
+      rendered = if context.target, do: context.target.render(output, context), else: walk_child(output, context)
 
       final_ctx = Process.get(:filament_render_context)
 
@@ -93,6 +92,7 @@ defmodule Filament.Renderer do
       fiber_tree: parent_ctx.fiber_tree,
       owner_pid: parent_ctx.owner_pid,
       subscribe_enabled: parent_ctx.subscribe_enabled,
+      target: parent_ctx.target,
       hook_slots: hook_slots
     }
 
@@ -234,7 +234,8 @@ defmodule Filament.Renderer do
   # closure as an event handler under the active fiber and replaces the
   # function value with a `{:wire_ref, ref_string}` marker. The web converter
   # consumes the marker and emits the corresponding `phx-*` attribute.
-  defp resolve_event_attr({key, value} = attr) do
+  @doc false
+  def resolve_event_attr({key, value} = attr) do
     if is_function(value) and String.starts_with?(to_string(key), "on_") do
       wire_ref = Filament.Hooks.register_event_handler(value)
       {key, {:wire_ref, wire_ref}}
