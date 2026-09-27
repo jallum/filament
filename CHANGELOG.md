@@ -46,6 +46,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `session_token` fields. Tests should construct cells against stub pids
   directly rather than relying on identifier-to-pid swap.
 
+## [0.5.1] - 2026-09-27
+
+### Fixed
+
+- Fixed `undefined variable "binary"` compilation errors when an
+  interpolated `class` and a function-valued attribute appear inside
+  a `:for` subtree, including on different elements (#9).
+
 ## [0.5.0] - 2026-09-18
 
 ### Changed
