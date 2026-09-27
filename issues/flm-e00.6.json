@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-09-27T17:32:22Z",
+  "description": "Reproduction: create root capture handler that calls Core.stop_propagation and a child bubble handler; LiveComponent.handle_event invokes the child directly, bypassing capture. Filament.Test.dispatch_event does the same, so tests do not model LiveView behavior.\nInstructions: route zero/one-arity handlers in both adapters through Core.dispatch_event. Preserve the LiveView socket-aware two-arity push path, stale-handler errors in the test API, and state-message flushing. Stop-propagation must be caught rather than escape as an uncaught throw.\nAcceptance: same fixture through LiveView, LiveComponent, and Filament.Test proves root-to-parent capture order, suppression of the target when stopped, and normal target state updates when not stopped.",
+  "id": "flm-e00.6",
+  "labels": [],
+  "parent": "flm-e00",
+  "priority": 2,
+  "status": "open",
+  "title": "Use Core event dispatch in LiveComponent and the component test harness",
+  "type": "bug",
+  "updated_at": "2026-09-27T17:32:22Z"
+}
