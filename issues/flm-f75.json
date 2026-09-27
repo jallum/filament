@@ -2,13 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-09-27T18:20:55Z",
+  "close_reason": "Formatted six existing files; reviewed whitespace/style-only changes. Format check, 496 tests, strict Credo, warnings-as-errors compilation and Dialyzer all pass.",
   "created": "2026-09-27T18:09:14Z",
   "description": "Run mix format --check-formatted on target-agnostic-substrate with Elixir 1.19.4. Existing drift is reported in lib/filament/defcomponent.ex, lib/filament/core.ex and slot/vnode tests. Run mix format, inspect the patch to ensure formatting-only changes, then rerun mix format --check-formatted, mix test and strict Credo. Keep this separate from benchmark harness code so baseline provenance remains clear.",
   "id": "flm-f75",
   "labels": [],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Normalize existing substrate formatting",
   "type": "chore",
-  "updated_at": "2026-09-27T18:20:37Z"
+  "updated_at": "2026-09-27T18:20:55Z"
 }
