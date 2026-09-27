@@ -128,7 +128,7 @@ defmodule Filament.Web do
     end)
   end
 
-  defp walk_child_rendered({:safe, iodata}, state), do: push_dynamic(state, iodata)
+  defp walk_child_rendered({:safe, iodata}, state), do: state |> push_dynamic(iodata) |> fp_mix(:dynamic_child)
   defp walk_child_rendered(child, state) when is_tuple(child), do: walk_rendered(child, state)
   defp walk_child_rendered(nil, state), do: state
   defp walk_child_rendered(false, state), do: state
@@ -152,7 +152,7 @@ defmodule Filament.Web do
 
     state
     |> append_static(" " <> attr_key <> ~s(="filament:) <> ref <> ~s("))
-    |> fp_mix({:attr_wire_ref, attr_key})
+    |> fp_mix({:attr_wire_ref, attr_key, ref})
   end
 
   defp walk_attr({name, value}, state) when is_binary(value) do
