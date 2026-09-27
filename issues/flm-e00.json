@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-09-27T17:32:21Z",
+  "description": "Review target-agnostic-substrate at 1ae3cd0 against merge base f80772d. Fix the reproducible lifecycle, Cell delivery, rendering, and adapter gaps in child issues. Each child requires a focused regression test and a separate commit. Finish with compile --warnings-as-errors, full tests, strict Credo, Dialyzer, and CI. Sequence: independent fixes first; subscription generation after basic Cell fixes; final integration last.\n\n```mermaid\ngraph LR\n  fixes[Independent correctness fixes] --\u003e generation[Subscription generation checks]\n  generation --\u003e validation[Full checks and CI]\n```",
+  "id": "flm-e00",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "Resolve full substrate branch review findings",
+  "type": "epic",
+  "updated_at": "2026-09-27T17:32:21Z"
+}
