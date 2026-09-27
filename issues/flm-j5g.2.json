@@ -4,14 +4,16 @@
     "flm-j5g.1"
   ],
   "blocks": [],
+  "closed_at": "2026-09-27T18:13:24Z",
+  "close_reason": "Identical harness merged into substrate; full matched reports and comparison committed at 2bf69df and pushed. Runtime, hardware, config, lock and harness match. Both branch CIs green; 493 substrate tests, fixture checks, strict Credo and Dialyzer pass. Follow-ups flm-ajz and flm-xl3 contain measured performance reproductions; flm-f75 tracks pre-existing formatting drift.",
   "created": "2026-09-27T17:52:03Z",
   "description": "After the main-based benchmark harness is implemented, run its full suite on main and save a documented JSON baseline. Integrate the harness branch into target-agnostic-substrate without merging the PR into main. Run identical inputs/configuration/toolchain on substrate. Produce a comparison with ratios and deterministic diff/message counts; distinguish benchmark-process memory from server-process resource use. Check that metadata and fixture signatures match before comparing. Preserve any findings in follow-up bw issues with reproductions and specific implementation instructions; do not silently omit failing scenarios or tune one branch differently. Push both branches and verify CI.",
   "id": "flm-j5g.2",
   "labels": [],
   "parent": "flm-j5g",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Record main baseline then compare the same harness on substrate",
   "type": "task",
-  "updated_at": "2026-09-27T18:07:42Z"
+  "updated_at": "2026-09-27T18:13:24Z"
 }
