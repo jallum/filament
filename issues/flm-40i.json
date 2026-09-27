@@ -2,13 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-09-27T19:04:45Z",
+  "close_reason": "Identity-only cache seeded during subscribe; exact raw/map matching and live owner backpressure checks; custom projections preserved and lifecycle invalidation covered. Cache rebuild folded into notification pass, empty-subscription snapshots not retained. 498 tests, 30 fixture checks, format, strict Credo, warnings-as-errors compile and Dialyzer pass. Focused no-op 5.6–5.9 us, full 17.1–18.6 us vs portable 77 us and original 208 us; server reductions 19262 -\u003e 56. Reports committed; code CI was green at measured 9f6370f, final artifact/empty-cache guard CI follows.",
   "created": "2026-09-27T18:47:26Z",
   "description": "Remaining 1000-cell no-op cost is ~68 us versus main ~4 us. Hooks subscribe with the known pure external function Function.identity/1. Add a notification cache only when every subscription uses that exact function and has the same raw last value. Seed/update this cache while subscribing so the first unchanged write benefits; require both raw state and subscriber-map identity/equality to match. Check every cached owner mailbox on each notification and fall back to normal per-cell delivery/resubscribe/dead-owner handling if any owner is unavailable or saturated. Invalidate or rebuild on subscription replacement, custom projections, raw value mismatch, unsubscribe and DOWN. Never skip arbitrary projection callbacks. Verify numeric strict equality, warmed saturation, custom projection execution on repeated equal inputs, callback-derived initial values and replacements. Capture matched reactive benchmarks, including changed writes, at 10/100/1000 rows; verify all benchmark fixtures and full checks. Land separately from direct-render adapters.",
   "id": "flm-40i",
   "labels": [],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Cache stable identity subscriptions for unchanged observable writes",
   "type": "task",
-  "updated_at": "2026-09-27T18:49:25Z"
+  "updated_at": "2026-09-27T19:04:45Z"
 }
