@@ -2,13 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-09-27T18:16:46Z",
+  "close_reason": "Owner mailbox snapshots cached per notification and unchanged subscriber map retained. Added strict-equality/projection/generation and shared-owner saturation coverage. First matched 1000-cell unchanged run improved 208.3 to 74.7 us; changed 4245.9 to 3901.9 us. Further matched full runs will accompany render-target work; projection evaluation remains required.",
   "created": "2026-09-27T18:10:40Z",
   "description": "Baseline bench/baselines/comparison-117ddfa.md shows reactivity/unchanged at 1000 subscriptions: main 4.0 us, substrate 208.3 us (52.62x), both emit zero updates and an empty 2-byte diff. Reproduce using ERL_FLAGS=\"+S 4:4\" mix run bench/run.exs --suite reactivity/ --label candidate --output tmp/bench/reactivity.json on both harness-bearing branches. Inspect Observable.GenServer.notify_cell_each/3 and cell_update/3: per-subscriber Process.info mailbox checks and map reconstruction occur even when projected values are unchanged. Profile server reductions and isolate per-owner checks, projection reuse and map rebuilding. Optimize without weakening saturation/resubscribe semantics, strict projected equality, per-subscriber generations, or lifecycle callbacks; do not assume equal raw values across arbitrary handle_subscribe projections. Add focused lifecycle/backpressure correctness coverage, rerun all 30 fixture checks and repeated full baselines with identical harness/configuration, and report server diagnostics plus median times.",
   "id": "flm-ajz",
   "labels": [],
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Reduce unchanged Cell notification overhead for shared owners",
   "type": "bug",
-  "updated_at": "2026-09-27T18:14:30Z"
+  "updated_at": "2026-09-27T18:16:46Z"
 }
