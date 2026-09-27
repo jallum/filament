@@ -9,7 +9,8 @@ defmodule Filament.HookSlot do
     * `{deps, cleanup}` — `use_effect`. `cleanup` is a 0-arity fn or `nil`.
       Disambiguated from the `use_state` shape by `cleanup`'s arity.
     * `{:cell_resolved, cell}` — `use_source` (resolved cell handle).
-    * `{:cell_subscribed, cell, raw}` — `use_value` (subscribed + last raw).
+    * `{:cell_subscribed, cell, raw, subscriber}` — `use_value`; subscriber includes a generation token.
+    * `{:cell_resubscribe, cell, subscriber}` — refresh pending; retains cleanup identity.
     * `:uninitialized` — slot never committed, or disabled mid-render.
     * `:needs_resubscribe` — cell transport requested a resubscribe.
 
@@ -33,6 +34,14 @@ defmodule Filament.HookSlot do
   def cleanup({_deps, cleanup}, _ctx) when is_function(cleanup, 0) do
     cleanup.()
     :ok
+  end
+
+  def cleanup({:cell_subscribed, source, _raw, subscriber}, _ctx) do
+    Filament.Cell.unsubscribe(source, subscriber)
+  end
+
+  def cleanup({:cell_resubscribe, source, subscriber}, _ctx) do
+    Filament.Cell.unsubscribe(source, subscriber)
   end
 
   def cleanup({:cell_subscribed, %Filament.Source{} = source, _raw}, %{
@@ -74,10 +83,26 @@ defmodule Filament.HookSlot do
   the next render.
   """
   @spec put_cell_value(slot :: term(), new_raw :: term()) ::
-          {:cell_subscribed, Filament.Source.t() | nil, term()}
+          {:cell_subscribed, Filament.Source.t(), term(), term()}
+          | {:cell_subscribed, Filament.Source.t() | nil, term()}
+  def put_cell_value({:cell_subscribed, source, _old, subscriber}, new_raw) do
+    {:cell_subscribed, source, new_raw, subscriber}
+  end
+
   def put_cell_value({:cell_subscribed, source, _old}, new_raw) do
     {:cell_subscribed, source, new_raw}
   end
 
   def put_cell_value(_other, new_raw), do: {:cell_subscribed, nil, new_raw}
+  @doc false
+  def matches_subscriber?({:cell_subscribed, _source, _raw, subscriber}, subscriber), do: true
+  def matches_subscriber?({:cell_subscribed, _source, _raw}, {_owner, _fiber, _slot}), do: true
+  def matches_subscriber?(_slot, _subscriber), do: false
+
+  @doc false
+  def resubscribe({:cell_subscribed, source, _raw, subscriber}, subscriber) do
+    {:cell_resubscribe, source, subscriber}
+  end
+
+  def resubscribe({:cell_subscribed, source, _raw}, subscriber), do: {:cell_resubscribe, source, subscriber}
 end

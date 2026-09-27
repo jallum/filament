@@ -303,64 +303,38 @@ defmodule Filament.Hooks do
   end
 
   defp observable_subscribed(cell, projection, slot_index, previous, ctx) do
-    case resolve_observable_value(cell, slot_index, previous, ctx) do
-      :disconnected ->
-        commit_slot(slot_index, :uninitialized)
-        projection.(:disconnected)
+    slot =
+      case previous do
+        {:cell_subscribed, ^cell, _raw, _subscriber} ->
+          previous
 
-      raw ->
-        commit_slot(slot_index, {:cell_subscribed, cell, raw})
-        projection.(raw)
+        _ ->
+          maybe_unsubscribe_observable(ctx, previous, slot_index)
+          observable_subscribe_fresh(cell, slot_index, ctx)
+      end
+
+    commit_slot(slot_index, slot)
+
+    case slot do
+      {:cell_subscribed, _cell, raw, _subscriber} -> projection.(raw)
+      :uninitialized -> projection.(:disconnected)
     end
   end
 
-  # Read the cell's raw value: prefer the fresher value from `new_hook_slots`
-  # (set by an in-flight `:cell_update`), fall back to the previously cached
-  # value, or subscribe fresh on first render. The slot tag carries the cell
-  # identity so a cell swap across renders triggers an unsubscribe + fresh
-  # subscribe rather than silently feeding values from the old transport.
-  defp resolve_observable_value(cell, slot_index, previous, ctx) do
-    case Map.get(ctx.new_hook_slots, slot_index) do
-      {:cell_subscribed, ^cell, raw} ->
-        raw
-
-      {:cell_subscribed, _other, _raw} ->
-        observable_subscribe_fresh(cell, slot_index, ctx)
-
-      _ ->
-        case previous do
-          {:cell_subscribed, ^cell, raw} ->
-            raw
-
-          {:cell_subscribed, old_cell, _raw} ->
-            maybe_unsubscribe_observable(ctx, old_cell, slot_index)
-            observable_subscribe_fresh(cell, slot_index, ctx)
-
-          _ ->
-            observable_subscribe_fresh(cell, slot_index, ctx)
-        end
-    end
+  defp maybe_unsubscribe_observable(ctx, previous, slot_index) do
+    Filament.HookSlot.cleanup(previous, %{
+      owner_pid: ctx.owner_pid,
+      fiber_id: ctx.fiber_id,
+      slot_index: slot_index
+    })
   end
-
-  defp maybe_unsubscribe_observable(ctx, %Filament.Source{} = old_cell, slot_index) do
-    maybe_unsubscribe_observable(ctx, {:cell_subscribed, old_cell, nil}, slot_index)
-  end
-
-  defp maybe_unsubscribe_observable(ctx, {:cell_subscribed, old_cell, _raw}, slot_index) do
-    if is_map_key(ctx.fiber_tree, ctx.fiber_id) do
-      subscriber = {ctx.owner_pid, ctx.fiber_id, slot_index}
-      Filament.Cell.unsubscribe(old_cell, subscriber)
-    end
-  end
-
-  defp maybe_unsubscribe_observable(_ctx, _previous, _slot_index), do: :ok
 
   defp observable_subscribe_fresh(cell, slot_index, ctx) do
-    subscriber = {ctx.owner_pid, ctx.fiber_id, slot_index}
+    subscriber = {ctx.owner_pid, ctx.fiber_id, slot_index, make_ref()}
 
     case Filament.Cell.subscribe(cell, subscriber, &Function.identity/1) do
-      {:ok, value} -> value
-      :disconnected -> :disconnected
+      {:ok, value} -> {:cell_subscribed, cell, value, subscriber}
+      :disconnected -> :uninitialized
     end
   end
 

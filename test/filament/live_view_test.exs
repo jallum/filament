@@ -383,17 +383,18 @@ defmodule Filament.LiveViewTest do
       {:ok, socket} = CellLiveView.mount(%{}, %{}, socket)
 
       # Find the subscriber tuple (one slot exists on root after mount).
-      [{slot_index, _}] = Enum.to_list(socket.assigns._filament_tree["root"].hook_slots)
-
-      subscriber = {self(), "root", slot_index}
+      [{slot_index, {:cell_subscribed, _, _, subscriber}}] =
+        Enum.to_list(socket.assigns._filament_tree["root"].hook_slots)
 
       {:noreply, socket} =
         CellLiveView.handle_info({:cell_resubscribe, subscriber}, socket)
 
       # After resubscribe, the slot should hold a fresh :cell_subscribed value
       # (set by the re-render which calls cell_subscribe_fresh).
-      assert {:cell_subscribed, _cell, _raw} =
+      assert {:cell_subscribed, _cell, _raw, refreshed_subscriber} =
                Map.fetch!(socket.assigns._filament_tree["root"].hook_slots, slot_index)
+
+      refute refreshed_subscriber == subscriber
     end
 
     test "no matching fiber returns unchanged socket" do
@@ -466,14 +467,13 @@ defmodule Filament.LiveViewTest do
       socket = test_socket(%{cell: cell})
       {:ok, socket} = CellLiveView.mount(%{}, %{}, socket)
 
-      [{slot_index, _}] = Enum.to_list(socket.assigns._filament_tree["root"].hook_slots)
+      [{slot_index, {:cell_subscribed, _, _, subscriber}}] =
+        Enum.to_list(socket.assigns._filament_tree["root"].hook_slots)
 
       # Kill the server. The cell is now unreachable.
       ref = Process.monitor(server)
       Process.exit(server, :kill)
       assert_receive {:DOWN, ^ref, _, _, _}, 200
-
-      subscriber = {self(), "root", slot_index}
 
       # Manually deliver the resubscribe (the dead transport can't send it).
       {:noreply, socket} =

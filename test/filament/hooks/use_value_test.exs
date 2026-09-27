@@ -12,7 +12,6 @@ defmodule Filament.Hooks.UseValueTest do
   """
   use ExUnit.Case, async: true
 
-  alias Filament.FiberTree
   alias Filament.Reconciler
 
   defmodule Counter do
@@ -91,8 +90,9 @@ defmodule Filament.Hooks.UseValueTest do
       Reconciler.mount(CellComp.CellComp, %{cell: cell}, owner_pid: self())
 
       Counter.increment(server)
-      assert_receive {:cell_update, {pid, "root", 0}, 1}, 200
+      assert_receive {:cell_update, {pid, "root", 0, generation}, 1}, 200
       assert pid == self()
+      assert is_reference(generation)
     end
 
     test "use_value returns :disconnected projection when the source is unreachable" do
@@ -169,10 +169,9 @@ defmodule Filament.Hooks.UseValueTest do
       assert walked1 |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>0</p>"
 
       Counter.increment(server)
-      assert_receive {:cell_update, {_, fid, sid}, 1}, 200
+      assert_receive {:cell_update, subscriber, 1}, 200
 
-      tree2 =
-        FiberTree.update_hook_slot(tree1, fid, sid, fn _ -> {:cell_subscribed, cell, 1} end)
+      {:ok, tree2, _} = Filament.LiveView.apply_cell_update(tree1, subscriber, 1)
 
       {_, walked3, _} =
         Reconciler.update(tree2, "root", %{cell: cell}, owner_pid: self())

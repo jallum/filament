@@ -72,7 +72,7 @@ A transport implements three callbacks:
 ```
 
 `subscriber` is opaque to `Filament.Cell` — by convention the tuple
-`{owner_pid, fiber_id, slot_index}` that Filament's hooks layer uses, but a
+`{owner_pid, fiber_id, slot_index, generation}` that Filament's hooks layer uses, but a
 transport may accept any term. Two subscribes with the same identity replace
 the previous projection.
 
@@ -93,6 +93,12 @@ When a cell's value changes, the transport sends a message to the subscriber's
 process:
 
     {:cell_update, subscriber, projected_value}
+
+Transports must echo the complete subscriber identity unchanged in update and
+resubscribe messages. The generation reference changes on source replacement,
+resubscription, and remount, allowing adapters to ignore queued messages from
+old subscriptions. Multiple updates for one owner may be sent as
+`{:cell_updates, [{subscriber, projected_value}, ...]}`.
 
 `Filament.LiveView`'s `handle_info` for `:cell_update` updates the fiber slot
 and triggers a re-render. Other backends (a TUI's `Interactive` GenServer,

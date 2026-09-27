@@ -234,7 +234,7 @@ defmodule Filament.LiveView do
 
       @doc """
       Phoenix LiveView info handler for `Filament.Cell` updates.
-      The subscriber tuple is `{owner_pid, fiber_id, slot_index}` (see
+      The subscriber tuple is `{owner_pid, fiber_id, slot_index, generation}` (see
       `Filament.Hooks.cell_subscribe_fresh/3`); the value is whatever the cell
       transport sent — for the GenServer transport this is the raw observable
       state (identity-projected), so the user projection runs at render time.
@@ -253,7 +253,7 @@ defmodule Filament.LiveView do
       Phoenix LiveView info handler for `Filament.Cell` resubscribe signals.
       Sent by a cell transport when it can't deliver an update — typically because
       the subscriber's mailbox is saturated, or because the cell source restarted.
-      Marks the slot `:needs_resubscribe`; the next render fetches a fresh value.
+      Marks the slot for resubscription while retaining its subscription identity; the next render fetches a fresh value.
       """
       def handle_info({:cell_resubscribe, subscriber}, socket) do
         tree = socket.assigns._filament_tree
@@ -408,42 +408,38 @@ defmodule Filament.LiveView do
   """
   @spec apply_cell_update(map(), term(), term()) ::
           {:ok, map(), String.t()} | :ignore
-  def apply_cell_update(tree, {_owner_pid, fiber_id, slot_index}, value) do
-    case Map.get(tree, fiber_id) do
-      nil ->
-        :ignore
-
-      fiber ->
-        existing = Map.get(fiber.hook_slots, slot_index)
-        new_slot = Filament.HookSlot.put_cell_value(existing, value)
-        new_slots = Map.put(fiber.hook_slots, slot_index, new_slot)
-        {:ok, Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots}), fiber_id}
-    end
+  def apply_cell_update(tree, subscriber, value) do
+    update_cell_slot(tree, subscriber, &Filament.HookSlot.put_cell_value(&1, value))
   end
-
-  def apply_cell_update(_tree, _subscriber, _value), do: :ignore
 
   @doc """
   Apply a `:cell_resubscribe` message to the fiber tree without rendering.
 
-  Marks the slot `:needs_resubscribe` so the next render fetches a fresh
+  Marks the slot for resubscription while retaining its subscription identity so the next render fetches a fresh
   value. Returns `{:ok, new_tree, fiber_id}` on success or `:ignore` if
   the subscriber tuple is malformed or the target fiber no longer exists.
   """
   @spec apply_cell_resubscribe(map(), term()) ::
           {:ok, map(), String.t()} | :ignore
-  def apply_cell_resubscribe(tree, {_owner_pid, fiber_id, slot_index}) do
-    case Map.get(tree, fiber_id) do
-      nil ->
-        :ignore
+  def apply_cell_resubscribe(tree, subscriber) do
+    update_cell_slot(tree, subscriber, &Filament.HookSlot.resubscribe(&1, subscriber))
+  end
 
-      fiber ->
-        new_slots = Map.put(fiber.hook_slots, slot_index, :needs_resubscribe)
-        {:ok, Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots}), fiber_id}
+  defp update_cell_slot(tree, subscriber, update) when is_tuple(subscriber) and tuple_size(subscriber) in [3, 4] do
+    fiber_id = elem(subscriber, 1)
+    slot_index = elem(subscriber, 2)
+
+    with {:ok, fiber} <- Map.fetch(tree, fiber_id),
+         {:ok, slot} <- Map.fetch(fiber.hook_slots, slot_index),
+         true <- Filament.HookSlot.matches_subscriber?(slot, subscriber) do
+      new_slots = Map.put(fiber.hook_slots, slot_index, update.(slot))
+      {:ok, Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots}), fiber_id}
+    else
+      _ -> :ignore
     end
   end
 
-  def apply_cell_resubscribe(_tree, _subscriber), do: :ignore
+  defp update_cell_slot(_tree, _subscriber, _update), do: :ignore
 
   # ── LiveView-shaped wrappers ─────────────────────────────────────────────
 

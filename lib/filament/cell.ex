@@ -41,7 +41,7 @@ defmodule Filament.Cell do
   ## Subscriber identity
 
   `subscriber` is opaque to `Filament.Cell` — typically the tuple
-  `{owner_pid, fiber_id, slot_index}` Filament's hooks layer uses, but a
+  `{owner_pid, fiber_id, slot_index, generation}` Filament's hooks layer uses, but a
   transport may accept any term. Two subscribes with the same identity
   replace the previous projection.
   """

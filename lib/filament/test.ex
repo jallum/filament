@@ -437,40 +437,27 @@ defmodule Filament.Test do
         view = apply_state_slot_update(view, fiber_id, slot_index, new_value)
         flush_messages(view)
 
-      {:cell_update, {_owner_pid, fiber_id, slot_index}, value} ->
-        view = apply_cell_slot_update(view, fiber_id, slot_index, value)
-        flush_messages(view)
+      {:cell_update, subscriber, value} ->
+        view
+        |> apply_cell_result(Filament.LiveView.apply_cell_update(view.fiber_tree, subscriber, value))
+        |> flush_messages()
 
       {:cell_updates, updates} ->
-        view =
-          Enum.reduce(updates, view, fn {subscriber, value}, acc ->
-            case subscriber do
-              {_owner_pid, fiber_id, slot_index} -> apply_cell_slot_update(acc, fiber_id, slot_index, value)
-              _ -> acc
-            end
-          end)
+        view
+        |> apply_cell_result(Filament.LiveView.apply_cell_updates(view.fiber_tree, updates))
+        |> flush_messages()
 
-        flush_messages(view)
-
-      {:cell_resubscribe, {_owner_pid, fiber_id, slot_index}} ->
-        view = apply_resubscribe_slot(view, fiber_id, slot_index)
-        flush_messages(view)
+      {:cell_resubscribe, subscriber} ->
+        view
+        |> apply_cell_result(Filament.LiveView.apply_cell_resubscribe(view.fiber_tree, subscriber))
+        |> flush_messages()
     after
       0 -> rerender(view)
     end
   end
 
-  defp apply_cell_slot_update(view, fiber_id, slot_index, value) do
-    tree =
-      Filament.FiberTree.update_hook_slot(
-        view.fiber_tree,
-        fiber_id,
-        slot_index,
-        &Filament.HookSlot.put_cell_value(&1, value)
-      )
-
-    %{view | fiber_tree: tree}
-  end
+  defp apply_cell_result(view, {:ok, tree, _fiber_id}), do: %{view | fiber_tree: tree}
+  defp apply_cell_result(view, :ignore), do: view
 
   defp apply_state_slot_update(view, fiber_id, slot_index, new_value) do
     tree =
@@ -479,18 +466,6 @@ defmodule Filament.Test do
         fiber_id,
         slot_index,
         &Filament.HookSlot.put_state_value(&1, new_value)
-      )
-
-    %{view | fiber_tree: tree}
-  end
-
-  defp apply_resubscribe_slot(view, fiber_id, slot_index) do
-    tree =
-      Filament.FiberTree.update_hook_slot(
-        view.fiber_tree,
-        fiber_id,
-        slot_index,
-        fn _ -> :needs_resubscribe end
       )
 
     %{view | fiber_tree: tree}

@@ -13,7 +13,7 @@ defmodule Filament.Observable.GenServer do
       projected value has actually changed (change-or-bust)
 
   Cell subscribers are keyed by an opaque term (typically the tuple
-  `{owner_pid, fiber_id, slot_index}` Filament's hooks layer uses). Each
+  `{owner_pid, fiber_id, slot_index, generation}` Filament's hooks layer uses). Each
   entry carries the subscriber's projection function so that
   `notify_observers/1` can compute the projected value and compare it
   against the previously delivered one before sending.
