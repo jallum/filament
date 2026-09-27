@@ -17,8 +17,8 @@ defmodule InventoryWeb.Hooks do
   - `hold.(qty)` — acquire `qty` units; raises on denial
   - `release.(qty)` — release up to `qty` units
 
-  Holds are released automatically when the LiveView disconnects (via
-  `handle_unsubscribe/2` on the server).
+  Holds are released automatically when this component unsubscribes or its
+  LiveView disconnects (via `handle_unsubscribe/2` on the server).
 
   Returns `:disconnected` (or the `:disconnected` option value) during HTTP pre-render.
   """
@@ -39,17 +39,18 @@ defmodule InventoryWeb.Hooks do
     if item == sentinel do
       disconnected_val
     else
-      owner_pid = current_context().owner_pid
+      context = current_context()
+      holder = {context.owner_pid, context.fiber_id}
 
       hold = fn qty ->
-        case GenServer.call(server, {:filament_hold, item_id, qty, owner_pid}) do
+        case GenServer.call(server, {:filament_hold, item_id, qty, holder}) do
           :ok -> set_held_qty.(held_qty + qty)
           {:error, reason} -> raise "hold denied for #{inspect(item_id)}: #{inspect(reason)}"
         end
       end
 
       release = fn qty ->
-        GenServer.cast(server, {:filament_release_qty, item_id, qty, owner_pid})
+        GenServer.cast(server, {:filament_release_qty, item_id, qty, holder})
         set_held_qty.(max(0, held_qty - qty))
       end
 

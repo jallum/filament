@@ -13,11 +13,12 @@ Filament splits the API surface into two related names:
 - **`Filament.Cell`** — the *behaviour* a transport author implements.
   Defines the `subscribe/3`, `unsubscribe/2`, `current/2` callbacks plus
   the routing helpers that dispatch through to the transport.
-- **`Filament.Source`** — the *struct* application code holds. Returned
-  by `use_source/1`, accepted by `use_value/2`, passed as a child prop.
+- **`Filament.Source`** — the transport envelope returned by
+  `use_source/1` and accepted by `use_value/2`. Domain hooks can keep it
+  out of component code.
 
 This guide is for developers who want to **author a transport** or work
-with non-default cells. Most application code uses `use_value/2` and never
+with non-default cells. Most application code calls domain hooks and never
 thinks about the cell layer; if that's you, the **[Observables
 guide](observables.html)** is enough — come back here when you need to
 plug something more exotic in.

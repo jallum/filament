@@ -64,7 +64,7 @@ defmodule Cart.Test do
   describe "CartBadge (rung-2)" do
     test "renders item count from stub observable" do
       {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
-      view = mount!(CartBadge, %{source: Filament.Source.new(Filament.Observable.GenServer, stub)})
+      view = mount!(CartBadge, %{cart: stub})
 
       assert view.rendered_html =~ "cart-badge"
       refute view.rendered_html =~ "data-count=\"1\""
@@ -72,7 +72,7 @@ defmodule Cart.Test do
 
     test "badge updates when count changes" do
       {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
-      view = mount!(CartBadge, %{source: Filament.Source.new(Filament.Observable.GenServer, stub)})
+      view = mount!(CartBadge, %{cart: stub})
       assert view.rendered_html =~ "data-count=\"0\""
 
       new_state =
@@ -113,7 +113,7 @@ defmodule Cart.Test do
   describe "CartItems (rung-3)" do
     setup do
       server = start_supervised!(%{id: Cart.Server, start: {Cart.Server, :start_link, [[name: nil]]}})
-      view = mount!(CartWeb.Components.CartItems, %{source: Filament.Source.new(Filament.Observable.GenServer, server)})
+      view = mount!(CartWeb.Components.CartItems, %{cart: server})
       %{server: server, view: view}
     end
 
@@ -166,6 +166,31 @@ defmodule Cart.Test do
         end,
         timeout: 500
       )
+    end
+  end
+
+  test "session-keyed domain hooks share one cart and commands use the same ID" do
+    ensure_cart_infrastructure()
+    session_id = "test-session-#{System.unique_integer([:positive])}"
+
+    view = mount!(CartWeb.Components.Cart, %{session_id: session_id})
+    assert view.rendered_html =~ ~s(data-count="0")
+
+    view = click!(view, ".btn-add")
+    assert view.rendered_html =~ ~s(data-count="1")
+    assert render_text(view) =~ "Total: $0.99"
+
+    view = click!(view, ".btn-remove")
+    assert view.rendered_html =~ ~s(data-count="0")
+  end
+
+  defp ensure_cart_infrastructure do
+    if !Process.whereis(Cart.Registry) do
+      start_supervised!({Registry, keys: :unique, name: Cart.Registry})
+    end
+
+    if !Process.whereis(Cart.DynamicSupervisor) do
+      start_supervised!({DynamicSupervisor, strategy: :one_for_one, name: Cart.DynamicSupervisor})
     end
   end
 end

@@ -2,8 +2,8 @@ defmodule Inventory.Server do
   @moduledoc false
   use Filament.Observable.GenServer
 
-  # State: items map + per-pid hold tracking
-  # holds: %{pid() => %{item_id => qty}}
+  # State: items map + per-component hold tracking
+  # holds: %{{owner_pid, fiber_id} => %{item_id => qty}}
   defstruct items: %{}, holds: %{}
 
   def start_link(opts \\ []) do
@@ -31,13 +31,17 @@ defmodule Inventory.Server do
   @impl Filament.Observable
   def handle_current(state), do: {:ok, state.items, state}
 
-  # Automatic hold release when a subscriber's LiveView process terminates.
-  # Cell subscribers are tuples led by the owner pid.
+  # Automatic hold release when a component unsubscribes or its owner dies.
   @impl Filament.Observable
   def handle_unsubscribe(subscriber, state) do
-    holder_pid = elem(subscriber, 0)
+    holder =
+      case subscriber do
+        {pid, fiber_id, _, _} when is_pid(pid) -> {pid, fiber_id}
+        {pid, fiber_id, _} when is_pid(pid) -> {pid, fiber_id}
+        _ -> nil
+      end
 
-    case Map.pop(state.holds, holder_pid) do
+    case Map.pop(state.holds, holder) do
       {nil, _} ->
         {:ok, state}
 
@@ -62,7 +66,7 @@ defmodule Inventory.Server do
     {:reply, Map.get(state.items, item_id), state}
   end
 
-  def handle_call({:filament_hold, item_id, qty, holder_pid}, _from, state) do
+  def handle_call({:filament_hold, item_id, qty, holder}, _from, state) do
     case Map.get(state.items, item_id) do
       nil ->
         {:reply, {:error, :not_found}, state}
@@ -72,8 +76,8 @@ defmodule Inventory.Server do
 
       item ->
         new_items = Map.put(state.items, item_id, %{item | available: item.available - qty})
-        holder_holds = Map.get(state.holds, holder_pid, %{})
-        new_holds = Map.put(state.holds, holder_pid, Map.update(holder_holds, item_id, qty, &(&1 + qty)))
+        holder_holds = Map.get(state.holds, holder, %{})
+        new_holds = Map.put(state.holds, holder, Map.update(holder_holds, item_id, qty, &(&1 + qty)))
         new_state = %{state | items: new_items, holds: new_holds}
         notify_observers(new_state.items)
         {:reply, :ok, new_state}
@@ -81,8 +85,8 @@ defmodule Inventory.Server do
   end
 
   @impl GenServer
-  def handle_cast({:filament_release_qty, item_id, qty, holder_pid}, state) do
-    holder_holds = Map.get(state.holds, holder_pid, %{})
+  def handle_cast({:filament_release_qty, item_id, qty, holder}, state) do
+    holder_holds = Map.get(state.holds, holder, %{})
     current_qty = Map.get(holder_holds, item_id, 0)
     actual_qty = min(qty, current_qty)
 
@@ -95,7 +99,7 @@ defmodule Inventory.Server do
       new_items =
         Map.update(state.items, item_id, nil, &%{&1 | available: &1.available + actual_qty})
 
-      new_state = %{state | items: new_items, holds: Map.put(state.holds, holder_pid, new_holder_holds)}
+      new_state = %{state | items: new_items, holds: Map.put(state.holds, holder, new_holder_holds)}
       notify_observers(new_state.items)
       {:noreply, new_state}
     else
