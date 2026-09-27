@@ -70,3 +70,64 @@ controlled repeat runs and GC/scheduling investigation before more changes.
 Commands use the documented full settings with `ERL_FLAGS='+S 4:4'` and labels
 `web-builder` and `optimized-repeat`. The isolated run additionally selected
 `--suite reactivity/`. All 30 scenarios verify output and cleanup outside timing.
+
+## Adapter experiment and identity notification cache
+
+The render-target-aware harness was applied identically to main and the
+portable control. Its hash differs from the earlier reports above. These
+new reports are compatible with each other:
+
+- `main-adapter-a97c342.json`: fresh main 0.5.1 reference using the updated harness.
+- `portable-adapter-40b8af2.json`: the previous optimized substrate with the same harness.
+- `web-direct-94acc72.json` and `direct-vs-portable-94acc72.md`: the optional
+  adapter prototype, retained on `flm-9hx/direct-render-prototype`.
+- `identity-reactivity-99951d6.json` and `identity-repeat-99951d6.json`: focused
+  reactive runs of the identity cache's initial implementation.
+- `identity-full-99951d6.json`: its first full run, with corresponding comparisons.
+- `identity-final-9f6370f.json`: full run after rebuilding the cache in the normal
+  notification pass, with final comparisons against main and the portable control.
+
+The direct-adapter prototype passed 500 tests and all fixture checks, including
+matching nested static/dynamic structure, fingerprints, incremental HTML, keyed
+state, slot/default resolution and actual capture/click/state dispatch through
+LiveView. In its measured run, 1,000-row mount was 5.33 ms versus 4.54 ms for the
+portable control, and most caller allocations fell only about 1%. Several
+updates slowed down. The production adapter changes were reverted: this
+prototype did not demonstrate enough benefit to justify changing production.
+It removes a walked vnode copy, not the initial template vnode construction;
+compiler-level target specialization is a distinct experiment.
+
+The landed identity cache applies only to the known pure external function
+`Function.identity/1`, which the framework's `use_value` subscriptions use.
+Subscription setup seeds the cache only when all stored projected values align.
+A fast notification requires the same raw value and subscriber map, and checks
+all owners' current mailbox depths. Saturation or a dead owner takes the regular
+notification path. Custom projections always execute; subscription replacement,
+unsubscribe and DOWN cannot reuse stale cache entries. No notification snapshot
+is retained when there are no subscribers.
+
+At 1,000 subscriptions, focused no-op medians were 5.90 / 5.58 us; full runs were
+18.56 / 17.08 us. The fresh portable control was 77.0 us and main was 4.0 us.
+Relative to the original substrate reference of 208.3 us, the full-run reduction
+is about 92%. These runs show a meaningful gain but also scope-dependent latency;
+do not present the best focused result as the full-suite result.
+
+Untimed preflight server reductions fell from 19,262 in the portable control to
+56 (main: 53). This demonstrates removal of the subscriber scan in the stable
+identity case. Server memory snapshots stayed at 444,264 bytes before/after the
+no-op instead of growing to 761,456 bytes; these are snapshots, not total
+allocation or peak-memory statistics. Changed-write server reductions remained
+close: 27,860 in the control and 28,364 in the final cache implementation.
+Changed-write medians varied from 3.89 to 4.72 ms across cache runs; the control
+was 4.29 ms and main 6.55 ms. Small timing differences need more controlled runs.
+
+Final mount time was 5.04 ms despite no production renderer changes versus the
+control's 4.54 ms. That variation reinforces why these sequential local timing
+reports are evidence rather than performance guarantees. Diff bytes, message
+counts and reconstructed HTML remain correct in every scenario.
+
+Runs use the same documented full settings and four schedulers. Focused runs
+add `--suite reactivity/`; their scenario sets intentionally differ, so compare
+the full reports with `bench/compare.exs` for automatic compatibility validation.
+The final measured revision precedes a guard that prevents empty-subscription
+cache retention; the measured scenarios all have at least ten subscribers.

@@ -1,0 +1,204 @@
+{
+  "metadata": {
+    "cpu": "Apple M4 Pro",
+    "label": "identity-cache",
+    "os": "{:unix, :darwin}",
+    "dirty": false,
+    "otp": "28",
+    "schedulers": 4,
+    "elixir": "1.19.4",
+    "erts": "16.2",
+    "benchee": "1.5.1",
+    "implementation": "cell-vnode",
+    "recorded_at": "2026-09-27T18:51:41.289987Z",
+    "commit": "99951d6f8652706be4c390455bdc004f6ac440d7",
+    "library_commit": "99951d6f8652706be4c390455bdc004f6ac440d7",
+    "architecture": "aarch64-apple-darwin25.1.0",
+    "lock_sha256": "b42a2b08883279583af5496d674c077cb5b3e43faebbbd985f3dc763d05b9a17",
+    "harness_sha256": "edc2eaf7d54c4f4916dce74a6a22803a851c3b0a4fc057dfc4a07498f0902887"
+  },
+  "diagnostics": [
+    {
+      "size": 10,
+      "job": "reactivity/changed",
+      "metrics": {
+        "messages": 1,
+        "updates": 10,
+        "diff_bytes": 222,
+        "html_bytes": 230,
+        "fibers": 11,
+        "server_reductions": 370,
+        "server_memory_before_bytes": 6600,
+        "server_memory_after_bytes": 17512,
+        "caller_reductions_diagnostic": 5364
+      }
+    },
+    {
+      "size": 100,
+      "job": "reactivity/changed",
+      "metrics": {
+        "messages": 1,
+        "updates": 100,
+        "diff_bytes": 2383,
+        "html_bytes": 2301,
+        "fibers": 101,
+        "server_reductions": 3618,
+        "server_memory_before_bytes": 41568,
+        "server_memory_after_bytes": 116440,
+        "caller_reductions_diagnostic": 46292
+      }
+    },
+    {
+      "size": 1000,
+      "job": "reactivity/changed",
+      "metrics": {
+        "messages": 1,
+        "updates": 1000,
+        "diff_bytes": 25784,
+        "html_bytes": 23902,
+        "fibers": 1001,
+        "server_reductions": 34986,
+        "server_memory_before_bytes": 444264,
+        "server_memory_after_bytes": 1187024,
+        "caller_reductions_diagnostic": 400597
+      }
+    },
+    {
+      "size": 10,
+      "job": "reactivity/unchanged",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 2,
+        "html_bytes": 230,
+        "fibers": 11,
+        "server_reductions": 56,
+        "server_memory_before_bytes": 6488,
+        "server_memory_after_bytes": 6488,
+        "caller_reductions_diagnostic": 51
+      }
+    },
+    {
+      "size": 100,
+      "job": "reactivity/unchanged",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 2,
+        "html_bytes": 2301,
+        "fibers": 101,
+        "server_reductions": 56,
+        "server_memory_before_bytes": 41568,
+        "server_memory_after_bytes": 41568,
+        "caller_reductions_diagnostic": 51
+      }
+    },
+    {
+      "size": 1000,
+      "job": "reactivity/unchanged",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 2,
+        "html_bytes": 23902,
+        "fibers": 1001,
+        "server_reductions": 56,
+        "server_memory_before_bytes": 444264,
+        "server_memory_after_bytes": 444264,
+        "caller_reductions_diagnostic": 51
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "size": 10,
+      "job": "reactivity/unchanged",
+      "time_ns": {
+        "sample_size": 30492,
+        "median": 1167.0,
+        "average": 1248.7651515151515,
+        "p99": 2086.869999999988,
+        "std_dev_ratio": 0.62309758790442
+      },
+      "caller_memory_bytes": null,
+      "caller_reductions": null
+    },
+    {
+      "size": 10,
+      "job": "reactivity/changed",
+      "time_ns": {
+        "sample_size": 20082,
+        "median": 28667.0,
+        "average": 29747.987800019917,
+        "p99": 66333.66999999956,
+        "std_dev_ratio": 0.3243618069048965
+      },
+      "caller_memory_bytes": null,
+      "caller_reductions": null
+    },
+    {
+      "size": 100,
+      "job": "reactivity/unchanged",
+      "time_ns": {
+        "sample_size": 2770,
+        "median": 1.5e3,
+        "average": 1676.3563176895307,
+        "p99": 4899.069999999997,
+        "std_dev_ratio": 0.5349985965769453
+      },
+      "caller_memory_bytes": null,
+      "caller_reductions": null
+    },
+    {
+      "size": 100,
+      "job": "reactivity/changed",
+      "time_ns": {
+        "sample_size": 1935,
+        "median": 292042.0,
+        "average": 295141.53385012917,
+        "p99": 391475.9999999999,
+        "std_dev_ratio": 0.1064836086731444
+      },
+      "caller_memory_bytes": null,
+      "caller_reductions": null
+    },
+    {
+      "size": 1000,
+      "job": "reactivity/unchanged",
+      "time_ns": {
+        "sample_size": 282,
+        "median": 5895.5,
+        "average": 7193.109929078014,
+        "p99": 24218.970000000216,
+        "std_dev_ratio": 0.6609466431793253
+      },
+      "caller_memory_bytes": null,
+      "caller_reductions": null
+    },
+    {
+      "size": 1000,
+      "job": "reactivity/changed",
+      "time_ns": {
+        "sample_size": 163,
+        "median": 3894209.0,
+        "average": 3936877.306748466,
+        "p99": 5094691.63999999,
+        "std_dev_ratio": 0.07498754505167579
+      },
+      "caller_memory_bytes": null,
+      "caller_reductions": null
+    }
+  ],
+  "schema": 1,
+  "configuration": {
+    "time": 2,
+    "warmup": 1,
+    "memory_time": 0.5,
+    "reduction_time": 0.5,
+    "time_only_jobs": [
+      "render/leaf_state",
+      "reactivity/changed",
+      "reactivity/unchanged"
+    ]
+  }
+}
