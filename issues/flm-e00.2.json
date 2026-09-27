@@ -9,9 +9,15 @@
   "id": "flm-e00.2",
   "labels": [],
   "parent": "flm-e00",
+  "comments": [
+    {
+      "text": "Validation count correction: the focused observable directory run contained 19 passing tests. Final integrated validation passes 489 tests.",
+      "timestamp": "2026-09-27T17:45:00Z"
+    }
+  ],
   "priority": 1,
   "status": "closed",
   "title": "Deliver nil Cell values instead of treating them as no update",
   "type": "bug",
-  "updated_at": "2026-09-27T17:34:11Z"
+  "updated_at": "2026-09-27T17:45:00Z"
 }
