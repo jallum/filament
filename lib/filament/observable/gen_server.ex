@@ -306,7 +306,10 @@ defmodule Filament.Observable.GenServer do
   defp notify_and_cache(subscribers, value, max_depth) do
     {updated, owners} = notify_cell_pass(subscribers, value, max_depth)
 
-    if owners, do: put_notification_cache(updated, value, owners), else: Process.delete(@notification_cache)
+    if owners && map_size(updated) > 0,
+      do: put_notification_cache(updated, value, owners),
+      else: Process.delete(@notification_cache)
+
     updated
   end
 
