@@ -22,6 +22,11 @@ defmodule Filament.Observable.CellImplTest do
     def init(initial), do: {:ok, initial}
 
     @impl GenServer
+    def handle_call({:set, value}, _from, _count) do
+      notify_observers(value)
+      {:reply, :ok, value}
+    end
+
     def handle_call(:increment, _from, count) do
       new_count = count + 1
       notify_observers(new_count)
@@ -154,5 +159,30 @@ defmodule Filament.Observable.CellImplTest do
       assert Enum.sort(updates) == Enum.sort([{{self(), :first}, 1}, {{self(), :second}, 1}])
       refute_receive {:cell_update, _, _}
     end
+  end
+
+  test "nil is delivered, deduplicated, and followed by non-nil updates" do
+    server = start_supervised!(Counter)
+    source = Counter.cell(server)
+    subscriber = {self(), :nullable}
+    assert {:ok, 0} = Cell.subscribe(source, subscriber, &Function.identity/1)
+    GenServer.call(server, {:set, nil})
+    assert_receive {:cell_update, ^subscriber, nil}
+    GenServer.call(server, {:set, nil})
+    refute_receive {:cell_update, _, _}
+    GenServer.call(server, {:set, 3})
+    assert_receive {:cell_update, ^subscriber, 3}
+  end
+
+  test "nil projection values are included in owner batches" do
+    server = start_supervised!(Counter)
+    source = Counter.cell(server)
+    first = {self(), :nullable}
+    second = {self(), :number}
+    Cell.subscribe(source, first, fn n -> if n == 0, do: 0 end)
+    Cell.subscribe(source, second, &Function.identity/1)
+    GenServer.call(server, :increment)
+    assert_receive {:cell_updates, updates}
+    assert Map.new(updates) == %{first => nil, second => 1}
   end
 end

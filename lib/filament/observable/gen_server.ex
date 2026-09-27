@@ -257,11 +257,13 @@ defmodule Filament.Observable.GenServer do
           :drop ->
             {updated, deliveries}
 
-          {updated_entry, nil} ->
+          {updated_entry, :unchanged} ->
             {Map.put(updated, subscriber, updated_entry), deliveries}
 
-          {updated_entry, value} ->
-            next_deliveries = Map.update(deliveries, updated_entry.pid, [{subscriber, value}], &[{subscriber, value} | &1])
+          {updated_entry, {:changed, value}} ->
+            next_deliveries =
+              Map.update(deliveries, updated_entry.pid, [{subscriber, value}], &[{subscriber, value} | &1])
+
             {Map.put(updated, subscriber, updated_entry), next_deliveries}
         end
       end)
@@ -280,15 +282,15 @@ defmodule Filament.Observable.GenServer do
 
       saturated_depth?(depth_result, max_mailbox_depth) ->
         log_and_resubscribe_cell(sub, pid, depth_result, max_mailbox_depth)
-        {entry, nil}
+        {entry, :unchanged}
 
       true ->
         new_projected = proj.(new_state)
 
         if new_projected === last do
-          {entry, nil}
+          {entry, :unchanged}
         else
-          {%{entry | last: new_projected}, new_projected}
+          {%{entry | last: new_projected}, {:changed, new_projected}}
         end
     end
   end
