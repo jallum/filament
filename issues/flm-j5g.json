@@ -2,13 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-09-27T18:13:24Z",
+  "close_reason": "Main baseline draft PR #11 and matched substrate measurements completed; reports archived and performance follow-ups filed with specific instructions.",
   "created": "2026-09-27T17:51:28Z",
   "description": "Build the benchmark harness on origin/main in a separate PR, capture reproducible baseline results, then merge the harness into target-agnostic-substrate and compare identical workloads on the same local toolchain. Keep benchmark behavior assertions outside timed sections. Record commit, harness/lock fingerprints, runtime, hardware, input sizes, and caveats with results. Do not gate CI on noisy timing ratios.",
   "id": "flm-j5g",
   "labels": [],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Establish comparable Benchee baselines on main and substrate",
   "type": "epic",
-  "updated_at": "2026-09-27T17:52:03Z"
+  "updated_at": "2026-09-27T18:13:24Z"
 }
