@@ -121,4 +121,37 @@ defmodule Filament.Observable.CellBackpressureTest do
 
     drain_sleeper_mailbox(sub_pid)
   end
+
+  test "unchanged values still request resubscription for every saturated cell" do
+    server = start_supervised!({CellPressureCounter, 1})
+    owner = spawn_sleeper()
+    on_exit(fn -> Process.exit(owner, :kill) end)
+    first = subscribe_cell(server, owner, "first", 0)
+    second = subscribe_cell(server, owner, "second", 0)
+    flood_mailbox(owner, 110)
+
+    capture_log(fn -> CellPressureCounter.set(server, 1) end)
+
+    {:messages, messages} = Process.info(owner, :messages)
+    assert {:cell_resubscribe, first} in messages
+    assert {:cell_resubscribe, second} in messages
+    refute Enum.any?(messages, &match?({:cell_update, _, _}, &1))
+    assert CellPressureCounter.get_cell_entry(server, first).last == 1
+    assert CellPressureCounter.get_cell_entry(server, second).last == 1
+  end
+
+  test "saturation of one owner does not suppress another owner's updates" do
+    server = start_supervised!({CellPressureCounter, 1})
+    owner = spawn_sleeper()
+    on_exit(fn -> Process.exit(owner, :kill) end)
+    blocked = subscribe_cell(server, owner, "blocked", 0)
+    ready = subscribe_cell(server, self(), "ready", 0)
+    flood_mailbox(owner, 110)
+
+    capture_log(fn -> CellPressureCounter.set(server, 2) end)
+
+    assert_receive {:cell_update, ^ready, 2}
+    assert CellPressureCounter.get_cell_entry(server, blocked).last == 1
+    assert CellPressureCounter.get_cell_entry(server, ready).last == 2
+  end
 end

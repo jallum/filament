@@ -185,4 +185,24 @@ defmodule Filament.Observable.CellImplTest do
     assert_receive {:cell_updates, updates}
     assert Map.new(updates) == %{first => nil, second => 1}
   end
+
+  test "shared owners retain distinct projections and strict equality" do
+    server = start_supervised!(Counter)
+    source = Counter.cell(server)
+    first = {self(), :identity, 0, make_ref()}
+    second = {self(), :constant, 0, make_ref()}
+    assert {:ok, 0} = Cell.subscribe(source, first, &Function.identity/1)
+    assert {:ok, :constant} = Cell.subscribe(source, second, fn _ -> :constant end)
+
+    GenServer.call(server, {:set, 0.0})
+    assert_receive {:cell_update, ^first, 0.0}
+    GenServer.call(server, {:set, 0.0})
+    refute_receive {:cell_update, _, _}
+    refute_receive {:cell_updates, _}
+
+    Cell.unsubscribe(source, first)
+    assert {:ok, 0.0} = Cell.subscribe(source, first, &Function.identity/1)
+    GenServer.call(server, {:set, 2})
+    assert_receive {:cell_update, ^first, 2}
+  end
 end

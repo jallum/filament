@@ -251,20 +251,22 @@ defmodule Filament.Observable.GenServer do
 
   @doc false
   def notify_cell_each(cell_subs, new_state, max_mailbox_depth) do
-    {updated_subs, deliveries} =
-      Enum.reduce(cell_subs, {%{}, %{}}, fn {subscriber, entry}, {updated, deliveries} ->
-        case update_cell_subscriber(subscriber, entry, new_state, max_mailbox_depth) do
-          :drop ->
-            {updated, deliveries}
+    {updated_subs, deliveries, _depths} =
+      Enum.reduce(cell_subs, {cell_subs, %{}, %{}}, fn {subscriber, entry}, {updated, deliveries, depths} ->
+        {depth_result, depths} = owner_depth(entry.pid, depths)
 
-          {updated_entry, :unchanged} ->
-            {Map.put(updated, subscriber, updated_entry), deliveries}
+        case update_cell_subscriber(subscriber, entry, new_state, depth_result, max_mailbox_depth) do
+          :drop ->
+            {Map.delete(updated, subscriber), deliveries, depths}
+
+          {_entry, :unchanged} ->
+            {updated, deliveries, depths}
 
           {updated_entry, {:changed, value}} ->
             next_deliveries =
               Map.update(deliveries, updated_entry.pid, [{subscriber, value}], &[{subscriber, value} | &1])
 
-            {Map.put(updated, subscriber, updated_entry), next_deliveries}
+            {Map.put(updated, subscriber, updated_entry), next_deliveries, depths}
         end
       end)
 
@@ -272,9 +274,21 @@ defmodule Filament.Observable.GenServer do
     updated_subs
   end
 
-  defp update_cell_subscriber(sub, entry, new_state, max_mailbox_depth) do
+  # Deliveries are sent after traversal, so all cells owned by a process see
+  # the same mailbox snapshot. Avoid querying that process once per cell.
+  defp owner_depth(pid, depths) do
+    case Map.fetch(depths, pid) do
+      {:ok, depth} ->
+        {depth, depths}
+
+      :error ->
+        depth = Process.info(pid, :message_queue_len)
+        {depth, Map.put(depths, pid, depth)}
+    end
+  end
+
+  defp update_cell_subscriber(sub, entry, new_state, depth_result, max_mailbox_depth) do
     %{pid: pid, projection: proj, last: last} = entry
-    depth_result = Process.info(pid, :message_queue_len)
 
     cond do
       is_nil(depth_result) ->
