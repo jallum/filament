@@ -2,15 +2,13 @@ defmodule CartWeb.Components.CartBadge do
   @moduledoc false
   use Filament.Component
 
-  defcomponent do
-    prop(:source, :any, default: nil)
+  import CartWeb.Hooks, only: [use_cart_count: 1]
 
-    def render(%{source: source}) do
-      count =
-        use_value(source, fn
-          :disconnected -> 0
-          s -> Cart.State.item_count(s)
-        end)
+  defcomponent do
+    prop(:cart, :any, default: nil)
+
+    def render(%{cart: cart}) do
+      count = use_cart_count(cart)
 
       ~F"""
       <span class="cart-badge" data-count={count}>

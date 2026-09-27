@@ -1,10 +1,10 @@
 # Hooks
 
 Hooks are functions you call at the top level of `render/1` to access state,
-subscribe to servers, and schedule side effects. Filament ships three
-application-facing hooks: `use_state`, `use_value`, and `use_effect`. You
-can compose these into custom hooks that encapsulate domain behaviour — the
-inventory example's `use_hold` is a complete worked example of this pattern.
+subscribe to servers, and schedule side effects. Build application-facing,
+domain-named hooks from `use_state`, `use_source`, `use_value`, and
+`use_effect`. The Cart, Todo, Collaboration, and Inventory examples all
+demonstrate this pattern.
 
 ## Rules of hooks
 
@@ -50,9 +50,10 @@ end
 Setters are safe to capture in closures — the same function is reused across
 renders so you can compare them with `==` if needed.
 
-## use_source/1 and use_value/2
+## Writing a domain hook with use_source and use_value
 
-The preferred pattern separates source binding from value projection:
+Components should usually call a domain hook such as `use_cart_count(cart)`.
+Inside that hook, source binding and value projection are separate:
 
 ```elixir
 source = use_source(source_or_factory_fn)
@@ -81,21 +82,35 @@ The argument to `use_source/1` is either:
   called on the first connected render (and again if the underlying
   transport dies). Use this when the component owns the server's
   lifecycle.
+- For a factory that closes over a changing resource ID, use
+  `use_source(factory_fn, key)`. A changed key replaces the cached source
+  even if the old transport remains reachable.
 
-The struct exposes the underlying transport-specific data (a pid,
-registered name, or via-tuple, depending on the transport) via
-`source.data` — used to invoke action functions in event handlers:
+The struct exposes transport-specific data inside the hook. A domain hook
+can return the underlying server handle so components can pass it to domain
+actions without handling `Source` themselves:
 
 ```elixir
-# Connect to a session-keyed server (Cart.Server overrides cell/1 to take a
-# session_id and ensure-start the server)
-source = use_source(fn -> Cart.Server.cell(session_id) end)
-count  = use_value(source, fn
-  :disconnected -> 0
-  s -> Cart.State.item_count(s)
-end)
+# In CartWeb.Hooks
+def use_cart(session_id) do
+  case use_source(fn -> Cart.Server.cell(session_id) end, session_id) do
+    nil -> nil
+    source -> source.data
+  end
+end
 
-on_click={fn -> Cart.Server.add_item(source.data, item) end}
+def use_cart_count(session_id) do
+  cart = use_cart(session_id)
+  source = if cart, do: Filament.Source.new(Filament.Observable.GenServer, cart)
+  use_value(source, fn
+    :disconnected -> 0
+    state -> Cart.State.item_count(state)
+  end)
+end
+
+# In components
+count = use_cart_count(session_id)
+on_click={fn -> Cart.Server.add_item(session_id, item) end}
 
 # Component owns the server lifecycle — no `cell/1` override needed; the
 # default constructor wraps any server reference
@@ -109,15 +124,12 @@ todos = use_value(source, fn
   s -> s
 end)
 
-# Multiple projections from one source — independent slot entries per fiber
-source = use_source(fn -> DocumentServer.cell(doc_id) end)
-title  = use_value(source, fn :disconnected -> ""; s -> s.title end)
-locked = use_value(source, fn :disconnected -> false; s -> s.locked end)
+# Multiple projections can live in separate domain hooks.
 ```
 
-Passing `source` as a prop to child components lets each child apply
-its own projection (and access `source.data` for its own mutations)
-without re-resolving the underlying transport.
+Passing `session_id` as a prop lets each child apply its own domain hook
+without repeating the factory code or touching transport internals. The
+supervised `ensure_started` lookup is idempotent, so the hooks agree on one cart.
 
 ### Projection runs client-side and can close over local state
 

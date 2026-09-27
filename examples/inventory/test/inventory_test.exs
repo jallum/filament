@@ -44,9 +44,9 @@ defmodule Inventory.Test do
       holder =
         spawn(fn ->
           cell = Filament.Source.new(Filament.Observable.GenServer, server)
-          subscriber = {self(), :holder_fiber, 0}
+          subscriber = {self(), :holder_fiber, 0, make_ref()}
           {:ok, _} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
-          :ok = GenServer.call(server, {:filament_hold, "item-a", 1, self()})
+          :ok = GenServer.call(server, {:filament_hold, "item-a", 1, {self(), :holder_fiber}})
           send(parent, :acquired)
           receive do: (:die -> :ok)
         end)
@@ -60,15 +60,33 @@ defmodule Inventory.Test do
       assert Inventory.Server.get_item(server, "item-a").available == 2
     end
 
+    test "unsubscribing one component preserves another component's hold", %{server: server} do
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+      first = {self(), :first_item, 0, make_ref()}
+      second = {self(), :second_item, 0, make_ref()}
+
+      {:ok, _} = Filament.Cell.subscribe(cell, first, &Function.identity/1)
+      {:ok, _} = Filament.Cell.subscribe(cell, second, &Function.identity/1)
+      :ok = GenServer.call(server, {:filament_hold, "item-a", 1, {self(), :first_item}})
+      :ok = GenServer.call(server, {:filament_hold, "item-a", 1, {self(), :second_item}})
+      assert Inventory.Server.get_item(server, "item-a").available == 0
+
+      :ok = Filament.Cell.unsubscribe(cell, first)
+      assert Inventory.Server.get_item(server, "item-a").available == 1
+
+      :ok = Filament.Cell.unsubscribe(cell, second)
+      assert Inventory.Server.get_item(server, "item-a").available == 2
+    end
+
     test "multiple holds on same item tracked independently", %{server: server} do
       parent = self()
 
       for i <- [1, 2] do
         spawn(fn ->
           cell = Filament.Source.new(Filament.Observable.GenServer, server)
-          subscriber = {self(), :"holder_#{i}", 0}
+          subscriber = {self(), :"holder_#{i}", 0, make_ref()}
           {:ok, _} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
-          :ok = GenServer.call(server, {:filament_hold, "item-a", 1, self()})
+          :ok = GenServer.call(server, {:filament_hold, "item-a", 1, {self(), :"holder_#{i}"}})
           send(parent, {:"h#{i}", :acquired})
           receive do: (:stop -> :ok)
         end)
@@ -141,9 +159,9 @@ defmodule Inventory.Test do
       holder =
         spawn(fn ->
           cell = Filament.Source.new(Filament.Observable.GenServer, server)
-          subscriber = {self(), :holder, 0}
+          subscriber = {self(), :holder, 0, make_ref()}
           {:ok, _} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
-          :ok = GenServer.call(server, {:filament_hold, "last", 1, self()})
+          :ok = GenServer.call(server, {:filament_hold, "last", 1, {self(), :holder}})
           send(parent, :held)
           receive do: (:stop -> :ok)
         end)
