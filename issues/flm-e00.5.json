@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-09-27T17:32:22Z",
+  "description": "Reproduction: ~F\"\u003cinput disabled={nil}\u003e\" renders \u003cinput disabled\u003e, disabling the input. TagEngine/VNodeEngine encode both bare disabled and dynamic nil identically.\nInstructions: encode bare HTML boolean attributes as true (or another distinct marker); omit evaluated nil and false attributes in both Web.to_rendered and Web.to_iodata. Keep component prop nil semantics unchanged.\nAcceptance: compiler-to-renderer tests cover disabled (present), disabled={true} (present), disabled={false} and disabled={nil} (absent), plus nil id/class and spread attributes. Both HTML conversion paths must agree.",
+  "id": "flm-e00.5",
+  "labels": [],
+  "parent": "flm-e00",
+  "priority": 2,
+  "status": "open",
+  "title": "Distinguish bare boolean attributes from dynamic nil attributes",
+  "type": "bug",
+  "updated_at": "2026-09-27T17:32:22Z"
+}
