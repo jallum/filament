@@ -2,6 +2,8 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-09-27T17:48:31Z",
+  "close_reason": "Merged main 0.5.1 preserving compiler regression coverage. Head 9eddf6f is mergeable; CI run 36338171522 passed Elixir 1.18/OTP27, Elixir 1.20/OTP29, and standalone examples. Local suite: 493 tests, all checks green.",
   "created": "2026-09-27T17:45:36Z",
   "description": "While resolving the review, main advanced to 355e421 (0.5.1) after merging 384ae44, the interpolated-class/handler compiler fix. PR #7 now reports merge conflicts and GitHub is not starting pull_request CI. Instructions: merge origin/main into target-agnostic-substrate without rewriting its history; inspect each conflict and retain both the vnode substrate implementation and the new main regression coverage. Preserve version 0.5.1 and changelog entries. Run compile --warnings-as-errors, all tests, strict Credo, and Dialyzer; push and verify all three CI jobs on the exact resulting head. Close only after the integration and checks pass.",
   "id": "flm-e00.9",
@@ -14,8 +16,8 @@
     }
   ],
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Integrate main 0.5.1 and compiler fix to restore PR CI",
   "type": "bug",
-  "updated_at": "2026-09-27T17:46:11Z"
+  "updated_at": "2026-09-27T17:48:31Z"
 }
