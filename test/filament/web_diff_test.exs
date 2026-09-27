@@ -11,12 +11,19 @@ defmodule Filament.WebDiffTest do
     {socket, diff, prints, components}
   end
 
+  defp static(diff) do
+    case diff.s do
+      index when is_integer(index) -> Map.fetch!(diff.p, index)
+      chunks -> chunks
+    end
+  end
+
   test "a changed static wire reference is sent to the browser" do
     button = fn ref -> {:element, "button", [{"on_click", {:wire_ref, ref}}], []} end
     {socket, first, prints, components} = initial(button.("root:0"))
-    assert first.s == [~s(<button phx-click="filament:root:0"></button>)]
+    assert static(first) == [~s(<button phx-click="filament:root:0"></button>)]
     {second, _, _} = Diff.render(socket, Filament.Web.to_rendered(button.("root:1")), prints, components)
-    assert second.s == [~s(<button phx-click="filament:root:1"></button>)]
+    assert static(second) == [~s(<button phx-click="filament:root:1"></button>)]
   end
 
   test "inserting and removing a safe child updates the dynamic layout" do
@@ -24,12 +31,12 @@ defmodule Filament.WebDiffTest do
     inserted = {:element, "p", [], ["left", {:safe, "<b>middle</b>"}, "right"]}
     {socket, _, prints, components} = initial(base)
     {diff, prints, components} = Diff.render(socket, Filament.Web.to_rendered(inserted), prints, components)
-    assert diff.s == ["<p>", "", "", "</p>"]
+    assert static(diff) == ["<p>", "", "", "</p>"]
     assert diff[0] == "left"
     assert diff[1] == "<b>middle</b>"
     assert diff[2] == "right"
     {removed, _, _} = Diff.render(socket, Filament.Web.to_rendered(base), prints, components)
-    assert removed.s == ["<p>", "", "</p>"]
+    assert static(removed) == ["<p>", "", "</p>"]
     assert removed[1] == "right"
   end
 end
