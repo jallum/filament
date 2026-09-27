@@ -88,3 +88,11 @@ measurement, and 0.5 seconds reductions per scenario, with `parallel: 1`.
 Treat this as a starting baseline, not a performance SLA. Deep-tree lifecycle,
 source switching, capture dispatch, and multiple-owner fanout can be added as
 separate workloads; APIs that only exist on the substrate need their own baseline.
+
+When a revision supports `Filament.Web.render/2`, the compatibility adapter
+selects `target: Filament.Web`, matching the production LiveView path. Older
+substrate revisions use portable reconciliation followed by `Web.to_rendered`;
+main already produces LiveView output. Inputs, completed work and correctness
+checks remain identical. Reports distinguish `cell-web-direct` from `cell-vnode`.
+Applying this adapter update changes the harness hash: older archived reports
+must be recaptured with the updated harness before automated comparison.

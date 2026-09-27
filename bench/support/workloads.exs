@@ -37,7 +37,7 @@ defmodule Filament.Bench.Workloads do
     if job == "render/mount" do
       input
     else
-      {tree, output, []} = Reconciler.mount(component, props, owner_pid: self())
+      {tree, output, []} = Reconciler.mount(component, props, Compat.render_options())
       rendered = Compat.rendered(output)
       {initial_diff, prints, components} = Diff.render(socket, rendered, input.prints, input.components)
 
@@ -53,7 +53,7 @@ defmodule Filament.Bench.Workloads do
   end
 
   def run(%{job: "render/mount"} = input) do
-    {tree, output, []} = Reconciler.mount(input.component, input.props, owner_pid: self())
+    {tree, output, []} = Reconciler.mount(input.component, input.props, Compat.render_options())
     finish(input, tree, output, input.props.items, 0, 0)
   end
 
@@ -96,7 +96,7 @@ defmodule Filament.Bench.Workloads do
   defp next_items("keyed/clear", _, _), do: []
 
   defp update(input, tree, props, messages, updates) do
-    {tree, output, []} = Reconciler.update(tree, "root", props, owner_pid: self())
+    {tree, output, []} = Reconciler.update(tree, "root", props, Compat.render_options())
     finish(input, tree, output, props.items, messages, updates)
   end
 
