@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-09-27T18:19:16Z",
@@ -7,8 +7,8 @@
   "id": "flm-9hx",
   "labels": [],
   "priority": 3,
-  "status": "open",
+  "status": "in_progress",
   "title": "Evaluate direct render targets without a walked vnode intermediate",
   "type": "task",
-  "updated_at": "2026-09-27T18:19:16Z"
+  "updated_at": "2026-09-27T18:35:22Z"
 }
