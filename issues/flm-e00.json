@@ -2,13 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-09-27T17:48:31Z",
+  "close_reason": "All eight review fixes and the main-integration blocker are committed and pushed. Regression suite grew from 470 to 493 tests (including four tests from main). All three CI jobs pass at 9eddf6f: https://github.com/jallum/filament/actions/runs/36338171522",
   "created": "2026-09-27T17:32:21Z",
   "description": "Review target-agnostic-substrate at 1ae3cd0 against merge base f80772d. Fix the reproducible lifecycle, Cell delivery, rendering, and adapter gaps in child issues. Each child requires a focused regression test and a separate commit. Finish with compile --warnings-as-errors, full tests, strict Credo, Dialyzer, and CI. Sequence: independent fixes first; subscription generation after basic Cell fixes; final integration last.\n\n```mermaid\ngraph LR\n  fixes[Independent correctness fixes] --\u003e generation[Subscription generation checks]\n  generation --\u003e validation[Full checks and CI]\n```",
   "id": "flm-e00",
   "labels": [],
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Resolve full substrate branch review findings",
   "type": "epic",
-  "updated_at": "2026-09-27T17:32:35Z"
+  "updated_at": "2026-09-27T17:48:31Z"
 }
