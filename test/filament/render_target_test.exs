@@ -64,6 +64,7 @@ defmodule Filament.RenderTargetTest do
 
     def render(output, context) do
       send(self(), {:target, context.fiber_id, context.target})
+      if context.fiber_id == "root", do: send(self(), {:root_captures, map_size(context.new_capture_handlers)})
       if is_tuple(output), do: Renderer.walk_vnode(output, context), else: output
     end
   end
@@ -144,6 +145,7 @@ defmodule Filament.RenderTargetTest do
   test "child contexts inherit an arbitrary target" do
     {tree, _output, []} = Reconciler.mount(Root, %{ids: [1]}, target: RecordingTarget)
     assert_receive {:target, "root", RecordingTarget}
+    assert_receive {:root_captures, 1}
 
     for {id, _fiber} <- tree, id != "root" do
       assert_receive {:target, ^id, RecordingTarget}

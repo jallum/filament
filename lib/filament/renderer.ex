@@ -57,7 +57,9 @@ defmodule Filament.Renderer do
       # A target can reconcile raw output while building its final structure.
       # The default path materializes portable walked vnodes.
       output = component_module.render(props)
-      rendered = if context.target, do: context.target.render(output, context), else: walk_child(output, context)
+
+      rendered =
+        if context.target, do: context.target.render(output, current_context()), else: walk_child(output, context)
 
       final_ctx = Process.get(:filament_render_context)
 
