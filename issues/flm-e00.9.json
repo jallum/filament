@@ -7,9 +7,15 @@
   "id": "flm-e00.9",
   "labels": [],
   "parent": "flm-e00",
+  "comments": [
+    {
+      "text": "Resolved compiler conflict by retaining the vnode compiler: the legacy dependency-analysis pass fixed on main was removed by this branch. Kept all four main regression tests, adapting their HTML conversion to the vnode boundary. Version and changelog are 0.5.1. All 493 tests, compile, Credo, and Dialyzer pass; pushed merge commit and awaiting CI.",
+      "timestamp": "2026-09-27T17:46:11Z"
+    }
+  ],
   "priority": 1,
   "status": "in_progress",
   "title": "Integrate main 0.5.1 and compiler fix to restore PR CI",
   "type": "bug",
-  "updated_at": "2026-09-27T17:45:44Z"
+  "updated_at": "2026-09-27T17:46:11Z"
 }
