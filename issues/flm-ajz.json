@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-09-27T18:10:40Z",
+  "description": "Baseline bench/baselines/comparison-117ddfa.md shows reactivity/unchanged at 1000 subscriptions: main 4.0 us, substrate 208.3 us (52.62x), both emit zero updates and an empty 2-byte diff. Reproduce using ERL_FLAGS=\"+S 4:4\" mix run bench/run.exs --suite reactivity/ --label candidate --output tmp/bench/reactivity.json on both harness-bearing branches. Inspect Observable.GenServer.notify_cell_each/3 and cell_update/3: per-subscriber Process.info mailbox checks and map reconstruction occur even when projected values are unchanged. Profile server reductions and isolate per-owner checks, projection reuse and map rebuilding. Optimize without weakening saturation/resubscribe semantics, strict projected equality, per-subscriber generations, or lifecycle callbacks; do not assume equal raw values across arbitrary handle_subscribe projections. Add focused lifecycle/backpressure correctness coverage, rerun all 30 fixture checks and repeated full baselines with identical harness/configuration, and report server diagnostics plus median times.",
+  "id": "flm-ajz",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "Reduce unchanged Cell notification overhead for shared owners",
+  "type": "bug",
+  "updated_at": "2026-09-27T18:10:40Z"
+}
