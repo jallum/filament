@@ -41,6 +41,7 @@ defmodule Filament.RendererSlotTest do
 
     test "entry with element vnode is walked recursively" do
       entries = [%Entry{render_fn: fn -> {:element, "span", [], [{:text, "hi"}]} end}]
+
       assert {:fragment, [{:element, "span", [], [{:text, "hi"}]}]} =
                Renderer.walk_vnode({:slot, :body, entries, nil}, stub_ctx())
     end
@@ -60,11 +61,12 @@ defmodule Filament.RendererSlotTest do
     use Filament.Component
 
     defcomponent Panel do
-      slot :header, required: false
-      slot :body, required: true
+      slot(:header, required: false)
+      slot(:body, required: true)
 
       def render(assigns) do
         import Filament.Component
+
         ~F"""
         <div class="panel">
           <:header />
@@ -86,17 +88,19 @@ defmodule Filament.RendererSlotTest do
       defcomponent DefaultHeader do
         def render(_) do
           import Filament.Component
+
           ~F"<span>Default</span>"
         end
       end
     end
 
     defcomponent DefaultPanel do
-      slot :header, required: false, default: DefaultHeader.DefaultHeader
-      slot :body, required: true
+      slot(:header, required: false, default: DefaultHeader.DefaultHeader)
+      slot(:body, required: true)
 
       def render(assigns) do
         import Filament.Component
+
         ~F"""
         <div>
           <:header default={Filament.RendererSlotTest.DefaultPanel.DefaultHeader.DefaultHeader} />
@@ -155,14 +159,11 @@ defmodule Filament.RendererSlotTest do
 
   defp vnode_contains?(node, target) when node == target, do: true
 
-  defp vnode_contains?({:element, _, _, children}, target),
-    do: Enum.any?(children, &vnode_contains?(&1, target))
+  defp vnode_contains?({:element, _, _, children}, target), do: Enum.any?(children, &vnode_contains?(&1, target))
 
-  defp vnode_contains?({:fragment, children}, target),
-    do: Enum.any?(children, &vnode_contains?(&1, target))
+  defp vnode_contains?({:fragment, children}, target), do: Enum.any?(children, &vnode_contains?(&1, target))
 
-  defp vnode_contains?({:component, _, _, _, child}, target),
-    do: vnode_contains?(child, target)
+  defp vnode_contains?({:component, _, _, _, child}, target), do: vnode_contains?(child, target)
 
   defp vnode_contains?(_, _), do: false
 
@@ -171,11 +172,9 @@ defmodule Filament.RendererSlotTest do
   defp vnode_has_component?({:element, _, _, children}, target),
     do: Enum.any?(children, &vnode_has_component?(&1, target))
 
-  defp vnode_has_component?({:fragment, children}, target),
-    do: Enum.any?(children, &vnode_has_component?(&1, target))
+  defp vnode_has_component?({:fragment, children}, target), do: Enum.any?(children, &vnode_has_component?(&1, target))
 
-  defp vnode_has_component?({:component, _, _, _, child}, target),
-    do: vnode_has_component?(child, target)
+  defp vnode_has_component?({:component, _, _, _, child}, target), do: vnode_has_component?(child, target)
 
   defp vnode_has_component?(_, _), do: false
 end

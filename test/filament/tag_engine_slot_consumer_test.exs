@@ -19,9 +19,9 @@ defmodule Filament.TagEngine.SlotConsumerTest do
     use Filament.Component
 
     defcomponent Layout do
-      slot :header, required: false
-      slot :body, required: true
-      slot :footer, required: false, default: String
+      slot(:header, required: false)
+      slot(:body, required: true)
+      slot(:footer, required: false, default: String)
 
       def render(_), do: nil
     end
@@ -117,6 +117,7 @@ defmodule Filament.TagEngine.SlotConsumerTest do
         """)
 
       {:component, _, assigns, nil} = eval(ast, items: ["one", "two"])
+
       assert Enum.map(assigns.body, & &1.render_fn.()) == [
                {:element, "div", [], ["one"]},
                {:element, "div", [], ["two"]}

@@ -113,8 +113,7 @@ defmodule Filament.Core do
   defp kind_matches?(:all, _kind), do: true
   defp kind_matches?(_slot_kinds, :all), do: true
 
-  defp kind_matches?(%MapSet{} = slot_kinds, kind),
-    do: MapSet.member?(slot_kinds, kind)
+  defp kind_matches?(%MapSet{} = slot_kinds, kind), do: MapSet.member?(slot_kinds, kind)
 
   defp kind_matches?(_slot_kinds, _kind), do: false
 

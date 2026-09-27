@@ -95,7 +95,11 @@ defmodule Filament.VNodeEngineComponentsTest do
     end
 
     test "block component honours :if" do
-      ast = compile("<Filament.VNodeEngineComponentsTest.Item.Item :if={show}><:body>body</:body></Filament.VNodeEngineComponentsTest.Item.Item>")
+      ast =
+        compile(
+          "<Filament.VNodeEngineComponentsTest.Item.Item :if={show}><:body>body</:body></Filament.VNodeEngineComponentsTest.Item.Item>"
+        )
+
       assert eval(ast, show: false) == nil
     end
 

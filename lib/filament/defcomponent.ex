@@ -102,7 +102,7 @@ defmodule Filament.Defcomponent do
   defmacro __before_compile__(env) do
     module = env.module
     props = Module.get_attribute(module, :filament_props)
-    slots = Module.get_attribute(module, :filament_slots) |> Enum.reverse()
+    slots = module |> Module.get_attribute(:filament_slots) |> Enum.reverse()
     check_slot_prop_collisions!(module, props, slots)
     build_component_module_ast(module, props, slots)
   end
@@ -112,8 +112,7 @@ defmodule Filament.Defcomponent do
 
     for {slot_name, _opts} <- slots, slot_name in prop_names do
       raise CompileError,
-        description:
-          "slot #{inspect(slot_name)} has the same name as a prop in #{inspect(module)}"
+        description: "slot #{inspect(slot_name)} has the same name as a prop in #{inspect(module)}"
     end
   end
 

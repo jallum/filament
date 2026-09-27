@@ -6,29 +6,29 @@ defmodule Filament.DefcomponentSlotTest do
     use Filament.Component
 
     defcomponent WithRequiredSlot do
-      slot :inner_block, required: true
+      slot(:inner_block, required: true)
       def render(_), do: nil
     end
 
     defcomponent WithOptionalSlot do
-      slot :footer
+      slot(:footer)
       def render(_), do: nil
     end
 
     defcomponent WithDefaultSlot do
-      slot :header, default: String
+      slot(:header, default: String)
       def render(_), do: nil
     end
 
     defcomponent WithPropsAndSlots do
-      prop :id, :string, required: true
-      slot :inner_block, required: true
-      slot :footer
+      prop(:id, :string, required: true)
+      slot(:inner_block, required: true)
+      slot(:footer)
       def render(_), do: nil
     end
 
     defcomponent NoSlots do
-      prop :label, :string
+      prop(:label, :string)
       def render(_), do: nil
     end
   end
