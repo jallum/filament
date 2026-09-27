@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-09-27T17:32:22Z",
+  "description": "Reproduction: call Observable.GenServer.notify_cell_each with last=1 and an identity projection, then new_state=nil. The entry records last=nil but sends no message. The delivery reducer uses nil as its no-delivery sentinel.\nInstructions: return tagged delivery decisions (:unchanged or {:changed, value}, or equivalent) from update_cell_subscriber. Keep saturation and dead-subscriber behavior intact; never use a valid projected value as control flow.\nAcceptance: live GenServer transport tests cover non-nil -\u003e nil, repeated nil producing no second notification, nil -\u003e non-nil, and batched updates with one nil projection.",
+  "id": "flm-e00.2",
+  "labels": [],
+  "parent": "flm-e00",
+  "priority": 1,
+  "status": "open",
+  "title": "Deliver nil Cell values instead of treating them as no update",
+  "type": "bug",
+  "updated_at": "2026-09-27T17:32:22Z"
+}
