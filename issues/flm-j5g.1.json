@@ -9,9 +9,15 @@
   "id": "flm-j5g.1",
   "labels": [],
   "parent": "flm-j5g",
+  "comments": [
+    {
+      "text": "Harness preflight verifies 30 scenarios and reconstructs client HTML from incremental diffs. Benchee 1.5.1 memory/reduction collectors spawn a process after before_each; mailbox-owned leaf/reactive scenarios therefore intentionally use time-only Benchee measurement. Separate untimed caller/server reduction diagnostics remain available. Pure scenarios collect all three metrics. Timed smoke run passed; full main baseline is running with ERL_FLAGS=+S 4:4.",
+      "timestamp": "2026-09-27T18:02:41Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Build a main-based Benchee harness with verified shared workloads",
   "type": "task",
-  "updated_at": "2026-09-27T17:52:03Z"
+  "updated_at": "2026-09-27T18:02:41Z"
 }
