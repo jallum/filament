@@ -478,7 +478,7 @@ defmodule Filament.VNodeCompiler do
   # to capture vars referenced by event handler closures like set_sel, on_change).
   defp collect_nil_names(ast) do
     {_, names} =
-      Macro.prewalk(ast, MapSet.new(), fn
+      Macro.prewalk(dependency_ast(ast), MapSet.new(), fn
         {name, _meta, nil} = node, acc when is_atom(name) ->
           if valid_variable_name?(name),
             do: {node, MapSet.put(acc, name)},
@@ -533,7 +533,7 @@ defmodule Filament.VNodeCompiler do
 
   defp collect_variables(ast) do
     {_, vars} =
-      Macro.prewalk(ast, MapSet.new(), fn
+      Macro.prewalk(dependency_ast(ast), MapSet.new(), fn
         {:fn, _, _} = node, acc ->
           {node, acc}
 
@@ -549,7 +549,7 @@ defmodule Filament.VNodeCompiler do
 
   defp collect_variables_deep(ast) do
     {_, vars} =
-      Macro.prewalk(ast, MapSet.new(), fn
+      Macro.prewalk(dependency_ast(ast), MapSet.new(), fn
         {name, _meta, nil} = node, acc when is_atom(name) ->
           if valid_variable_name?(name), do: {node, MapSet.put(acc, name)}, else: {node, acc}
 
@@ -559,6 +559,24 @@ defmodule Filament.VNodeCompiler do
 
     MapSet.to_list(vars)
   end
+
+  # Bitstring type names have the same AST shape as variables. Strip only the
+  # specifier syntax for dependency analysis, retaining size/unit expressions.
+  # The executable AST is left untouched.
+  defp dependency_ast(ast) do
+    Macro.prewalk(ast, fn
+      {:"::", _, [value, spec]} -> [value, bitstring_spec_expressions(spec)]
+      node -> node
+    end)
+  end
+
+  defp bitstring_spec_expressions({:-, _, [left, right]}) do
+    [bitstring_spec_expressions(left), bitstring_spec_expressions(right)]
+  end
+
+  defp bitstring_spec_expressions({name, _, args}) when name in [:size, :unit] and is_list(args), do: args
+
+  defp bitstring_spec_expressions(_spec), do: []
 
   defp valid_variable_name?(name) when is_atom(name) do
     name not in ~w[
