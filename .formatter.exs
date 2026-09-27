@@ -4,6 +4,7 @@
   inputs: [
     "{mix,.formatter}.exs",
     "{config,lib,test}/**/*.{ex,exs}",
+    "bench/**/*.exs",
     "examples/*/lib/**/*.{ex,exs}",
     "examples/*/test/**/*.{ex,exs}",
     "examples/*/config/**/*.{ex,exs}"
