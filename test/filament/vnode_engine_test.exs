@@ -75,10 +75,10 @@ defmodule Filament.VNodeEngineTest do
                {:element, "div", [{"id", "a"}, {"class", "y"}], [{:text, "x"}]}
     end
 
-    test "boolean attribute (no value) is preserved as nil" do
+    test "bare boolean attribute is encoded as true" do
       # `<input disabled>` — TagEngine emits `disabled` with no value.
       assert eval(compile("<input disabled>")) ==
-               {:element, "input", [{"disabled", nil}], []}
+               {:element, "input", [{"disabled", true}], []}
     end
 
     test "void elements emit empty children list" do

@@ -542,6 +542,7 @@ defmodule Filament.TagEngine do
   defp handle_token([{:slot, slot_name, attrs, %{closing: :self} = tag_meta} | tokens], state) do
     slot_atom = String.to_atom(slot_name)
     default_ast = parse_slot_default(attrs, state)
+
     vnode_ast =
       quote line: tag_meta.line do
         {:slot, unquote(slot_atom), Map.get(Filament.Renderer.current_props(), unquote(slot_atom), []),
@@ -604,6 +605,7 @@ defmodule Filament.TagEngine do
     {slots_map, state} = pop_slots_frame(state)
     slot_assigns_ast = build_slot_assigns_ast(slots_map)
     full_assigns = merge_assigns_with_slots(regular_assigns, slot_assigns_ast, open_meta.line)
+
     vnode_ast =
       if has_special? do
         build_self_close_component_with_special(state, special, open_meta, fn key_ast ->
@@ -1080,7 +1082,7 @@ defmodule Filament.TagEngine do
         [{name, value}]
 
       {name, nil, _attr_meta} ->
-        [{name, nil}]
+        [{name, true}]
     end)
     |> Enum.flat_map(&transform_event_attr_for_vnode/1)
   end
@@ -1213,11 +1215,11 @@ defmodule Filament.TagEngine do
   defp build_slot_entry_ast(body_ast, slot_attrs_ast, has_special?, special) do
     entry =
       quote do
-      %Filament.Slot.Entry{
-        render_fn: fn -> unquote(body_ast) end,
-        attrs: unquote(slot_attrs_ast)
-      }
-    end
+        %Filament.Slot.Entry{
+          render_fn: fn -> unquote(body_ast) end,
+          attrs: unquote(slot_attrs_ast)
+        }
+      end
 
     if has_special? do
       entry |> wrap_slot_for(special) |> maybe_wrap_if(special)

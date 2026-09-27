@@ -140,11 +140,7 @@ defmodule Filament.Web do
     state |> push_dynamic(Safe.to_iodata(other)) |> fp_mix(:dynamic_child)
   end
 
-  defp walk_attr({_name, false}, state), do: state
-
-  defp walk_attr({name, nil}, state) do
-    state |> append_static(" " <> to_string(name)) |> fp_mix({:attr_bool, name})
-  end
+  defp walk_attr({_name, value}, state) when value in [nil, false], do: state
 
   defp walk_attr({name, true}, state) do
     state |> append_static(" " <> to_string(name)) |> fp_mix({:attr_bool, name})
@@ -298,10 +294,8 @@ defmodule Filament.Web do
     end)
   end
 
-  defp render_attr_value(_key_str, false), do: []
+  defp render_attr_value(_key_str, value) when value in [nil, false], do: []
   defp render_attr_value(key_str, true), do: [" ", key_str]
-  # `nil` is emitted by VNodeEngine for bare boolean attrs (`<input disabled>`).
-  defp render_attr_value(key_str, nil), do: [" ", key_str]
 
   defp render_attr_value("class", value) do
     [" class=\"", Filament.HTMLEngine.class_attribute_encode(value), "\""]

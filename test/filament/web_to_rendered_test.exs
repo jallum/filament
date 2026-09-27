@@ -69,9 +69,9 @@ defmodule Filament.WebToRenderedTest do
       assert r.dynamic.(false) == []
     end
 
-    test "boolean nil attr renders as bare key" do
+    test "boolean nil attr is omitted" do
       r = render({:element, "input", [{"disabled", nil}], []})
-      assert r.static == ["<input disabled>"]
+      assert r.static == ["<input>"]
       assert r.dynamic.(false) == []
     end
 
