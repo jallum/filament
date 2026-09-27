@@ -115,8 +115,18 @@ defmodule Filament.Web do
   end
 
   defp component_dynamic(%Rendered{} = r), do: r
-  defp component_dynamic(other) when is_tuple(other), do: to_rendered(other)
+  defp component_dynamic(other) when is_tuple(other) or is_list(other), do: to_rendered(other)
   defp component_dynamic(other), do: Safe.to_iodata(other)
+
+  defp walk_child_rendered(children, state) when is_list(children) do
+    Enum.reduce(children, state, fn
+      codepoint, acc when is_integer(codepoint) ->
+        acc |> push_dynamic(Safe.to_iodata([codepoint])) |> fp_mix(:dynamic_child)
+
+      child, acc ->
+        walk_child_rendered(child, acc)
+    end)
+  end
 
   defp walk_child_rendered({:safe, iodata}, state), do: push_dynamic(state, iodata)
   defp walk_child_rendered(child, state) when is_tuple(child), do: walk_rendered(child, state)
@@ -222,14 +232,26 @@ defmodule Filament.Web do
   # Idempotent: an already-converted `{:safe, iodata}` value passes through.
   def to_iodata({:safe, iodata}), do: iodata
 
-  def to_iodata(invalid) do
+  def to_iodata(children) when is_list(children) do
+    Enum.map(children, fn
+      codepoint when is_integer(codepoint) -> Safe.to_iodata([codepoint])
+      child -> child_to_iodata(child)
+    end)
+  end
+
+  def to_iodata(nil), do: []
+  def to_iodata(false), do: []
+
+  def to_iodata(invalid) when is_tuple(invalid) do
     raise ArgumentError, "invalid walked vnode: #{inspect(invalid)}"
   end
+
+  def to_iodata(scalar), do: Safe.to_iodata(scalar)
 
   # Scalar child of an element/fragment — string from `{name}` interpolation,
   # integer, atom, etc. HTML-escape and emit as iodata. Nil/false render as
   # empty (matches HEEx semantics for `nil` interpolations).
-  defp child_to_iodata(child) when is_tuple(child), do: to_iodata(child)
+  defp child_to_iodata(child) when is_tuple(child) or is_list(child), do: to_iodata(child)
   defp child_to_iodata(nil), do: []
   defp child_to_iodata(false), do: []
   defp child_to_iodata(child), do: Safe.to_iodata(child)
@@ -241,7 +263,7 @@ defmodule Filament.Web do
 
   defp embed_child({tag, _, _, _, _} = walked_vnode) when is_atom(tag), do: to_iodata(walked_vnode)
 
-  defp embed_child(other), do: Safe.to_iodata(other)
+  defp embed_child(other), do: child_to_iodata(other)
 
   defp void_element?("br"), do: true
   defp void_element?("hr"), do: true

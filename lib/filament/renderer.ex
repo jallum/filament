@@ -58,11 +58,7 @@ defmodule Filament.Renderer do
       # render/1 either returns a vnode tuple (which we walk for fiber
       # registration) or a scalar value (passed through as-is for the
       # embedder/web converter to render).
-      rendered =
-        case component_module.render(props) do
-          vnode when is_tuple(vnode) -> walk_vnode(vnode, context)
-          other -> other
-        end
+      rendered = walk_child(component_module.render(props), context)
 
       final_ctx = Process.get(:filament_render_context)
 
@@ -179,6 +175,7 @@ defmodule Filament.Renderer do
   """
   @spec walk_vnode(Filament.VNode.t(), RenderContext.t()) :: term()
   def walk_vnode({:text, _content} = node, _context), do: node
+  def walk_vnode({:safe, _iodata} = safe, _context), do: safe
 
   def walk_vnode({:element, tag, attrs, children}, context) do
     resolved_attrs = Enum.map(attrs, &resolve_event_attr/1)
@@ -229,6 +226,7 @@ defmodule Filament.Renderer do
   # `{name}`, a number, etc.) alongside vnode tuples. Tuples recurse through
   # the walker; scalars pass through and are stringified/escaped by
   # `Filament.Web.to_iodata`.
+  defp walk_child(children, context) when is_list(children), do: Enum.map(children, &walk_child(&1, context))
   defp walk_child(child, context) when is_tuple(child), do: walk_vnode(child, context)
   defp walk_child(child, _context), do: child
 

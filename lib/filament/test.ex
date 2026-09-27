@@ -381,6 +381,7 @@ defmodule Filament.Test do
   end
 
   defp walked_to_string(%Rendered{} = r), do: rendered_to_string(r)
+  defp walked_to_string(other), do: other |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
 
   # ── Event dispatch helpers ────────────────────────────────────────────────
 
@@ -445,12 +446,13 @@ defmodule Filament.Test do
         flush_messages(view)
 
       {:cell_updates, updates} ->
-        view = Enum.reduce(updates, view, fn {subscriber, value}, acc ->
-          case subscriber do
-            {_owner_pid, fiber_id, slot_index} -> apply_cell_slot_update(acc, fiber_id, slot_index, value)
-            _ -> acc
-          end
-        end)
+        view =
+          Enum.reduce(updates, view, fn {subscriber, value}, acc ->
+            case subscriber do
+              {_owner_pid, fiber_id, slot_index} -> apply_cell_slot_update(acc, fiber_id, slot_index, value)
+              _ -> acc
+            end
+          end)
 
         flush_messages(view)
 
