@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-09-27T17:32:21Z",
+  "description": "Reproduction: mount Root -\u003e Middle -\u003e Leaf, then update Root so Middle remains but stops rendering Leaf. Leaf remains in the tree. lib/filament/reconciler.ex reconcile_children only compares direct children of the updated parent and merges the full descendant map; renderer also records all descendants as child children.\nInstructions: reconcile removed fibers throughout the updated subtree, preserving fibers outside that subtree. Store direct child IDs on every fiber. Run unmount cleanup exactly once for each removed descendant before deleting it. Preserve state for retained keyed descendants.\nAcceptance: tests remove a grandchild beneath a retained parent; verify absence from the tree, one effect cleanup and Cell unsubscribe, and fresh state when remounted. Cover a deeper subtree and a direct non-root update. Existing ancestry/capture tests must pass.",
+  "id": "flm-e00.1",
+  "labels": [],
+  "parent": "flm-e00",
+  "priority": 1,
+  "status": "open",
+  "title": "Reconcile removed descendants beneath retained fibers",
+  "type": "bug",
+  "updated_at": "2026-09-27T17:32:21Z"
+}
