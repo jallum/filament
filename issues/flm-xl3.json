@@ -2,13 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-09-27T18:20:34Z",
+  "close_reason": "Profiled mount with Erlang call-time tracing; web builder state updates were a major hot path. Replaced its transient maps with tuples while retaining identical HTML/diff/fingerprints. First matched full run: 1000-row mount 4831.6 -\u003e 4136.3 us, caller allocation 0.96x. Direct-target hypothesis captured separately as flm-9hx; repeat full measurement follows formatting cleanup.",
   "created": "2026-09-27T18:10:40Z",
   "description": "The first full matched run in bench/baselines/comparison-117ddfa.md shows render/mount at 1000 rows increasing from 3335.1 us to 4831.6 us (1.45x) and caller allocations 1.21x. Pure rendering/keyed jobs allocate about 12–36% more across tested sizes. Reproduce full baseline commands in bench/README.md with identical runtime/harness and repeat before optimizing. Profile Reconciler mount, vnode construction and Web.to_rendered separately; identify intermediate allocations and repeated traversal rather than guessing from elapsed time. Preserve equivalent encoded-diff output correctness, keyed fiber retention, lifecycle and event behavior. Implement a measured optimization in a separate commit, run tests/Credo/Dialyzer and all fixture checks, then compare matched full reports and document tradeoffs including diff bytes.",
   "id": "flm-xl3",
   "labels": [],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Profile vnode mount cost and rendering allocations against main baseline",
   "type": "task",
-  "updated_at": "2026-09-27T18:16:48Z"
+  "updated_at": "2026-09-27T18:20:34Z"
 }
