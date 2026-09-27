@@ -29,3 +29,44 @@ are required to attribute the full difference.
 Follow-up work: `flm-ajz` covers unchanged notification overhead; `flm-xl3`
 covers mount time and vnode/rendering allocations. Each includes reproduction,
 implementation guidance and correctness/performance acceptance checks.
+
+## First performance fixes
+
+The harness, lockfile, runtime, hardware and scheduler settings remain unchanged.
+
+- `substrate-owner-cache-1b95207.json`: reactive scenarios after querying owner
+  mailbox depth once per notification and retaining unchanged subscriber entries.
+- `substrate-web-builder-391a010.json`: full run after replacing transient web
+  builder state maps with tuples.
+- `substrate-optimized-c787282.json`: repeat full run after formatting-only cleanup.
+- `optimization-c787282.md`: repeat versus the original substrate reference.
+- `main-vs-optimized-c787282.md`: repeat versus the original main reference.
+
+At 1,000 subscriptions, unchanged writes fell from 208.3 us to 74.7 us in the
+isolated reactive run and 68.9 / 67.7 us in the two full runs. Each notification
+still evaluates every independent projection and checks saturation; we do not
+assume arbitrary projection callbacks can be skipped based on equal raw state.
+Server reduction diagnostics fell from 22,346 to 19,245 in the isolated preflight;
+these are single-run diagnostics rather than Benchee distributions.
+
+At 1,000 rows, mount medians were 4.14 / 4.52 ms versus the original 4.83 ms,
+with caller allocations about 4% lower in both runs. The original main reference
+was 3.34 ms; the mount regression is reduced, not eliminated. Most pure rendering
+jobs show about 4% less caller allocation. Diff byte counts match the original
+substrate in every scenario. No allocation claim is made for process-owned jobs.
+
+Call-time profiling of 50 mounts identified frequent `Web.append_static/2`,
+`Web.fp_mix/2`, and `Web.push_dynamic/2` state updates among the hot functions.
+The small tuple change reduces their transient allocation without changing
+fingerprints or introducing another adapter API. A direct-output adapter
+experiment remains tracked in `flm-9hx`.
+
+Timing varies: keyed/clear at 1,000 rows measured 236 / 493 us in the two runs,
+with almost identical reduction counts and allocation. Do not interpret the
+single comparison table as proof that every workload improved or regressed.
+The no-op reduction is large and repeats; small list-edit differences need
+controlled repeat runs and GC/scheduling investigation before more changes.
+
+Commands use the documented full settings with `ERL_FLAGS='+S 4:4'` and labels
+`web-builder` and `optimized-repeat`. The isolated run additionally selected
+`--suite reactivity/`. All 30 scenarios verify output and cleanup outside timing.
