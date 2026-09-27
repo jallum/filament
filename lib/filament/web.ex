@@ -44,15 +44,15 @@ defmodule Filament.Web do
   def to_rendered(%Rendered{} = rendered), do: rendered
 
   def to_rendered(walked) do
-    state = %{static: [""], dynamic: [], fp: 0}
-    state = walk_child_rendered(walked, state)
-    static = Enum.reverse(state.static)
-    dynamic = Enum.reverse(state.dynamic)
+    state = {[""], [], 0}
+    {static, dynamic, fingerprint} = walk_child_rendered(walked, state)
+    static = Enum.reverse(static)
+    dynamic = Enum.reverse(dynamic)
 
     %Rendered{
       static: static,
       dynamic: fn _track -> dynamic end,
-      fingerprint: state.fp,
+      fingerprint: fingerprint,
       root: false,
       caller: :not_available
     }
@@ -60,16 +60,16 @@ defmodule Filament.Web do
 
   defp append_static(state, ""), do: state
 
-  defp append_static(%{static: [head | rest]} = state, text) do
-    %{state | static: [head <> text | rest]}
+  defp append_static({[head | rest], dynamic, fp}, text) do
+    {[head <> text | rest], dynamic, fp}
   end
 
-  defp push_dynamic(state, value) do
-    %{state | static: ["" | state.static], dynamic: [value | state.dynamic]}
+  defp push_dynamic({static, dynamic, fp}, value) do
+    {["" | static], [value | dynamic], fp}
   end
 
-  defp fp_mix(state, term) do
-    %{state | fp: :erlang.phash2({state.fp, term})}
+  defp fp_mix({static, dynamic, fp}, term) do
+    {static, dynamic, :erlang.phash2({fp, term})}
   end
 
   defp walk_rendered({:text, content}, state) when is_binary(content) do
