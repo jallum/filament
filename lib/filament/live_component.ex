@@ -19,7 +19,7 @@ defmodule Filament.LiveComponent do
   ## Observable updates
 
   Because `Filament.LiveComponent` runs inside the parent LiveView process,
-  observable update messages (`:filament_set_state`, `:cell_update`,
+  observable update messages (`:filament_set_state`, `:cell_update`, `:cell_updates`,
   `:cell_resubscribe`) arrive at the **parent**
   LiveView's `handle_info/2`. The parent must forward them to the component:
 
@@ -30,6 +30,12 @@ defmodule Filament.LiveComponent do
       end
 
       def handle_info({:cell_update, _sub, _val} = msg, socket) do
+        Phoenix.LiveView.send_update(Filament.LiveComponent,
+          id: "my-id", filament_msg: msg)
+        {:noreply, socket}
+      end
+
+      def handle_info({:cell_updates, _updates} = msg, socket) do
         Phoenix.LiveView.send_update(Filament.LiveComponent,
           id: "my-id", filament_msg: msg)
         {:noreply, socket}
@@ -149,20 +155,23 @@ defmodule Filament.LiveComponent do
     tree |> Filament.LiveView.apply_cell_update(sub, val) |> render_after_apply(tree, owner_pid)
   end
 
+  defp process_filament_msg({:cell_updates, updates}, tree, owner_pid) do
+    tree |> Filament.LiveView.apply_cell_updates(updates) |> render_after_apply(tree, owner_pid)
+  end
+
   defp process_filament_msg({:cell_resubscribe, sub}, tree, owner_pid) do
     tree |> Filament.LiveView.apply_cell_resubscribe(sub) |> render_after_apply(tree, owner_pid)
   end
 
   defp process_filament_msg(_unknown, _tree, _owner_pid), do: :ignore
 
-  # Re-render from the fiber that owns the slot. The LiveView adapter always
-  # re-renders from "root"; LiveComponent only owns the embedded subtree, so
-  # rendering from the affected fiber keeps the work scoped.
-  defp render_after_apply({:ok, new_tree, fiber_id}, _orig_tree, owner_pid) do
-    fiber = Map.fetch!(new_tree, fiber_id)
+  # The adapter output represents the whole embedded tree, even when a
+  # descendant's hook triggered this update.
+  defp render_after_apply({:ok, new_tree, _fiber_id}, _orig_tree, owner_pid) do
+    root = Map.fetch!(new_tree, "root")
 
     {final_tree, rendered, pending_effects} =
-      Reconciler.update(new_tree, fiber_id, fiber.props, owner_pid: owner_pid)
+      Reconciler.update(new_tree, "root", root.props, owner_pid: owner_pid)
 
     {:ok, final_tree, rendered, pending_effects}
   end

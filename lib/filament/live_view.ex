@@ -464,19 +464,34 @@ defmodule Filament.LiveView do
   end
 
   @doc false
-  def handle_cell_updates(tree, updates, socket, rerender_fn) when is_list(updates) do
-    {new_tree, changed?} =
-      Enum.reduce(updates, {tree, false}, fn {subscriber, value}, {current_tree, changed?} ->
-        case apply_cell_update(current_tree, subscriber, value) do
-          {:ok, updated_tree, _fiber_id} -> {updated_tree, true}
-          :ignore -> {current_tree, changed?}
-        end
-      end)
-
-    if changed?, do: {:noreply, rerender_fn.(socket, new_tree)}, else: {:noreply, socket}
+  def handle_cell_updates(tree, updates, socket, rerender_fn) do
+    case apply_cell_updates(tree, updates) do
+      {:ok, new_tree, _fiber_id} -> {:noreply, rerender_fn.(socket, new_tree)}
+      :ignore -> {:noreply, socket}
+    end
   end
 
-  def handle_cell_updates(_tree, _updates, socket, _rerender_fn), do: {:noreply, socket}
+  @doc false
+  def apply_cell_updates(tree, updates) when is_list(updates) do
+    Enum.reduce(updates, :ignore, fn
+      {subscriber, value}, result ->
+        current_tree =
+          case result do
+            {:ok, updated, _} -> updated
+            :ignore -> tree
+          end
+
+        case apply_cell_update(current_tree, subscriber, value) do
+          :ignore -> result
+          updated -> updated
+        end
+
+      _, result ->
+        result
+    end)
+  end
+
+  def apply_cell_updates(_tree, _updates), do: :ignore
 
   @doc false
   def handle_cell_resubscribe(tree, subscriber, socket, rerender_fn) do
