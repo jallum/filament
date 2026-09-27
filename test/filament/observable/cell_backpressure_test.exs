@@ -128,6 +128,8 @@ defmodule Filament.Observable.CellBackpressureTest do
     on_exit(fn -> Process.exit(owner, :kill) end)
     first = subscribe_cell(server, owner, "first", 0)
     second = subscribe_cell(server, owner, "second", 0)
+    # Warm the unchanged path before saturating its owner.
+    CellPressureCounter.set(server, 1)
     flood_mailbox(owner, 110)
 
     capture_log(fn -> CellPressureCounter.set(server, 1) end)

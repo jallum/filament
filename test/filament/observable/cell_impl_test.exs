@@ -34,6 +34,20 @@ defmodule Filament.Observable.CellImplTest do
     end
   end
 
+  defmodule SeededCounter do
+    @moduledoc false
+    use Filament.Observable.GenServer
+
+    def start_link(_opts), do: GenServer.start_link(__MODULE__, 0)
+    def init(state), do: {:ok, state}
+    def handle_subscribe(_subscriber, state), do: {:ok, -1, state}
+
+    def handle_call({:set, value}, _from, _state) do
+      notify_observers(value)
+      {:reply, :ok, value}
+    end
+  end
+
   defmodule ReadOnlyCounter do
     @moduledoc false
     use Filament.Observable.GenServer
@@ -204,5 +218,47 @@ defmodule Filament.Observable.CellImplTest do
     assert {:ok, 0.0} = Cell.subscribe(source, first, &Function.identity/1)
     GenServer.call(server, {:set, 2})
     assert_receive {:cell_update, ^first, 2}
+  end
+
+  test "custom projections still run for repeated equal raw values beside identity subscribers" do
+    server = start_supervised!(Counter)
+    source = Counter.cell(server)
+    observer = self()
+    identity = {self(), :identity}
+    custom = {self(), :custom}
+    Cell.subscribe(source, identity, &Function.identity/1)
+
+    Cell.subscribe(source, custom, fn value ->
+      send(observer, {:projected, value})
+      value
+    end)
+
+    assert_receive {:projected, 0}
+
+    GenServer.call(server, {:set, 0})
+    assert_receive {:projected, 0}
+    GenServer.call(server, {:set, 0})
+    assert_receive {:projected, 0}
+    refute_receive {:cell_update, _, _}
+    refute_receive {:cell_updates, _}
+  end
+
+  test "callback-derived initial values and replacements receive unchanged raw state" do
+    server = start_supervised!(SeededCounter)
+    source = SeededCounter.cell(server)
+    subscriber = {self(), :seeded, 0, make_ref()}
+    assert {:ok, -1} = Cell.subscribe(source, subscriber, &Function.identity/1)
+    GenServer.call(server, {:set, 0})
+    assert_receive {:cell_update, ^subscriber, 0}
+    GenServer.call(server, {:set, 0})
+    refute_receive {:cell_update, _, _}
+
+    assert {:ok, -1} = Cell.subscribe(source, subscriber, &Function.identity/1)
+    GenServer.call(server, {:set, 0})
+    assert_receive {:cell_update, ^subscriber, 0}
+    Cell.unsubscribe(source, subscriber)
+    assert {:ok, -1} = Cell.subscribe(source, subscriber, &Function.identity/1)
+    GenServer.call(server, {:set, 0})
+    assert_receive {:cell_update, ^subscriber, 0}
   end
 end

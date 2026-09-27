@@ -46,6 +46,8 @@ defmodule Filament.Observable.GenServer do
 
   @behaviour Filament.Cell
 
+  @notification_cache :__filament_cell_notification_cache__
+
   # ── Cell behaviour: GenServer transport ─────────────────────────────────────
 
   @impl Filament.Cell
@@ -172,7 +174,7 @@ defmodule Filament.Observable.GenServer do
         cell_subs = Process.get(:__filament_cell_subscribers__, %{})
 
         new_cell_subs =
-          Filament.Observable.GenServer.notify_cell_each(cell_subs, new_state, @max_mailbox_depth)
+          Filament.Observable.GenServer.notify_cells(cell_subs, new_state, @max_mailbox_depth)
 
         Process.put(:__filament_cell_subscribers__, new_cell_subs)
 
@@ -194,7 +196,9 @@ defmodule Filament.Observable.GenServer do
     ref = if send_pid != self(), do: Process.monitor(send_pid)
 
     entry = %{pid: send_pid, projection: projection, last: projected, monitor_ref: ref}
-    Process.put(:__filament_cell_subscribers__, Map.put(cell_subs, subscriber, entry))
+    new_subs = Map.put(cell_subs, subscriber, entry)
+    cache_identity_subscribe(cell_subs, new_subs, entry, raw)
+    Process.put(:__filament_cell_subscribers__, new_subs)
 
     {:reply, {:ok, projected}, new_state}
   end
@@ -215,6 +219,7 @@ defmodule Filament.Observable.GenServer do
 
       {:ok, entry} ->
         if entry.monitor_ref, do: Process.demonitor(entry.monitor_ref, [:flush])
+        Process.delete(@notification_cache)
         Process.put(:__filament_cell_subscribers__, Map.delete(cell_subs, subscriber))
         {:ok, new_state} = mod.handle_unsubscribe(subscriber, state)
         {:reply, :ok, new_state}
@@ -228,6 +233,7 @@ defmodule Filament.Observable.GenServer do
     {dead, alive} =
       Enum.split_with(cell_subs, fn {_sub, entry} -> entry.pid == dead_pid end)
 
+    Process.delete(@notification_cache)
     Process.put(:__filament_cell_subscribers__, Map.new(alive))
 
     new_state =
@@ -248,6 +254,68 @@ defmodule Filament.Observable.GenServer do
   end
 
   defp subscriber_pid(_), do: self()
+
+  # Only the known pure identity function may bypass projection evaluation.
+  # Keep the exact subscriber map in the cache so subscription replacement
+  # cannot reuse a value computed for a previous generation or projection.
+  defp cache_identity_subscribe(previous, subscribers, entry, raw) do
+    if entry.projection === (&Function.identity/1) do
+      case Process.get(@notification_cache) do
+        %{subscribers: ^previous, value: ^raw, owners: owners} ->
+          put_notification_cache(subscribers, raw, Map.put(owners, entry.pid, true))
+
+        _ when map_size(previous) == 0 ->
+          put_notification_cache(subscribers, raw, %{entry.pid => true})
+
+        _ ->
+          Process.delete(@notification_cache)
+      end
+    else
+      Process.delete(@notification_cache)
+    end
+  end
+
+  defp put_notification_cache(subscribers, value, owners) do
+    Process.put(@notification_cache, %{subscribers: subscribers, value: value, owners: owners})
+  end
+
+  @doc false
+  def notify_cells(subscribers, value, max_depth) do
+    case Process.get(@notification_cache) do
+      %{subscribers: ^subscribers, value: ^value, owners: owners} ->
+        if owners_ready?(owners, max_depth),
+          do: subscribers,
+          else: notify_and_cache(subscribers, value, max_depth)
+
+      _ ->
+        notify_and_cache(subscribers, value, max_depth)
+    end
+  end
+
+  defp owners_ready?(owners, max_depth) do
+    Enum.all?(owners, fn {pid, _} -> owner_ready?(pid, max_depth) end)
+  end
+
+  defp owner_ready?(pid, max_depth) do
+    case Process.info(pid, :message_queue_len) do
+      {:message_queue_len, depth} when depth < max_depth -> true
+      _ -> false
+    end
+  end
+
+  defp notify_and_cache(subscribers, value, max_depth) do
+    updated = notify_cell_each(subscribers, value, max_depth)
+
+    owners =
+      Enum.reduce_while(updated, %{}, fn {_subscriber, entry}, owners ->
+        if entry.projection === (&Function.identity/1) and entry.last === value,
+          do: {:cont, Map.put(owners, entry.pid, true)},
+          else: {:halt, nil}
+      end)
+
+    if owners, do: put_notification_cache(updated, value, owners), else: Process.delete(@notification_cache)
+    updated
+  end
 
   @doc false
   def notify_cell_each(cell_subs, new_state, max_mailbox_depth) do
