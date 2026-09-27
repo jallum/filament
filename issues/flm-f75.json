@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-09-27T18:09:14Z",
@@ -7,8 +7,8 @@
   "id": "flm-f75",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Normalize existing substrate formatting",
   "type": "chore",
-  "updated_at": "2026-09-27T18:09:14Z"
+  "updated_at": "2026-09-27T18:20:37Z"
 }
