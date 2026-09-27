@@ -113,31 +113,7 @@ defmodule Filament.LiveComponent do
 
   @impl true
   def handle_event("filament:" <> ref, params, socket) do
-    case String.split(ref, ":", parts: 2) do
-      [fiber_id_str, index_str] ->
-        handler_index = String.to_integer(index_str)
-        tree = socket.assigns._filament_tree
-        handler = Filament.FiberTree.get_event_handler(tree, fiber_id_str, handler_index)
-
-        case handler do
-          nil ->
-            {:noreply, socket}
-
-          fun when is_function(fun, 0) ->
-            fun.()
-            {:noreply, socket}
-
-          fun when is_function(fun, 1) ->
-            fun.(params)
-            {:noreply, socket}
-
-          _other ->
-            {:noreply, socket}
-        end
-
-      _ ->
-        {:noreply, socket}
-    end
+    Filament.LiveView.dispatch_filament_event(ref, params, socket)
   end
 
   @impl true

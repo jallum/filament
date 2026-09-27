@@ -417,12 +417,8 @@ defmodule Filament.Test do
           nil ->
             {:error, {:stale_handler, ref}}
 
-          fun when is_function(fun, 0) ->
-            fun.()
-            {:ok, flush_messages(view)}
-
-          fun when is_function(fun, 1) ->
-            fun.(params)
+          fun when is_function(fun, 0) or is_function(fun, 1) ->
+            Filament.Core.dispatch_event(view.fiber_tree, fiber_id_str, handler_index, params)
             {:ok, flush_messages(view)}
         end
 
