@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-09-27T17:45:36Z",
+  "description": "While resolving the review, main advanced to 355e421 (0.5.1) after merging 384ae44, the interpolated-class/handler compiler fix. PR #7 now reports merge conflicts and GitHub is not starting pull_request CI. Instructions: merge origin/main into target-agnostic-substrate without rewriting its history; inspect each conflict and retain both the vnode substrate implementation and the new main regression coverage. Preserve version 0.5.1 and changelog entries. Run compile --warnings-as-errors, all tests, strict Credo, and Dialyzer; push and verify all three CI jobs on the exact resulting head. Close only after the integration and checks pass.",
+  "id": "flm-e00.9",
+  "labels": [],
+  "parent": "flm-e00",
+  "priority": 1,
+  "status": "open",
+  "title": "Integrate main 0.5.1 and compiler fix to restore PR CI",
+  "type": "bug",
+  "updated_at": "2026-09-27T17:45:36Z"
+}
