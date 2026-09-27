@@ -191,7 +191,7 @@ defmodule Filament.Observable.GenServer do
     send_pid = subscriber_pid(subscriber)
     old_entry = Map.get(cell_subs, subscriber)
     if old_entry && old_entry.monitor_ref, do: Process.demonitor(old_entry.monitor_ref, [:flush])
-    ref = if is_pid(send_pid) and send_pid != self(), do: Process.monitor(send_pid)
+    ref = if send_pid != self(), do: Process.monitor(send_pid)
 
     entry = %{pid: send_pid, projection: projection, last: projected, monitor_ref: ref}
     Process.put(:__filament_cell_subscribers__, Map.put(cell_subs, subscriber, entry))

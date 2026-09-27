@@ -79,14 +79,17 @@ defmodule Filament.Core do
 
   defp run_capture_phase(tree, ancestor_ids, params, kind) do
     Enum.each(ancestor_ids, fn id ->
-      fiber = Map.fetch!(tree, id)
-      handlers = fiber.capture_handlers || %{}
-      kinds_map = Map.get(fiber, :capture_handler_kinds, %{}) || %{}
+      run_capture_handlers(Map.fetch!(tree, id), params, kind)
+    end)
+  end
 
-      Enum.each(handlers, fn {slot, handler} ->
-        slot_kinds = Map.get(kinds_map, slot, :all)
-        if kind_matches?(slot_kinds, kind), do: invoke(handler, params)
-      end)
+  defp run_capture_handlers(fiber, params, kind) do
+    handlers = fiber.capture_handlers || %{}
+    kinds_map = Map.get(fiber, :capture_handler_kinds, %{}) || %{}
+
+    Enum.each(handlers, fn {slot, handler} ->
+      slot_kinds = Map.get(kinds_map, slot, :all)
+      if kind_matches?(slot_kinds, kind), do: invoke(handler, params)
     end)
   end
 
