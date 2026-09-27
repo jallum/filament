@@ -6,23 +6,7 @@ defmodule Filament.Bench.Report do
   def run(args) do
     Application.load(:benchee)
 
-    {opts, rest, invalid} =
-      OptionParser.parse(args,
-        strict: [
-          verify_only: :boolean,
-          quick: :boolean,
-          output: :string,
-          label: :string,
-          sizes: :string,
-          suite: :string
-        ]
-      )
-
-    if rest != [] or invalid != [], do: raise(ArgumentError, "invalid benchmark arguments: #{inspect(rest ++ invalid)}")
-    sizes = opts |> Keyword.get(:sizes, "10,100,1000") |> String.split(",") |> Enum.map(&String.to_integer/1)
-    if Enum.any?(sizes, &(&1 < 2)), do: raise(ArgumentError, "sizes must be >= 2")
-    jobs = Enum.filter(Workloads.jobs(), &String.starts_with?(&1, Keyword.get(opts, :suite, "")))
-    if jobs == [], do: raise(ArgumentError, "no matching benchmark suite")
+    {opts, sizes, jobs} = parse_args(args)
 
     config =
       if opts[:quick],
@@ -68,6 +52,28 @@ defmodule Filament.Bench.Report do
       File.write!(path, Jason.encode!(report, pretty: true) <> "\n")
       IO.puts("Saved #{path}")
     end
+  end
+
+  defp parse_args(args) do
+    {opts, rest, invalid} =
+      OptionParser.parse(args,
+        strict: [
+          verify_only: :boolean,
+          quick: :boolean,
+          output: :string,
+          label: :string,
+          sizes: :string,
+          suite: :string
+        ]
+      )
+
+    if rest != [] or invalid != [], do: raise(ArgumentError, "invalid benchmark arguments: #{inspect(rest ++ invalid)}")
+    sizes = opts |> Keyword.get(:sizes, "10,100,1000") |> String.split(",") |> Enum.map(&String.to_integer/1)
+    if Enum.any?(sizes, &(&1 < 2)), do: raise(ArgumentError, "sizes must be >= 2")
+    jobs = Enum.filter(Workloads.jobs(), &String.starts_with?(&1, Keyword.get(opts, :suite, "")))
+    if jobs == [], do: raise(ArgumentError, "no matching benchmark suite")
+
+    {opts, sizes, jobs}
   end
 
   defp preflight(jobs, sizes) do

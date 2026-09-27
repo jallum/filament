@@ -2,6 +2,8 @@ defmodule Filament.Bench.Store do
   @moduledoc false
   use Filament.Observable.GenServer
 
+  alias Filament.Bench.Compat
+
   def start_link, do: GenServer.start_link(__MODULE__, 0)
   def init(value), do: {:ok, value}
 
@@ -11,7 +13,7 @@ defmodule Filament.Bench.Store do
   end
 
   def handle_call(:subscription_count, _from, value) do
-    {:reply, Filament.Bench.Compat.subscription_count(), value}
+    {:reply, Compat.subscription_count(), value}
   end
 end
 
@@ -51,12 +53,14 @@ defmodule Filament.Bench.ValueRow do
   @moduledoc false
   use Filament.Component
 
+  alias Filament.Bench.Compat
+
   defcomponent do
     prop(:id, :integer, required: true)
     prop(:server, :any, required: true)
 
     def render(%{id: id, server: server}) do
-      value = Filament.Bench.Compat.read(server)
+      value = Compat.read(server)
       ~F"<li data-id={id}>{value}</li>"
     end
   end
