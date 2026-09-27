@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "flm-j5g.1"
+  ],
   "blocks": [],
   "created": "2026-09-27T17:52:03Z",
   "description": "After the main-based benchmark harness is implemented, run its full suite on main and save a documented JSON baseline. Integrate the harness branch into target-agnostic-substrate without merging the PR into main. Run identical inputs/configuration/toolchain on substrate. Produce a comparison with ratios and deterministic diff/message counts; distinguish benchmark-process memory from server-process resource use. Check that metadata and fixture signatures match before comparing. Preserve any findings in follow-up bw issues with reproductions and specific implementation instructions; do not silently omit failing scenarios or tune one branch differently. Push both branches and verify CI.",
