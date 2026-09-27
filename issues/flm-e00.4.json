@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-09-27T17:32:22Z",
+  "description": "Reproduction: ~F\"\u003cdiv\u003e{Phoenix.HTML.raw(html)}\u003c/div\u003e\" raises invalid vnode {:safe, ...}. An EEx for block producing \u003cli\u003e vnodes returns a list that Web sends to Phoenix.HTML.Safe as iodata and raises.\nInstructions: make the substrate walker preserve {:safe, iodata} opaque values and recursively walk lists of vnode children (including components). Extend Web conversion consistently for nested lists without confusing ordinary scalar/iodata values with vnode lists. Preserve scalar escaping and Rendered embedding. Ensure the isolated test harness supports scalar root renders as documented by Component.rendered.\nAcceptance: mount real ~F components with raw HTML, EEx for blocks, interpolated vnode lists containing hooked child components, nested lists, escaped strings, and scalar roots; check both to_iodata and to_rendered output and registered fibers.",
+  "id": "flm-e00.4",
+  "labels": [],
+  "parent": "flm-e00",
+  "priority": 1,
+  "status": "open",
+  "title": "Support safe HTML and vnode lists throughout template interpolation",
+  "type": "bug",
+  "updated_at": "2026-09-27T17:32:22Z"
+}
