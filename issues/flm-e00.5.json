@@ -9,9 +9,15 @@
   "id": "flm-e00.5",
   "labels": [],
   "parent": "flm-e00",
+  "comments": [
+    {
+      "text": "Validation count correction: the focused compiler/rendering run contained 43 passing tests. Final integrated validation passes 489 tests.",
+      "timestamp": "2026-09-27T17:45:00Z"
+    }
+  ],
   "priority": 2,
   "status": "closed",
   "title": "Distinguish bare boolean attributes from dynamic nil attributes",
   "type": "bug",
-  "updated_at": "2026-09-27T17:37:30Z"
+  "updated_at": "2026-09-27T17:45:00Z"
 }
