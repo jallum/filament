@@ -49,7 +49,9 @@ jobs:
 
       - name: Verify benchmark fixtures
         if: matrix.lint
-        run: mix run bench/run.exs --verify-only
+        run: |
+          mix run bench/run.exs --verify-only
+          mix run bench/run.exs --quick --sizes 10 --label ci --output tmp/bench/ci.json
 
       - name: Credo
         if: matrix.lint

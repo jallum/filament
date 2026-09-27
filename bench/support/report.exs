@@ -41,18 +41,24 @@ defmodule Filament.Bench.Report do
           {job, {&Workloads.run/1, before_each: &Workloads.setup(job, &1), after_each: &Workloads.check_and_cleanup/1}}
         end)
 
-      suite =
-        Benchee.run(
-          functions,
-          config ++ [inputs: Map.new(sizes, &{Integer.to_string(&1), &1}), parallel: 1, print: [fast_warning: false]]
-        )
+      # Benchee's allocation/reduction collectors execute the function in a
+      # different process from before_each. Process-owned mailboxes/setters
+      # cannot move with that input, so those jobs only use its time collector.
+      owned_jobs = ["render/leaf_state", "reactivity/changed", "reactivity/unchanged"]
+      {owned, pure} = Map.split(functions, owned_jobs)
+      inputs = Map.new(sizes, &{Integer.to_string(&1), &1})
+      common = [inputs: inputs, parallel: 1, print: [fast_warning: false]]
 
-      scenarios = Enum.map(suite.scenarios, &summary/1)
+      scenarios =
+        [{pure, config}, {owned, Keyword.merge(config, memory_time: 0, reduction_time: 0)}]
+        |> Enum.reject(fn {jobs, _} -> map_size(jobs) == 0 end)
+        |> Enum.flat_map(fn {jobs, measurement} -> Benchee.run(jobs, measurement ++ common).scenarios end)
+        |> Enum.map(&summary/1)
 
       report = %{
         schema: 1,
         metadata: metadata,
-        configuration: Map.new(config),
+        configuration: Map.put(Map.new(config), :time_only_jobs, owned_jobs),
         diagnostics: diagnostics,
         scenarios: scenarios
       }
@@ -69,7 +75,9 @@ defmodule Filament.Bench.Report do
       input = Workloads.setup(job, size)
       if input.server, do: :erlang.garbage_collect(input.server)
       before = Workloads.server_resources(input)
+      {:reductions, caller_before} = Process.info(self(), :reductions)
       result = Workloads.run(input)
+      {:reductions, caller_after} = Process.info(self(), :reductions)
       after_run = Workloads.server_resources(input)
       metrics = Workloads.check_and_cleanup(result)
 
@@ -84,7 +92,11 @@ defmodule Filament.Bench.Report do
           %{}
         end
 
-      %{job: job, size: size, metrics: Map.merge(metrics, server)}
+      %{
+        job: job,
+        size: size,
+        metrics: metrics |> Map.merge(server) |> Map.put(:caller_reductions_diagnostic, caller_after - caller_before)
+      }
     end
   end
 
@@ -97,6 +109,8 @@ defmodule Filament.Bench.Report do
       caller_reductions: stats(scenario.reductions_data.statistics)
     }
   end
+
+  defp stats(%{sample_size: 0}), do: nil
 
   defp stats(stats) do
     %{

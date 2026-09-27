@@ -13,7 +13,10 @@ current = Map.new(candidate["scenarios"], &{key.(&1), &1})
 if Enum.sort(Map.keys(reference)) != Enum.sort(Map.keys(current)), do: raise("scenario sets differ")
 base_metrics = Map.new(baseline["diagnostics"], &{key.(&1), &1["metrics"]})
 new_metrics = Map.new(candidate["diagnostics"], &{key.(&1), &1["metrics"]})
-ratio = fn new, old -> if old == 0, do: "n/a", else: :erlang.float_to_binary(new / old, decimals: 2) <> "x" end
+
+ratio = fn new, old ->
+  if is_nil(new) or is_nil(old) or old == 0, do: "n/a", else: :erlang.float_to_binary(new / old, decimals: 2) <> "x"
+end
 
 IO.puts(
   "Candidate / baseline; lower is better. Times are median microseconds. Allocation/reductions cover the caller only.\n"
@@ -31,6 +34,6 @@ for {{job, size} = id, row} <- Enum.sort(current) do
   old_time = old["time_ns"]["median"]
 
   IO.puts(
-    "| #{job} | #{size} | #{Float.round(old_time / 1000, 1)} | #{Float.round(time / 1000, 1)} | #{ratio.(time, old_time)} | #{ratio.(row["caller_memory_bytes"]["median"], old["caller_memory_bytes"]["median"])} | #{ratio.(row["caller_reductions"]["median"], old["caller_reductions"]["median"])} | #{base_metrics[id]["diff_bytes"]} → #{new_metrics[id]["diff_bytes"]} |"
+    "| #{job} | #{size} | #{Float.round(old_time / 1000, 1)} | #{Float.round(time / 1000, 1)} | #{ratio.(time, old_time)} | #{ratio.(get_in(row, ["caller_memory_bytes", "median"]), get_in(old, ["caller_memory_bytes", "median"]))} | #{ratio.(get_in(row, ["caller_reductions", "median"]), get_in(old, ["caller_reductions", "median"]))} | #{base_metrics[id]["diff_bytes"]} → #{new_metrics[id]["diff_bytes"]} |"
   )
 end

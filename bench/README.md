@@ -63,6 +63,14 @@ untimed preflight diagnostics record that server's reduction delta and memory
 snapshots (bytes; after a GC before the write, but not after the write). These
 snapshots are not total allocation or peak-memory measurements.
 
+Benchee runs its memory and reductions collectors in a different process from
+`before_each`. That would move execution away from the owner of prebuilt state
+setters and subscriptions. Therefore **leaf-state and reactive jobs use Benchee's
+time collector only**; their allocation/reduction distributions are explicitly
+`null` (`n/a` in comparisons). Their preflight caller/server reduction deltas
+remain available as single-run diagnostics, not statistical measurements. The
+seven pure rendering/reconciliation jobs collect all three Benchee metrics.
+
 Diagnostics also record serialized diff bytes, full HTML bytes, message/update
 counts, and remaining fibers. The comparison prints candidate/baseline ratios;
 less than 1 means less measured work. It rejects mismatched runtimes, hardware,
