@@ -2,14 +2,16 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-09-27T17:44:30Z",
+  "close_reason": "Generation-scoped identities validated across all adapters and cleanup paths. Full suite: 489 tests; warnings-as-errors compile, strict Credo, Dialyzer, and diff checks pass.",
   "created": "2026-09-27T17:32:22Z",
   "description": "Reproduction: mount use_value(source A); enqueue an A update; rerender with source B; process the queued A update. The B slot now renders A data because messages identify only owner/fiber/slot and apply_cell_update preserves whichever source is currently stored.\nInstructions: assign a subscription-generation token on each fresh subscription. Carry it in the opaque subscriber identity and stored hook slot; validate it before applying updates or resubscribe requests in LiveView, LiveComponent, and Filament.Test. Keep the token stable while reusing the subscription and unsubscribe with exactly the original identity. Preserve custom transport support by treating subscriber identity as opaque. Update documentation/tests for the internal protocol, retaining intentional legacy/manual message support only if it cannot overwrite a generation-tracked slot.\nAcceptance: deterministic queued-old-update test across A -\u003e B, late resubscribe request, unmount/remount of the same fiber, normal batch updates, and cleanup on swap/unmount. Old messages must neither overwrite new data nor create ghost subscriptions.",
   "id": "flm-e00.8",
   "labels": [],
   "parent": "flm-e00",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Reject queued Cell messages from replaced subscriptions",
   "type": "bug",
-  "updated_at": "2026-09-27T17:40:00Z"
+  "updated_at": "2026-09-27T17:44:30Z"
 }
