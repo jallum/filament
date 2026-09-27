@@ -2,13 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-09-27T18:49:23Z",
+  "close_reason": "Implemented opt-in render-target prototype and inherited contexts; 500 tests/30 fixture checks and checks passed. Fresh identical-harness main, portable and direct reports captured. Direct vs portable at 1000 rows: mount 5328.9 vs 4535.3 us, most allocations only about 1% lower, several updates slower. Production adapter changes reverted; prototype retained on flm-9hx/direct-render-prototype for future investigation. Portable IR remains default; further compiler-level target specialization would require separate measurements.",
   "created": "2026-09-27T18:19:16Z",
   "description": "User raised allowing Web to build LiveView structs directly while keeping the substrate target-independent. Current path is component.render -\u003e Renderer.walk_child copies vnode tree and resolves child fibers/events -\u003e Web.to_rendered traverses it again. Profile mount allocations and time before redesign. Prototype an optional render-target callback inherited by child RenderContexts that builds output during reconciliation; preserve the default vnode path for other targets. Separate removal of the walked copy from compiling templates directly to target output. Preserve event registration order and capture, slots/defaults, scalar/charlist/safe escaping, static/dynamic fingerprints, keyed children, hook lifecycles and nested component renders. Verify incremental client HTML and live event dispatch; benchmark matched actual Web paths at 10/100/1000 rows with identical harness/runtime before choosing whether to land the change. Do not remove the portable IR solely on timing from one run.",
   "id": "flm-9hx",
   "labels": [],
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Evaluate direct render targets without a walked vnode intermediate",
   "type": "task",
-  "updated_at": "2026-09-27T18:35:22Z"
+  "updated_at": "2026-09-27T18:49:23Z"
 }
