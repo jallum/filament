@@ -304,14 +304,7 @@ defmodule Filament.Observable.GenServer do
   end
 
   defp notify_and_cache(subscribers, value, max_depth) do
-    updated = notify_cell_each(subscribers, value, max_depth)
-
-    owners =
-      Enum.reduce_while(updated, %{}, fn {_subscriber, entry}, owners ->
-        if entry.projection === (&Function.identity/1) and entry.last === value,
-          do: {:cont, Map.put(owners, entry.pid, true)},
-          else: {:halt, nil}
-      end)
+    {updated, owners} = notify_cell_pass(subscribers, value, max_depth)
 
     if owners, do: put_notification_cache(updated, value, owners), else: Process.delete(@notification_cache)
     updated
@@ -319,27 +312,34 @@ defmodule Filament.Observable.GenServer do
 
   @doc false
   def notify_cell_each(cell_subs, new_state, max_mailbox_depth) do
-    {updated_subs, deliveries, _depths} =
-      Enum.reduce(cell_subs, {cell_subs, %{}, %{}}, fn {subscriber, entry}, {updated, deliveries, depths} ->
+    {updated, _owners} = notify_cell_pass(cell_subs, new_state, max_mailbox_depth)
+    updated
+  end
+
+  defp notify_cell_pass(cell_subs, new_state, max_mailbox_depth) do
+    {updated_subs, deliveries, depths, identity?} =
+      Enum.reduce(cell_subs, {cell_subs, %{}, %{}, true}, fn {subscriber, entry},
+                                                             {updated, deliveries, depths, identity?} ->
         {depth_result, depths} = owner_depth(entry.pid, depths)
+        identity? = identity? and entry.projection === (&Function.identity/1)
 
         case update_cell_subscriber(subscriber, entry, new_state, depth_result, max_mailbox_depth) do
           :drop ->
-            {Map.delete(updated, subscriber), deliveries, depths}
+            {Map.delete(updated, subscriber), deliveries, depths, false}
 
           {_entry, :unchanged} ->
-            {updated, deliveries, depths}
+            {updated, deliveries, depths, identity? and entry.last === new_state}
 
           {updated_entry, {:changed, value}} ->
             next_deliveries =
               Map.update(deliveries, updated_entry.pid, [{subscriber, value}], &[{subscriber, value} | &1])
 
-            {Map.put(updated, subscriber, updated_entry), next_deliveries, depths}
+            {Map.put(updated, subscriber, updated_entry), next_deliveries, depths, identity?}
         end
       end)
 
     Enum.each(deliveries, fn {pid, updates} -> deliver_cell_updates(pid, Enum.reverse(updates)) end)
-    updated_subs
+    {updated_subs, if(identity?, do: depths)}
   end
 
   # Deliveries are sent after traversal, so all cells owned by a process see
