@@ -2,14 +2,16 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-09-27T17:35:22Z",
+  "close_reason": "35 adapter tests and strict Credo pass; batched and child updates preserve root output.",
   "created": "2026-09-27T17:32:22Z",
   "description": "Reproduction: forwarding {:cell_updates, [{subscriber1, value1}, {subscriber2, value2}]} to LiveComponent.update leaves both slots unchanged because process_filament_msg falls through to :ignore. Also, a child state update rerenders only the child and replaces the entire adapter output, losing parent markup (an inherited bug exposed by this review).\nInstructions: add batch handling that applies all valid updates before one render. Always rerender the embedded tree from its root after child or batch mutations. Share tree mutation helpers with LiveView and document forwarding :cell_updates. Ignore updates for missing fibers.\nAcceptance: adapter tests with a parent wrapper and two children verify a batch updates both values, preserves parent/sibling markup, and renders once. A single child state update must preserve the same wrapper.",
   "id": "flm-e00.3",
   "labels": [],
   "parent": "flm-e00",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Handle batched Cell messages and preserve the LiveComponent root render",
   "type": "bug",
-  "updated_at": "2026-09-27T17:34:12Z"
+  "updated_at": "2026-09-27T17:35:22Z"
 }
