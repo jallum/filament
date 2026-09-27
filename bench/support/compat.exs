@@ -1,8 +1,19 @@
 defmodule Filament.Bench.Compat do
   @moduledoc false
   @substrate Code.ensure_loaded?(Filament.Source)
+  @direct_web Code.ensure_loaded?(Filament.Web) and function_exported?(Filament.Web, :render, 2)
 
-  def implementation, do: if(@substrate, do: "cell-vnode", else: "observable-rendered")
+  def implementation do
+    cond do
+      @direct_web -> "cell-web-direct"
+      @substrate -> "cell-vnode"
+      true -> "observable-rendered"
+    end
+  end
+
+  def render_options do
+    if @direct_web, do: [owner_pid: self(), target: Filament.Web], else: [owner_pid: self()]
+  end
 
   if @substrate do
     def read(server),
