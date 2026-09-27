@@ -2,14 +2,16 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-09-27T17:40:26Z",
+  "close_reason": "Corrected test assertions for Phoenix shared static templates; 27 tests and strict Credo now pass.",
   "created": "2026-09-27T17:32:22Z",
   "description": "Reproduction: Web.to_rendered of a button with {:wire_ref, \"root:0\"} and then {:wire_ref, \"root:1\"} produces different static HTML but identical fingerprints. Phoenix can reuse the old static event target.\nInstructions: either put wire refs in dynamic slots or include their complete emitted static value in the structural fingerprint. Audit dynamic slot shape markers, including safe values, so fingerprint equality implies compatible static/dynamic layout.\nAcceptance: a Phoenix.LiveView.Diff regression test changes the wire ref on an otherwise identical element and verifies the diff updates the browser target. Also cover adding/removing safe dynamic children between existing dynamic children.",
   "id": "flm-e00.7",
   "labels": [],
   "parent": "flm-e00",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Include wire-reference static bytes in Web render fingerprints",
   "type": "bug",
-  "updated_at": "2026-09-27T17:40:14Z"
+  "updated_at": "2026-09-27T17:40:26Z"
 }
