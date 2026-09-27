@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-09-27T17:32:22Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "flm-e00",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Handle batched Cell messages and preserve the LiveComponent root render",
   "type": "bug",
-  "updated_at": "2026-09-27T17:32:22Z"
+  "updated_at": "2026-09-27T17:34:12Z"
 }
