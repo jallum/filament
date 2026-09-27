@@ -4,6 +4,8 @@
   "blocks": [
     "flm-j5g.2"
   ],
+  "closed_at": "2026-09-27T18:07:41Z",
+  "close_reason": "Implemented and verified shared harness; full main baseline archived; draft PR #11 opened.",
   "created": "2026-09-27T17:52:03Z",
   "description": "Create a worktree from origin/main (355e421). Add Benchee as a dev-only dependency and bench scripts for mount, unchanged update, one leaf state update, keyed append/prepend/reverse/remove/clear, and observable write through rendered Phoenix diff. Use 10/100/1000 rows. Isolate preconditions/setup and correctness validation from timed work; each observable sample must finish all delivery/rendering and clean up subscriptions. Provide a small compatibility boundary for current Observable and substrate Cell APIs without changing workload semantics. Record JSON summaries including timing, allocations, reductions, wire diff bytes, message/update counts, and environment/git/lock/harness metadata. Include smoke verification in CI without speed thresholds, commands/docs, and a repeatable comparison tool. Validate full tests and existing checks, then open a separate draft PR targeting main.",
   "id": "flm-j5g.1",
@@ -16,8 +18,8 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Build a main-based Benchee harness with verified shared workloads",
   "type": "task",
-  "updated_at": "2026-09-27T18:02:41Z"
+  "updated_at": "2026-09-27T18:07:41Z"
 }
