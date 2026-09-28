@@ -116,15 +116,47 @@ defmodule Filament.VNodeCompiler do
     {fn_body1, reg_hoisted} = extract_reg_handlers(fn_body)
     {fn_body2, comp_hoisted} = extract_component_calls(fn_body1)
     all_hoisted = reg_hoisted ++ comp_hoisted
+    assigns = Enum.map(all_hoisted, fn {var, expr} -> {:=, [], [var, expr]} end)
 
-    if all_hoisted == [] do
-      {:{}, tuple_meta, [key, map_expr, {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body]}]}]}
+    {entry_fn, assigns} =
+      if has_render_context_call?(fn_body2) do
+        # Nested comprehensions are lazy: their entries are constructed when
+        # LiveView evaluates this entry function, outside the render pass.
+        # Evaluate the parent entry now, while its generator variables and
+        # render context are available, then return those prepared dynamics.
+        prepared = {:"fentry_#{System.unique_integer([:positive, :monotonic])}", [], nil}
+        original_fn = {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body2]}]}
+        prepare = {:=, [], [prepared, quote(do: unquote(original_fn).(%{}, false))]}
+        trivial_fn = {:fn, fn_meta, [{:->, arrow_meta, [fn_args, prepared]}]}
+        {trivial_fn, assigns ++ [prepare]}
+      else
+        {{:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body2]}]}, assigns}
+      end
+
+    new_tuple = {:{}, tuple_meta, [key, map_expr, entry_fn]}
+
+    if assigns == [] do
+      new_tuple
     else
-      new_fn = {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body2]}]}
-      new_tuple = {:{}, tuple_meta, [key, map_expr, new_fn]}
-      assigns = Enum.map(all_hoisted, fn {var, expr} -> {:=, [], [var, expr]} end)
       {:__block__, [], assigns ++ [new_tuple]}
     end
+  end
+
+  defp has_render_context_call?(ast) do
+    {_, found} =
+      Macro.prewalk(ast, false, fn
+        {{:., _, [{:__aliases__, _, [:Filament, :Hooks]}, :register_event_handler]}, _, _} = node, _ ->
+          {node, true}
+
+        {{:., _, [{:__aliases__, _, [:Filament, :TagEngine]}, fun]}, _, _} = node, _
+        when fun in [:component, :component_keyed] ->
+          {node, true}
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    found
   end
 
   # Replace register_event_handler(fn_expr) calls in fn_body with fresh variable refs.
@@ -133,7 +165,7 @@ defmodule Filament.VNodeCompiler do
     base = System.unique_integer([:positive, :monotonic])
 
     {new_body, {_counter, hoisted}} =
-      Macro.postwalk(fn_body, {base, []}, fn
+      postwalk_in_comprehension(fn_body, {base, []}, fn
         {{:., meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]}, call_meta, [fn_expr]},
         {counter, acc} ->
           var_name = :"freh_#{counter}"
@@ -163,7 +195,7 @@ defmodule Filament.VNodeCompiler do
     base = System.unique_integer([:positive, :monotonic])
 
     {new_body, {_counter, hoisted}} =
-      Macro.postwalk(fn_body, {base, []}, fn
+      postwalk_in_comprehension(fn_body, {base, []}, fn
         {{:., _, [{:__aliases__, _, [:Filament, :TagEngine]}, comp_fn]}, _, _} = node, {counter, acc}
         when comp_fn in [:component, :component_keyed] ->
           var_name = :"fchild_#{counter}"
@@ -176,6 +208,30 @@ defmodule Filament.VNodeCompiler do
 
     {new_body, Enum.reverse(hoisted)}
   end
+
+  # A nested comprehension has its own generator bindings. Its entry tuple is
+  # visited separately by hoist_comprehension_handlers/1, after the enclosing
+  # tuple, so do not lift its handlers or components into the outer loop.
+  defp postwalk_in_comprehension({:for, _, _} = node, acc, _fun), do: {node, acc}
+  defp postwalk_in_comprehension({:fn, _, _} = node, acc, _fun), do: {node, acc}
+
+  defp postwalk_in_comprehension({tag, meta, args}, acc, fun) when is_list(args) do
+    {args, acc} = Enum.map_reduce(args, acc, &postwalk_in_comprehension(&1, &2, fun))
+    fun.({tag, meta, args}, acc)
+  end
+
+  defp postwalk_in_comprehension({left, right}, acc, fun) do
+    {left, acc} = postwalk_in_comprehension(left, acc, fun)
+    {right, acc} = postwalk_in_comprehension(right, acc, fun)
+    fun.({left, right}, acc)
+  end
+
+  defp postwalk_in_comprehension(list, acc, fun) when is_list(list) do
+    {list, acc} = Enum.map_reduce(list, acc, &postwalk_in_comprehension(&1, &2, fun))
+    fun.(list, acc)
+  end
+
+  defp postwalk_in_comprehension(node, acc, fun), do: fun.(node, acc)
 
   # Walk the AST stripping outer Phoenix change-tracking variable assignments
   # without descending into fn literals (comprehension entry fns own their bindings).
@@ -443,8 +499,8 @@ defmodule Filament.VNodeCompiler do
   #    {:for, [counter: N], Phoenix.LiveView.Engine}. Extracting these directly gives
   #    us the right dep regardless of context or name (`:for` would be excluded by
   #    valid_variable_name? if we collected it as a plain var).
-  # 2. Nil-context user vars referenced in the loop (excluding generator-pattern-bound
-  #    and for-body-local vars). These cover outer reactive vars like `current`.
+  # 2. Nil-context user vars captured from outside the loop. These cover outer
+  #    reactive vars like `current`, while respecting nested generator bindings.
   defp for_loop_outer_vars({:for, _, args} = for_ast) do
     gen_collections =
       Enum.flat_map(args, fn
@@ -452,60 +508,92 @@ defmodule Filament.VNodeCompiler do
         _ -> []
       end)
 
-    gen_nil_names =
-      Enum.reduce(args, MapSet.new(), fn
-        {:<-, _, [pattern, _]}, acc -> MapSet.union(acc, collect_nil_names(pattern))
-        _, acc -> acc
-      end)
-
-    body_nil_names =
-      Enum.reduce(args, MapSet.new(), fn
-        [do: body], acc -> MapSet.union(acc, collect_body_nil_names(body))
-        _, acc -> acc
-      end)
-
     outer_nil_vars =
       for_ast
-      |> collect_nil_names()
-      |> MapSet.difference(gen_nil_names)
-      |> MapSet.difference(body_nil_names)
+      |> dependency_ast()
+      |> free_nil_names(MapSet.new())
       |> Enum.map(fn name -> {name, [], nil} end)
 
     Enum.uniq(gen_collections ++ outer_nil_vars)
   end
 
-  # Collect all nil-context variable names from an AST (descends into fn literals
-  # to capture vars referenced by event handler closures like set_sel, on_change).
-  defp collect_nil_names(ast) do
-    {_, names} =
-      Macro.prewalk(dependency_ast(ast), MapSet.new(), fn
-        {name, _meta, nil} = node, acc when is_atom(name) ->
-          if valid_variable_name?(name),
-            do: {node, MapSet.put(acc, name)},
-            else: {node, acc}
+  # Gather free user variables without treating an inner generator's bindings
+  # as if they were available at the enclosing memo site.
+  defp free_nil_names({:for, _, args}, bound) do
+    {names, _bound} =
+      Enum.reduce(args, {MapSet.new(), bound}, fn
+        {:<-, _, [pattern, source]}, {names, bound} ->
+          names = MapSet.union(names, free_nil_names(source, bound))
+          {names, MapSet.union(bound, pattern_nil_names(pattern))}
 
-        node, acc ->
-          {node, acc}
+        [do: body], {names, bound} ->
+          {MapSet.union(names, free_nil_names(body, bound)), bound}
+
+        qualifier, {names, bound} ->
+          {MapSet.union(names, free_nil_names(qualifier, bound)), bound}
       end)
 
     names
   end
 
-  # Collect nil-context var names bound by := at the top level of a block
-  # (does not descend into fn literals — those bindings are fn-local).
-  defp collect_body_nil_names(ast) do
+  defp free_nil_names({:fn, _, clauses}, bound) do
+    Enum.reduce(clauses, MapSet.new(), fn {:->, _, [patterns, body]}, names ->
+      clause_bound = MapSet.union(bound, pattern_nil_names(patterns))
+      MapSet.union(names, free_nil_names(body, clause_bound))
+    end)
+  end
+
+  defp free_nil_names({:__block__, _, expressions}, bound) do
+    {names, _bound} =
+      Enum.reduce(expressions, {MapSet.new(), bound}, fn
+        {:=, _, [pattern, value]}, {names, bound} ->
+          names = MapSet.union(names, free_nil_names(value, bound))
+          {names, MapSet.union(bound, pattern_nil_names(pattern))}
+
+        expression, {names, bound} ->
+          {MapSet.union(names, free_nil_names(expression, bound)), bound}
+      end)
+
+    names
+  end
+
+  defp free_nil_names({:=, _, [_pattern, value]}, bound), do: free_nil_names(value, bound)
+
+  defp free_nil_names({name, _, nil}, bound) when is_atom(name) do
+    if valid_variable_name?(name) and not MapSet.member?(bound, name),
+      do: MapSet.new([name]),
+      else: MapSet.new()
+  end
+
+  defp free_nil_names({call, _, args}, bound) when is_list(args) do
+    MapSet.union(free_nil_names(call, bound), free_nil_names(args, bound))
+  end
+
+  defp free_nil_names({first, second, third}, bound) do
+    first
+    |> free_nil_names(bound)
+    |> MapSet.union(free_nil_names(second, bound))
+    |> MapSet.union(free_nil_names(third, bound))
+  end
+
+  defp free_nil_names({left, right}, bound) do
+    MapSet.union(free_nil_names(left, bound), free_nil_names(right, bound))
+  end
+
+  defp free_nil_names(list, bound) when is_list(list) do
+    Enum.reduce(list, MapSet.new(), &MapSet.union(&2, free_nil_names(&1, bound)))
+  end
+
+  defp free_nil_names(_, _bound), do: MapSet.new()
+
+  defp pattern_nil_names(pattern) do
     {_, names} =
-      Macro.prewalk(ast, MapSet.new(), fn
-        {:fn, _, _} = node, acc ->
-          {node, acc}
+      Macro.prewalk(pattern, MapSet.new(), fn
+        {name, _, nil} = node, names when is_atom(name) ->
+          if valid_variable_name?(name), do: {node, MapSet.put(names, name)}, else: {node, names}
 
-        {:=, _, [{name, _, nil}, _]} = node, acc when is_atom(name) ->
-          if valid_variable_name?(name),
-            do: {node, MapSet.put(acc, name)},
-            else: {node, acc}
-
-        node, acc ->
-          {node, acc}
+        node, names ->
+          {node, names}
       end)
 
     names
