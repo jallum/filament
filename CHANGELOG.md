@@ -19,6 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.5.2] - 2026-09-28
+
+### Added
+
+- `~F` templates now support `{case ... do}` blocks with pattern-matched
+  clauses, including tuple patterns, guards, fallback clauses, and nested
+  blocks. A `case` with no clauses raises a targeted parse error (#14).
+
+### Fixed
+
+- Nested `{for}` blocks now compile when inner markup, event handlers, or
+  child components reference the inner generator's bindings (including
+  destructured patterns), and an inner binding no longer hides a changing
+  outer value of the same name (#18).
+
 ## [0.5.1] - 2026-09-27
 
 ### Fixed
