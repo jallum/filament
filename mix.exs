@@ -52,6 +52,7 @@ defmodule Filament.MixProject do
   defp deps do
     [
       # Development and quality tools
+      {:benchee, "~> 1.3", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.36", only: [:dev, :docs], runtime: false},
