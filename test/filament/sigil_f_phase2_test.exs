@@ -201,6 +201,57 @@ defmodule Filament.SigilFPhase2Test do
     end
   end
 
+  describe "~F sigil: {case} block syntax" do
+    test "matches tuple patterns and renders the selected branch" do
+      for {primary, expected} <- [
+            {{:scan, "Scan item"}, "<button>Scan item</button>"},
+            {{:review, "Review item"}, "<a href=\"/reviews\">Review item</a>"},
+            {:other, "<span>unknown</span>"}
+          ] do
+        result = ~F"""
+        {case primary do}
+          {{:scan, label} ->}
+            <button>{label}</button>
+          {{:review, label} ->}
+            <a href="/reviews">{label}</a>
+          {_ ->}
+            <span>unknown</span>
+        {end}
+        """
+
+        html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
+        assert html =~ expected
+      end
+    end
+
+    test "supports guards and nested blocks" do
+      primary = {:review, 3}
+
+      result = ~F"""
+      {case primary do}
+        {{:review, count} when count > 0 ->}
+          {if count > 1 do}
+            <span>{count} reviews</span>
+          {end}
+        {_ ->}
+          <span>none</span>
+      {end}
+      """
+
+      html = result |> Safe.to_iodata() |> IO.iodata_to_binary()
+      assert html =~ "3 reviews"
+      refute html =~ "none"
+    end
+
+    test "requires a clause" do
+      source = "import Filament.SigilF\n~F\"{case value do}{end}\""
+
+      assert_raise Phoenix.LiveView.TagEngine.Tokenizer.ParseError,
+                   ~r/requires at least one clause/,
+                   fn -> Code.eval_string(source, value: :anything, file: __ENV__.file) end
+    end
+  end
+
   describe "~F sigil Phase 2: Known limitations" do
     @tag :skip
     test "component in :for without explicit key tracking" do
