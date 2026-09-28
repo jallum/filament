@@ -409,17 +409,22 @@ defmodule Filament.TagEngine do
       trimmed == "else" -> :jsx_else
       trimmed == "end" -> :jsx_end
       block_opener?(trimmed) -> parse_block_opener(trimmed, opts)
+      String.ends_with?(trimmed, "->") -> {:jsx_clause, trimmed}
       true -> :expr
     end
   end
 
   defp block_opener?(trimmed) do
-    (String.starts_with?(trimmed, "if ") or String.starts_with?(trimmed, "for ")) and
+    (String.starts_with?(trimmed, "if ") or String.starts_with?(trimmed, "for ") or
+       String.starts_with?(trimmed, "case ")) and
       String.ends_with?(trimmed, " do")
   end
 
   defp parse_block_opener(trimmed, opts) do
-    case Code.string_to_quoted(trimmed <> "\nnil\nend", opts) do
+    placeholder =
+      if String.starts_with?(trimmed, "case "), do: "\n_ -> nil\nend", else: "\nnil\nend"
+
+    case Code.string_to_quoted(trimmed <> placeholder, opts) do
       {:ok, {:if, _, [cond_ast, [do: nil]]}} ->
         {:if_block, cond_ast}
 
@@ -427,12 +432,15 @@ defmodule Filament.TagEngine do
         {gen_args, _} = Enum.split(for_args, length(for_args) - 1)
         {:for_block, gen_args}
 
+      {:ok, {:case, _, [subject, [do: [_]]]}} ->
+        {:case_block, subject}
+
       _ ->
         :expr
     end
   end
 
-  defp jsx_else(%{stack: [{:jsx_block, _kind, _expr, _block_meta} | _]} = state, _else_meta, tokens) do
+  defp jsx_else(%{stack: [{:jsx_block, :if, _expr, _block_meta} | _]} = state, _else_meta, tokens) do
     then_body = invoke_subengine(state, :handle_end, [])
 
     state
@@ -443,6 +451,69 @@ defmodule Filament.TagEngine do
 
   defp jsx_else(state, else_meta, _tokens) do
     raise_syntax_error!("{else} without matching {if}", else_meta, state)
+  end
+
+  defp jsx_clause(%{stack: [{:jsx_block, :case, _, _} | _]} = state, clause, meta, opts, tokens) do
+    _before_first_clause = invoke_subengine(state, :handle_end, [])
+    patterns = parse_case_clause!(clause, meta, opts, state)
+
+    state
+    |> push_stack_item({:jsx_clause, patterns, [], meta})
+    |> update_subengine(:handle_begin, [])
+    |> continue(tokens)
+  end
+
+  defp jsx_clause(
+         %{stack: [{:jsx_clause, patterns, clauses, clause_meta}, {:jsx_block, :case, _, _} | _]} = state,
+         clause,
+         meta,
+         opts,
+         tokens
+       ) do
+    body = invoke_subengine(state, :handle_end, [])
+    completed = {:->, [line: clause_meta.line], [patterns, body]}
+    next_patterns = parse_case_clause!(clause, meta, opts, state)
+
+    state
+    |> pop_stack_item()
+    |> push_stack_item({:jsx_clause, next_patterns, [completed | clauses], meta})
+    |> update_subengine(:handle_begin, [])
+    |> continue(tokens)
+  end
+
+  defp jsx_clause(state, _clause, meta, _opts, _tokens) do
+    raise_syntax_error!("case clause without matching {case ... do}", meta, state)
+  end
+
+  defp parse_case_clause!(clause, meta, opts, state) do
+    case Code.string_to_quoted("case nil do\n" <> clause <> " nil\nend", opts) do
+      {:ok, {:case, _, [_, [do: [{:->, _, [patterns, nil]}]]]}} ->
+        patterns
+
+      _ ->
+        raise_syntax_error!("invalid case clause", meta, state)
+    end
+  end
+
+  defp jsx_end(
+         %{stack: [{:jsx_clause, patterns, clauses, clause_meta}, {:jsx_block, :case, subject, _} | _]} = state,
+         tokens
+       ) do
+    body = invoke_subengine(state, :handle_end, [])
+    clauses = Enum.reverse([{:->, [line: clause_meta.line], [patterns, body]} | clauses])
+    ast = {:case, [], [subject, [do: clauses]]}
+
+    state
+    |> pop_stack_item()
+    |> pop_stack_item()
+    |> pop_substate_from_stack()
+    |> set_root_on_not_tag()
+    |> update_subengine(:handle_expr, ["=", ast])
+    |> continue(tokens)
+  end
+
+  defp jsx_end(%{stack: [{:jsx_block, :case, _, meta} | _]} = state, _tokens) do
+    raise_syntax_error!("{case ... do} requires at least one clause", meta, state)
   end
 
   defp jsx_end(%{stack: [{:jsx_else, then_body}, {:jsx_block, :if, cond_ast, _bm} | _]} = state, tokens) do
@@ -491,7 +562,7 @@ defmodule Filament.TagEngine do
   end
 
   defp jsx_end(_state, _tokens) do
-    raise CompileError, description: "{end} without matching {if} or {for}"
+    raise CompileError, description: "{end} without matching {if}, {for}, or {case}"
   end
 
   defp invoke_subengine(%{subengine: subengine, substate: substate}, fun, args) do
@@ -641,6 +712,16 @@ defmodule Filament.TagEngine do
         |> push_stack_item({:jsx_block, :for, for_args, meta})
         |> update_subengine(:handle_begin, [])
         |> continue(tokens)
+
+      {:case_block, subject} ->
+        state
+        |> push_substate_to_stack()
+        |> push_stack_item({:jsx_block, :case, subject, meta})
+        |> update_subengine(:handle_begin, [])
+        |> continue(tokens)
+
+      {:jsx_clause, clause} ->
+        jsx_clause(state, clause, meta, opts, tokens)
 
       :jsx_else ->
         jsx_else(state, meta, tokens)
