@@ -23,16 +23,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `~F` templates now support `{case ... do}` blocks with pattern-matched
-  clauses, including tuple patterns, guards, fallback clauses, and nested
-  blocks. A `case` with no clauses raises a targeted parse error (#14).
+- `~F` templates now support `{case ... do}` blocks. Before this, `~F`
+  treated a `case` header and its clauses as plain expressions, so
+  templates that picked a branch by pattern failed to compile. Clauses can
+  use tuple patterns, guards and a catch-all, and can contain other blocks.
+  A `case` with no clauses raises a clear parse error (#14).
+
+  ```elixir
+  ~F"""
+  {case primary do}
+    {{:scan, label} ->}
+      <button>{label}</button>
+    {{:review, count} when count > 0 ->}
+      <a href="/reviews">{count} reviews</a>
+    {_ ->}
+      <span>unknown</span>
+  {end}
+  """
+  ```
 
 ### Fixed
 
-- Nested `{for}` blocks now compile when inner markup, event handlers, or
-  child components reference the inner generator's bindings (including
-  destructured patterns), and an inner binding no longer hides a changing
-  outer value of the same name (#18).
+- Nested `{for}` blocks now compile when the inner loop's variables
+  (including destructured ones like `{tag, label}`) are used in inner
+  markup, event handlers, or child components. An inner variable with the
+  same name as an outer value no longer hides changes to the outer value
+  (#18).
 
 ## [0.5.1] - 2026-09-27
 
