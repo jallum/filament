@@ -140,7 +140,7 @@ end
 ## The `use_value/2` hook
 
 `use_value(cell, projection)` is the generic cell-subscription primitive at
-the component level. It accepts any cell tuple and applies the projection at
+the component level. It accepts a `%Filament.Source{}` or `nil` and applies the projection at
 render time:
 
 ```elixir

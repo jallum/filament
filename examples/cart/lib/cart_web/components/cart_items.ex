@@ -29,7 +29,7 @@ defmodule CartWeb.Components.CartItems do
                   <span class="item-name">{item.name}</span>
                   <span class="item-qty">× {item.quantity}</span>
                   <span class="item-price">{format_price(item.price_cents * item.quantity)}</span>
-                  <button class="btn-remove" on_click={fn -> Cart.Server.remove_item(cart_ref, item.id) end}>Remove</button>
+                  <button class="btn-remove" on_click={fn -> CartWeb.Hooks.remove_item(cart_ref, item.id) end}>Remove</button>
                 </li>
               {end}
             </ul>

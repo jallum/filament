@@ -34,7 +34,7 @@ defmodule CartWeb.Components.Cart do
               <div class="product-name">{p.name}</div>
               <div class="product-price">{format_price(p.price_cents)}</div>
               <button class="btn-add" on_click={fn ->
-                Cart.Server.add_item(
+                CartWeb.Hooks.add_item(
                   session_id,
                   %Cart.Item{id: p.id, name: p.name, price_cents: p.price_cents}
                 )
