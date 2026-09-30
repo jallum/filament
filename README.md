@@ -26,6 +26,11 @@ defmodule CartWeb.Hooks do
       state -> Cart.State.item_count(state)
     end)
   end
+
+  # The companion action accepts the same stable session ID.
+  def add_item(session_id, item) do
+    Cart.Server.add_item(Cart.Server.via_registry(session_id), item)
+  end
 end
 
 defmodule CartWeb.Components.CartBadge do
@@ -43,7 +48,7 @@ defmodule CartWeb.Components.CartBadge do
 end
 
 # A parent passes session_id to children and calls
-# Cart.Server.add_item(session_id, item) in event handlers.
+# CartWeb.Hooks.add_item(session_id, item) in event handlers.
 ```
 
 ## What it does
@@ -74,9 +79,8 @@ every subscribed component re-renders automatically — no PubSub, no
 
 Because subscriptions run during the initial HTTP render, the page arrives with
 real server data already in the HTML — no loading spinners, no client-side fetch
-on first paint. When the WebSocket connects, Filament hands off the existing
-subscription so the component picks up live updates seamlessly, without
-re-fetching or re-running `handle_subscribe`.
+on first paint. The static render process subscribes and cleans up when it terminates.
+The WebSocket process establishes its own subscription on mount.
 
 > **Note:** One place where this behavior might not be desirable (and you can
 > easily turn it off) are observables that represent *who is connected* rather
@@ -90,18 +94,19 @@ re-fetching or re-running `handle_subscribe`.
 to `use_value/2` to extract only the slice of state the component
 cares about. The function receives `:disconnected` or the raw server state and
 runs on the client at render time, so it can safely close over local component
-state such as filters or selections. If the projected value is unchanged after a
-mutation, the update is suppressed and the component does not re-render. This
-keeps large UIs fast without manual shouldComponentUpdate logic.
+state such as filters or selections. Equal raw state writes are suppressed at the transport. Changed raw state
+triggers rendering, even if a particular projection returns the same value.
+Projections keep domain reads concise and current; they do not suppress these
+render passes.
 
 ```elixir
 # CartBadge reads its domain value without handling a Source.
 count = use_cart_count(cart)
 ```
 
-**Automatic memoization.** The `~F` compiler automatically wraps closure
-expressions and child component renders in `memo_at` calls. Stable subtrees
-skip re-evaluation without any annotation from the component author.
+**Keyed component identity.** A child component with `:key` retains its hook
+state as a list is reordered. The reconciler matches component instances by
+key, and the web adapter produces incremental LiveView diffs.
 
 **Composable custom hooks.** Any function that calls `use_state`,
 `use_source`, `use_value`, or `use_effect` is a custom hook. Domain behaviour — holds,

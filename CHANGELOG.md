@@ -7,44 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A target-independent vnode renderer and `Filament.Core` event dispatcher,
+  with capture/bubble phases and `stop_propagation/1`. Phoenix LiveView and
+  LiveComponent convert resolved vnodes through `Filament.Web`.
+- `%Filament.Source{}` and the `Filament.Cell` transport behaviour for reactive
+  values beyond GenServers.
+- `use_source/1,2` to bind a source, including factories keyed by resource
+  identity, and `use_value/2` to subscribe and project its value. The examples
+  show custom domain hooks that hide source construction from components.
+
 ### Changed
 
-- **Breaking:** `use_observable` now goes through `Filament.Cell`. The hook
-  takes a cell tuple `{transport, data}` (or a 0-arity factory returning
-  one) instead of a raw GenServer reference. For an observable GenServer
-  the migration is mechanical — wrap the server pid in a tuple:
+- **Breaking:** replace `use_observable/1,2` with `use_source/1,2` and
+  `use_value/2`. Sources are structs, not `{transport, data}` tuples:
 
   ```elixir
-  # Before
+  # Before (0.5.x)
   count = use_observable(server, fn :disconnected -> 0; s -> s.count end)
 
   # After
-  cell  = {Filament.Observable.GenServer, server}
-  count = use_observable(cell,   fn :disconnected -> 0; s -> s.count end)
+  source = MyServer.cell(server)
+  count = use_value(source, fn :disconnected -> 0; s -> s.count end)
   ```
 
-  The factory form (`use_observable/1`) returns the cell, which can then
-  be passed as a prop to children that subscribe with their own
-  projections.
+  When resolving a server from an identifier, put
+  `use_source(fn -> MyServer.cell(id) end, id)` inside a domain hook.
+  See the migration guide for the full 0.5.x upgrade.
+- Reactive hooks subscribe to raw state and run the user projection during
+  rendering, so projections can capture current local state. Equal raw writes
+  produce no delivery; a changed raw value can rerender even when a user's
+  projected result stays equal.
+- **Breaking:** `handle_unsubscribe/2` receives the opaque subscriber tuple
+  `{owner_pid, fiber_id, slot_index, generation}`. Destructure this tuple rather
+  than reading the former `Subscriber.pid` field.
+- **Breaking:** component `render/1` and `Reconciler.mount/3` / `update/4`
+  produce vnode output. Low-level callers use `Filament.Web.to_rendered/1`
+  or `to_iodata/1` for Phoenix/HTML output; the adapters do this automatically.
 
-- `Filament.Observable.GenServer.handle_unsubscribe/2` is now invoked
-  with the cell-subscriber tuple `{owner_pid, fiber_id, slot_index}`
-  rather than the old `%Subscriber{}` struct. Servers that read
-  `subscriber.pid` need to destructure the tuple instead.
+### Fixed
+
+- Removed descendants run cleanup exactly once; keyed descendants retain
+  state, and stale messages from replaced subscriptions are ignored.
+- LiveComponent handles batched Cell updates while preserving its root output.
+- HTML loop `:key` expressions are evaluated in generator scope, avoiding
+  unused-variable warnings for bindings used only by the key.
 
 ### Removed
 
-- `Filament.Observable.Subscriber` struct and the entire parallel
-  Subscriber-keyed subscription path. `Filament.Observable.subscribe/2`
-  and `remove_projection/4` are gone; subscribe via `Filament.Cell` or
-  through the `use_observable` hook.
-- `:filament_observable_updates` and `:filament_observable_resubscribe`
-  messages are no longer sent or handled. The cell transport sends
-  `:cell_update` and `:cell_resubscribe` instead, with matching
-  `handle_info` clauses injected by `use Filament.LiveView`.
-- `Filament.RenderContext` no longer carries `observable_stubs` or
-  `session_token` fields. Tests should construct cells against stub pids
-  directly rather than relying on identifier-to-pid swap.
+- `Filament.Observable.Subscriber`, `Filament.Observable.subscribe/2`,
+  `remove_projection/4`, and the parallel Subscriber-keyed subscription path.
+- Legacy `:filament_observable_updates` / `:filament_observable_resubscribe`
+  messages. Transports use `:cell_update`, `:cell_updates`, and
+  `:cell_resubscribe`; host LiveViews forwarding to LiveComponent must include
+  all three forms.
+- `Filament.RenderContext.observable_stubs` and `session_token`. Tests pass
+  sources built against stub pids directly.
+- Compiler-generated `memo_at/3` calls. The vnode compiler no longer depends
+  on Phoenix's lazy comprehension functions or their hoisting passes.
 
 ## [0.5.2] - 2026-09-28
 

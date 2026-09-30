@@ -10,7 +10,6 @@ defmodule Filament.Hooks do
     - `use_source/1,2` — bind a reactive source (optionally keyed); returns a stable handle
     - `use_value/2` — read a projected value from a source and subscribe to its updates
     - `use_effect/2` — side-effect with optional cleanup
-    - `memo_at/3` and `event_at/2` — invoked by compiler-generated code from `~F` templates
 
   ## Pattern: domain hooks
 
@@ -197,7 +196,8 @@ defmodule Filament.Hooks do
         state         -> state.count
       end)
 
-  Returns `nil` during disconnected (static HTTP) renders. On subsequent
+  Returns `nil` when subscriptions are disabled (for example, static HTTP
+  renders with `static_subscribe: false`). On subsequent
   renders, reuses the cached handle if its underlying transport is still
   reachable; calls the factory again otherwise (e.g. the GenServer behind
   the source crashed).
@@ -275,7 +275,7 @@ defmodule Filament.Hooks do
   and applies the user-supplied `projection` at render time. A projection that
   closes over local component state always sees the current value.
 
-  Returns `projection.(:disconnected)` during static (HTTP) renders and when
+  Returns `projection.(:disconnected)` when subscriptions are disabled or
   the source can't reach its underlying state.
 
   ## Example

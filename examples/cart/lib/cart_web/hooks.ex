@@ -35,9 +35,22 @@ defmodule CartWeb.Hooks do
     end)
   end
 
+  @doc "Add an item using a session ID or an already resolved server."
+  def add_item(cart_ref, %Cart.Item{} = item) do
+    Server.add_item(command_server(cart_ref), item)
+  end
+
+  @doc "Remove an item using a session ID or an already resolved server."
+  def remove_item(cart_ref, item_id) when is_binary(item_id) do
+    Server.remove_item(command_server(cart_ref), item_id)
+  end
+
   defp source_for(session_id) when is_binary(session_id), do: Server.cell(session_id)
   defp source_for(server), do: Source.new(Transport, server)
 
   defp source_for_value(nil), do: nil
   defp source_for_value(cart), do: Source.new(Transport, cart)
+
+  defp command_server(session_id) when is_binary(session_id), do: Server.via_registry(session_id)
+  defp command_server(server), do: server
 end

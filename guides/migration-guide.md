@@ -200,7 +200,7 @@ update messages must be forwarded from the parent's `handle_info/2`:
 ```elixir
 # In MyApp.CartLive:
 def handle_info({type, _, _} = msg, socket)
-    when type in [:filament_set_state, :cell_update, :cell_resubscribe] do
+    when type in [:filament_set_state, :cell_update, :cell_updates, :cell_resubscribe] do
   Phoenix.LiveView.send_update(Filament.LiveComponent, id: "cart", filament_msg: msg)
   {:noreply, socket}
 end
@@ -244,7 +244,7 @@ If you are starting fresh from the current release, skip this section —
 the examples in Phases 3–6 already reflect the current API. This summary
 exists for projects upgrading across Filament's pre-1.0 API shifts.
 
-### Subscription API: tuples → `%Filament.Source{}`
+### Upgrading 0.5.x to 0.6.0: `%Filament.Source{}`
 
 Subscriptions go through `Filament.Cell`, dispatched on a struct rather
 than a tagged tuple. Application code rarely sees the struct's internals
@@ -253,12 +253,11 @@ components pass it as a prop. When you need the underlying server reference
 in an event handler, reach through `source.data`.
 
 ```elixir
-# Before (pre-0.4 styles, in roughly historical order)
+# Before (0.5.x)
 count = use_observable(CartServer, fn :disconnected -> 0; s -> s.count end)
-count = use_observable({Filament.Observable.GenServer, server}, fn ... end)
 
 # After
-source = use_source(fn -> CartServer.cell(session_id) end)
+source = use_source(fn -> CartServer.cell(session_id) end, session_id)
 count  = use_value(source, fn :disconnected -> 0; s -> s.count end)
 on_click = fn -> CartServer.add_item(source.data, item) end
 ```
@@ -304,7 +303,7 @@ receives the cell-subscriber tuple directly:
 def handle_unsubscribe(%Subscriber{pid: pid}, state), do: ...
 
 # After
-def handle_unsubscribe({owner_pid, _fiber_id, _slot_index}, state), do: ...
+def handle_unsubscribe({owner_pid, _fiber_id, _slot_index, _generation}, state), do: ...
 ```
 
 ### Update-message names
@@ -343,3 +342,11 @@ contributions are welcome — the Getting Started guide provides the target synt
 - Phoenix layout files and `root.html.heex`: no changes required.
 - Test infrastructure: Filament's rung-2 test API is additive; you keep your
   existing `Phoenix.LiveViewTest` tests for non-Filament LiveViews.
+
+### Low-level rendering output
+
+`~F`, component `render/1`, and `Filament.Reconciler` now return vnodes.
+`Filament.LiveView` and `Filament.LiveComponent` convert them automatically.
+Low-level callers replace `Phoenix.HTML.Safe.to_iodata(output)` with
+`Filament.Web.to_iodata(output)`, or use `Filament.Web.to_rendered(output)`
+when passing output to Phoenix's diff engine.

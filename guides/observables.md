@@ -125,10 +125,10 @@ session_id)` internally. The key ensures a changed session does not reuse
 the previous cart. The hook returns `nil` when subscriptions are disabled;
 `use_cart_count/1` then supplies the disconnected value.
 
-Components call domain actions with the handle they received:
+Components call the hook module's companion actions with the same session ID:
 
 ```elixir
-on_click={fn -> Cart.Server.add_item(session_id, item) end}
+on_click={fn -> CartWeb.Hooks.add_item(session_id, item) end}
 ```
 
 Or use a sentinel to branch on the disconnected case:
@@ -158,8 +158,8 @@ todos = use_value(source, fn
 end)
 ```
 
-The server starts when the component first mounts in a connected
-render. Resource teardown is a separate lifecycle choice; unsubscribing a
+The server starts on the first render with subscriptions enabled
+(including HTTP rendering by default). Resource teardown is a separate lifecycle choice; unsubscribing a
 reader does not automatically stop the server.
 
 This eliminates the need to start the server in `mount/3` and thread it as a prop —
@@ -172,9 +172,10 @@ defmodule TodoWeb.TodoLive do
 end
 ```
 
-On the **first render** (HTTP pre-connect), `use_source/1` returns `nil` because
-subscribing during an HTTP render would create zombie subscribers. `use_value/2`
-calls the projection function with `:disconnected` instead.
+With `static_subscribe: false`, `use_source/1` returns `nil` during HTTP
+rendering and `use_value/2` calls the projection with `:disconnected`.
+The default subscribes during HTTP rendering; process termination cleans up
+the temporary subscription, and the WebSocket process subscribes anew.
 
 ## Projections and change-or-bust
 
@@ -282,13 +283,14 @@ this category.
 `CartView` handles item removal via a Phoenix event, but the pattern generalises to
 any mutation. The flow is:
 
-1. User interaction triggers a call to `Cart.Server.remove_item/2`.
+1. User interaction calls `CartWeb.Hooks.remove_item/2`, which addresses
+   `Cart.Server.remove_item/2` by the session's registered name.
 2. The server runs `notify_observers(new_state)`.
 3. Filament delivers raw state updates to each subscriber whose `last_raw` differs.
 4. Each subscribed component's fiber applies its projection and re-renders if the
    projected value changed.
 
-You do not need to do anything special in the component — just call the server and
+You do not need to do anything special in the component — call the companion action and
 let the observer push the update.
 
 ## Testing with rung-3

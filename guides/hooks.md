@@ -64,13 +64,13 @@ end)
 ```
 
 `use_source/1` binds a reactive source for the calling fiber and returns
-a stable `%Filament.Source{}` struct. Returns `nil` during disconnected
-(HTTP static) renders — no subscription is created until the WebSocket
-connects.
+a stable `%Filament.Source{}` struct. It returns `nil` when subscriptions
+are disabled. HTTP renders subscribe by default; `static_subscribe: false`
+defers subscription until the WebSocket connects.
 
 `use_value/2` subscribes this fiber's hook slot to the source and
 returns the projected value. The projection function receives
-`:disconnected` when the source is `nil` or the mount is not yet live,
+`:disconnected` when the source is `nil`, unavailable, or subscriptions are disabled,
 letting it return a safe default.
 
 The argument to `use_source/1` is either:
@@ -86,9 +86,10 @@ The argument to `use_source/1` is either:
   `use_source(factory_fn, key)`. A changed key replaces the cached source
   even if the old transport remains reachable.
 
-The struct exposes transport-specific data inside the hook. A domain hook
-can return the underlying server handle so components can pass it to domain
-actions without handling `Source` themselves:
+The struct exposes transport-specific data inside the hook. Domain hooks
+can use the underlying server handle for subscriptions while companion
+actions resolve the stable session ID for commands. Components handle neither
+`Source` nor Registry details:
 
 ```elixir
 # In CartWeb.Hooks
@@ -108,9 +109,13 @@ def use_cart_count(session_id) do
   end)
 end
 
+def add_item(session_id, item) do
+  Cart.Server.add_item(Cart.Server.via_registry(session_id), item)
+end
+
 # In components
 count = use_cart_count(session_id)
-on_click={fn -> Cart.Server.add_item(session_id, item) end}
+on_click={fn -> CartWeb.Hooks.add_item(session_id, item) end}
 
 # Component owns the server lifecycle — no `cell/1` override needed; the
 # default constructor wraps any server reference
