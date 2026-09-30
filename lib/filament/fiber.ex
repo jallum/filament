@@ -13,15 +13,25 @@ defmodule Filament.Fiber do
     :props,
     # %{non_neg_integer() => term()} — hook slot state map
     :hook_slots,
-    # %{non_neg_integer() => function()} — event handlers registered this render
+    # %{non_neg_integer() => function()} — bubble-phase event handlers
     :event_handlers,
     # [String.t()]      — ordered child fiber IDs
     :children,
     # String.t() | nil  — nil for the root fiber
     :parent_id,
     # :mounting | :stable | :updating | :unmounting
-    :status
+    :status,
+    # %{non_neg_integer() => function()} — capture-phase event handlers
+    capture_handlers: %{},
+    # %{non_neg_integer() => :all | MapSet.t(atom())} — per-slot kinds
+    # filter for bubble handlers. Missing entry interpreted as :all.
+    event_handler_kinds: %{},
+    # %{non_neg_integer() => :all | MapSet.t(atom())} — per-slot kinds
+    # filter for capture handlers.
+    capture_handler_kinds: %{}
   ]
+
+  @type kinds :: :all | MapSet.t(atom())
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -30,6 +40,9 @@ defmodule Filament.Fiber do
           props: map(),
           hook_slots: %{non_neg_integer() => term()},
           event_handlers: %{non_neg_integer() => function()},
+          capture_handlers: %{non_neg_integer() => function()},
+          event_handler_kinds: %{non_neg_integer() => kinds()},
+          capture_handler_kinds: %{non_neg_integer() => kinds()},
           children: [String.t()],
           parent_id: String.t() | nil,
           status: :mounting | :stable | :updating | :unmounting
@@ -60,6 +73,9 @@ defmodule Filament.Fiber do
     props = Keyword.get(opts, :props, %{})
     hook_slots = Keyword.get(opts, :hook_slots, %{})
     event_handlers = Keyword.get(opts, :event_handlers, %{})
+    capture_handlers = Keyword.get(opts, :capture_handlers, %{})
+    event_handler_kinds = Keyword.get(opts, :event_handler_kinds, %{})
+    capture_handler_kinds = Keyword.get(opts, :capture_handler_kinds, %{})
     children = Keyword.get(opts, :children, [])
     key = Keyword.get(opts, :key)
     parent_id = Keyword.get(opts, :parent_id)
@@ -75,6 +91,9 @@ defmodule Filament.Fiber do
       props: props,
       hook_slots: hook_slots,
       event_handlers: event_handlers,
+      capture_handlers: capture_handlers,
+      event_handler_kinds: event_handler_kinds,
+      capture_handler_kinds: capture_handler_kinds,
       children: children,
       parent_id: parent_id,
       status: status

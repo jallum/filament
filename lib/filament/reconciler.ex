@@ -2,12 +2,13 @@ defmodule Filament.Reconciler do
   @moduledoc false
 
   alias Filament.Fiber
+  alias Filament.HookSlot
   alias Filament.ReconcilerError
   alias Filament.RenderContext
   alias Filament.Renderer
-  alias Phoenix.LiveView.Rendered
 
   @type fiber_tree() :: %{String.t() => Fiber.t()}
+  @type walked_vnode() :: term()
 
   @doc """
   Mounts the root component and creates the initial fiber tree.
@@ -16,7 +17,7 @@ defmodule Filament.Reconciler do
     * `:owner_pid` - the LiveView process that owns this render tree (default: nil)
   """
   @spec mount(module(), map(), keyword()) ::
-          {fiber_tree(), Rendered.t(), list()}
+          {fiber_tree(), walked_vnode(), list()}
   def mount(root_component, props, opts \\ []) do
     owner_pid = Keyword.get(opts, :owner_pid)
 
@@ -34,13 +35,12 @@ defmodule Filament.Reconciler do
       fiber_id: "root",
       fiber_tree: %{},
       owner_pid: owner_pid,
-      observable_stubs: Keyword.get(opts, :observable_stubs, %{}),
-      subscribe_enabled: Keyword.get(opts, :connected, true),
-      session_token: Keyword.get(opts, :session_token)
+      subscribe_enabled: Keyword.get(opts, :connected, true)
     }
 
     # Render the component
-    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers} =
+    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers, new_capture_handlers,
+     new_event_handler_kinds, new_capture_handler_kinds} =
       Renderer.render(root_component, props, context)
 
     # Build initial tree with root and any discovered children
@@ -48,6 +48,9 @@ defmodule Filament.Reconciler do
       root_fiber
       | hook_slots: new_hook_slots,
         event_handlers: new_event_handlers,
+        capture_handlers: new_capture_handlers,
+        event_handler_kinds: new_event_handler_kinds,
+        capture_handler_kinds: new_capture_handler_kinds,
         status: :stable
     }
 
@@ -63,7 +66,7 @@ defmodule Filament.Reconciler do
     * `:owner_pid` - the LiveView process that owns this render tree (default: nil)
   """
   @spec update(fiber_tree(), String.t(), map(), keyword()) ::
-          {fiber_tree(), Rendered.t(), list()}
+          {fiber_tree(), walked_vnode(), list()}
   def update(tree, fiber_id, new_props, opts \\ []) do
     owner_pid = Keyword.get(opts, :owner_pid)
 
@@ -79,19 +82,22 @@ defmodule Filament.Reconciler do
     context = %RenderContext{
       fiber_id: fiber_id,
       fiber_tree: tree,
-      owner_pid: owner_pid,
-      observable_stubs: Keyword.get(opts, :observable_stubs, %{})
+      owner_pid: owner_pid
     }
 
     # Re-render component
-    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers} =
+    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers, new_capture_handlers,
+     new_event_handler_kinds, new_capture_handler_kinds} =
       Renderer.render(fiber.component, new_props, context)
 
     # Commit hook slots and event handlers
     updated_fiber = %{
       updated_fiber
       | hook_slots: new_hook_slots,
-        event_handlers: new_event_handlers
+        event_handlers: new_event_handlers,
+        capture_handlers: new_capture_handlers,
+        event_handler_kinds: new_event_handler_kinds,
+        capture_handler_kinds: new_capture_handler_kinds
     }
 
     # Create new tree with updated fiber
@@ -119,20 +125,7 @@ defmodule Filament.Reconciler do
     tree
     |> Map.values()
     |> Enum.each(fn fiber ->
-      Enum.each(fiber.hook_slots, fn
-        {_index, {_deps, cleanup}} when is_function(cleanup, 0) ->
-          cleanup.()
-
-        {index, {:subscribed, server, _raw}} ->
-          Filament.Observable.remove_projection(server, owner_pid, fiber.id, index)
-
-        {_index, {:resolved, _server}} ->
-          :ok
-
-        _ ->
-          :ok
-      end)
-
+      HookSlot.cleanup_all(fiber.hook_slots, owner_pid, fiber.id)
       %{fiber | status: :unmounting}
     end)
 
@@ -142,17 +135,19 @@ defmodule Filament.Reconciler do
   # Private reconciliation functions
 
   defp reconcile_children(tree, parent_id, parent_fiber, new_fibers, owner_pid) do
-    new_children =
+    new_fibers =
       new_fibers
       |> Enum.reject(fn {_id, fiber} -> fiber.status == :unmounting end)
-      |> Map.new(fn {id, fiber} -> {id, %{fiber | parent_id: parent_id, status: :stable}} end)
+      |> Map.new(fn {id, fiber} -> {id, %{fiber | status: :stable}} end)
 
-    old_child_ids = parent_fiber.children || []
+    new_children = Map.filter(new_fibers, fn {_id, fiber} -> fiber.parent_id == parent_id end)
+
+    old_child_ids = descendant_ids(tree, parent_fiber)
     new_child_ids = Map.keys(new_children)
 
     tree_after_unmount =
       Enum.reduce(old_child_ids, tree, fn child_id, acc ->
-        if child_id in new_child_ids do
+        if Map.has_key?(new_fibers, child_id) do
           acc
         else
           unmount_fiber(acc, child_id, owner_pid)
@@ -160,8 +155,17 @@ defmodule Filament.Reconciler do
       end)
 
     tree_after_unmount
-    |> Map.merge(new_children)
+    |> Map.merge(new_fibers)
     |> Map.update!(parent_id, &%{&1 | children: new_child_ids})
+  end
+
+  defp descendant_ids(tree, fiber) do
+    Enum.flat_map(fiber.children || [], fn id ->
+      case Map.get(tree, id) do
+        nil -> []
+        child -> [id | descendant_ids(tree, child)]
+      end
+    end)
   end
 
   defp unmount_fiber(tree, fiber_id, owner_pid) do
@@ -170,19 +174,7 @@ defmodule Filament.Reconciler do
         tree
 
       fiber ->
-        Enum.each(fiber.hook_slots, fn
-          {_index, {_deps, cleanup}} when is_function(cleanup, 0) ->
-            cleanup.()
-
-          {index, {:subscribed, server, _raw}} ->
-            Filament.Observable.remove_projection(server, owner_pid, fiber.id, index)
-
-          {_index, {:resolved, _server}} ->
-            :ok
-
-          _ ->
-            :ok
-        end)
+        HookSlot.cleanup_all(fiber.hook_slots, owner_pid, fiber.id)
 
         tree_without_descendants =
           Enum.reduce(fiber.children || [], tree, fn child_id, acc ->

@@ -5,15 +5,21 @@ defmodule Filament.FiberTree do
 
   @doc """
   Look up the event handler at `handler_index` for the fiber with `fiber_id`.
+  Defaults to the bubble phase; pass `:capture` for capture-phase handlers.
   Returns the handler function or nil if not found.
   """
   @spec get_event_handler(t(), String.t(), non_neg_integer()) :: function() | nil
-  def get_event_handler(tree, fiber_id, handler_index) do
+  @spec get_event_handler(t(), String.t(), non_neg_integer(), :bubble | :capture) ::
+          function() | nil
+  def get_event_handler(tree, fiber_id, handler_index, phase \\ :bubble) when phase in [:bubble, :capture] do
     case Map.get(tree, fiber_id) do
       nil -> nil
-      fiber -> Map.get(fiber.event_handlers, handler_index)
+      fiber -> Map.get(handler_map_for(fiber, phase), handler_index)
     end
   end
+
+  defp handler_map_for(fiber, :bubble), do: fiber.event_handlers
+  defp handler_map_for(fiber, :capture), do: fiber.capture_handlers || %{}
 
   @doc """
   Returns all fiber IDs present in the tree.

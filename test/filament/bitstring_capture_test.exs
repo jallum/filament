@@ -56,5 +56,5 @@ defmodule Filament.BitstringCaptureTest do
     module
   end
 
-  defp html(rendered), do: rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+  defp html(rendered), do: rendered |> Filament.Web.to_rendered() |> Safe.to_iodata() |> IO.iodata_to_binary()
 end

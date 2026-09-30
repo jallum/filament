@@ -1,11 +1,9 @@
 defmodule Todo.Store do
   @moduledoc """
   Observable GenServer that stores the todo list.
-  Used for demonstration of use_observable/2.
+  Used for demonstration of use_value/2.
   """
   use Filament.Observable.GenServer
-
-  alias Filament.Observable.Subscriber
 
   # Client API
 

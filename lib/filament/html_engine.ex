@@ -59,22 +59,25 @@ defmodule Filament.HTMLEngine do
   defp transform_event_attrs(other), do: other
 
   defp transform_event_pair({"on_key", v}) do
-    wrapped = quote do
-      fn params ->
-        mods = %Filament.KeyModifiers{
-          ctrl: params["ctrl"] || false,
-          shift: params["shift"] || false,
-          alt: params["alt"] || false,
-          meta: params["meta"] || false
-        }
-        unquote(v).(params["key"], mods)
+    wrapped =
+      quote do
+        fn params ->
+          mods = %Filament.KeyModifiers{
+            ctrl: params["ctrl"] || false,
+            shift: params["shift"] || false,
+            alt: params["alt"] || false,
+            meta: params["meta"] || false
+          }
+
+          unquote(v).(params["key"], mods)
+        end
       end
-    end
+
     wire_var = Macro.unique_var(:_filament_key_wire, __MODULE__)
+
     [
       {"phx-hook", "FilamentKey"},
-      {"data-filament-wire",
-       quote(do: unquote(wire_var) = Filament.Hooks.register_event_handler(unquote(wrapped)))},
+      {"data-filament-wire", quote(do: unquote(wire_var) = Filament.Hooks.register_event_handler(unquote(wrapped)))},
       {"id", quote(do: unquote(wire_var))}
     ]
   end
@@ -226,13 +229,6 @@ defmodule Filament.HTMLEngine do
       %Macro.Env{module: mod, function: {fun, _}, file: file, line: line} = caller
       name = "#{inspect(mod)}.#{fun}"
       annotate_source(name, file, line)
-    end
-  end
-
-  @impl true
-  def annotate_slot(name, %{line: line}, _close_meta, %{file: file}) do
-    if Application.get_env(:phoenix_live_view, :debug_heex_annotations, false) do
-      annotate_source(":#{name}", file, line)
     end
   end
 

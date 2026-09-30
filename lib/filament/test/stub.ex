@@ -7,7 +7,8 @@ defmodule Filament.Test.Stub do
       stubs: [{CartServer, fn _req -> %{items: [], total: 0} end}]
 
   This creates a StubObservable for CartServer. Components calling
-  use_observable(CartServer, ...) receive the stub's value instead.
+  use_value({Filament.Observable.GenServer, CartServer}, ...) receive
+  the stub's value instead.
 
   To push an update after mount:
 

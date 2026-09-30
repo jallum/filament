@@ -2,7 +2,7 @@
 
 Hooks are functions you call at the top level of `render/1` to access state,
 subscribe to servers, and schedule side effects. Filament ships three
-application-facing hooks: `use_state`, `use_observable`, and `use_effect`. You
+application-facing hooks: `use_state`, `use_value`, and `use_effect`. You
 can compose these into custom hooks that encapsulate domain behaviour — the
 inventory example's `use_hold` is a complete worked example of this pattern.
 
@@ -50,56 +50,74 @@ end
 Setters are safe to capture in closures — the same function is reused across
 renders so you can compare them with `==` if needed.
 
-## use_observable/1 and use_observable/2
+## use_source/1 and use_value/2
 
-The preferred pattern separates server resolution from value projection:
+The preferred pattern separates source binding from value projection:
 
 ```elixir
-server = use_observable(server_or_fn)
-value  = use_observable(server, fn
+source = use_source(source_or_factory_fn)
+value  = use_value(source, fn
   :disconnected -> default_value
   state -> project(state)
 end)
 ```
 
-`use_observable/1` resolves the server reference to a live pid and returns it.
-Returns `nil` during disconnected (HTTP static) renders — no subscription is
-created until the WebSocket connects.
+`use_source/1` binds a reactive source for the calling fiber and returns
+a stable `%Filament.Source{}` struct. Returns `nil` during disconnected
+(HTTP static) renders — no subscription is created until the WebSocket
+connects.
 
-`use_observable/2` subscribes this fiber's hook slot to the server and returns
-the projected value. The projection function receives `:disconnected` when the
-server is `nil` or the mount is not yet live, letting it return a safe default.
+`use_value/2` subscribes this fiber's hook slot to the source and
+returns the projected value. The projection function receives
+`:disconnected` when the source is `nil` or the mount is not yet live,
+letting it return a safe default.
 
-The first argument to `use_observable/1` can be:
+The argument to `use_source/1` is either:
 
-- a pid, atom, `{:via, Registry, key}`, or `{node, name}` — used directly.
-- a zero-arity function — called on the first WebSocket render (and again if the
-  process dies) to obtain a pid or `{:ok, pid}`; useful when the component owns
-  the server lifecycle.
+- A `%Filament.Source{}` struct directly — typically built via the
+  `cell/1` constructor that `use Filament.Observable.GenServer` injects
+  (or `Filament.Source.new/2` for non-GenServer transports).
+- A zero-arity factory function returning a `%Filament.Source{}` —
+  called on the first connected render (and again if the underlying
+  transport dies). Use this when the component owns the server's
+  lifecycle.
+
+The struct exposes the underlying transport-specific data (a pid,
+registered name, or via-tuple, depending on the transport) via
+`source.data` — used to invoke action functions in event handlers:
 
 ```elixir
-# Connect to a running singleton server
-server = use_observable(Cart.Server)
-count  = use_observable(server, fn
+# Connect to a session-keyed server (Cart.Server overrides cell/1 to take a
+# session_id and ensure-start the server)
+source = use_source(fn -> Cart.Server.cell(session_id) end)
+count  = use_value(source, fn
   :disconnected -> 0
   s -> Cart.State.item_count(s)
 end)
 
-# Component owns the server lifecycle — keep the pid for mutations
-store = use_observable(fn -> Todo.Store.start_link([]) end)
-todos = use_observable(store, fn
+on_click={fn -> Cart.Server.add_item(source.data, item) end}
+
+# Component owns the server lifecycle — no `cell/1` override needed; the
+# default constructor wraps any server reference
+source = use_source(fn ->
+  {:ok, pid} = Todo.Store.start_link([])
+  Todo.Store.cell(pid)
+end)
+
+todos = use_value(source, fn
   :disconnected -> []
   s -> s
 end)
 
-# Multiple projections from one server — one subscriber entry on the server
-server = use_observable(DocumentServer.via_registry(doc_id))
-title  = use_observable(server, fn :disconnected -> ""; s -> s.title end)
-locked = use_observable(server, fn :disconnected -> false; s -> s.locked end)
+# Multiple projections from one source — independent slot entries per fiber
+source = use_source(fn -> DocumentServer.cell(doc_id) end)
+title  = use_value(source, fn :disconnected -> ""; s -> s.title end)
+locked = use_value(source, fn :disconnected -> false; s -> s.locked end)
 ```
 
-Passing `server` as a prop to child components lets each child register its own
-projection without creating redundant subscriber entries on the server.
+Passing `source` as a prop to child components lets each child apply
+its own projection (and access `source.data` for its own mutations)
+without re-resolving the underlying transport.
 
 ### Projection runs client-side and can close over local state
 
@@ -111,7 +129,7 @@ captures are always current because the projection re-runs on every render.
 ```elixir
 {filter, set_filter} = use_state(:all)
 
-filtered = use_observable(store, fn
+filtered = use_value(store, fn
   :disconnected -> []
   items -> Enum.filter(items, &matches?(&1, filter))
 end)
@@ -170,7 +188,7 @@ end, [id])
 
 ## Composing hooks into custom hooks
 
-Any module function that calls `use_state`, `use_observable`, or `use_effect`
+Any module function that calls `use_state`, `use_value`, or `use_effect`
 is a custom hook. The only requirements are that it is called at the top level
 of `render/1` and always calls the same hooks in the same order.
 
@@ -181,7 +199,7 @@ Custom hooks let you extract domain behaviour that would otherwise clutter
 
 The inventory example (`examples/inventory/lib/inventory_web/hooks.ex`)
 defines `use_hold/3` — a hook that manages quantity-based resource holds
-against an `Inventory.Server`. It composes `use_observable` and `use_state`
+against an `Inventory.Server`. It composes `use_value` and `use_state`
 and returns a tuple of the held quantity, current item state, and
 `hold`/`release` closures:
 
@@ -193,10 +211,10 @@ defmodule InventoryWeb.Hooks do
     disconnected_val = Keyword.get(opts, :disconnected, :disconnected)
     sentinel = :__hold_disconnected__
 
-    srv = use_observable(server)
+    source = use_source(Inventory.Server.cell(server))
 
     item =
-      use_observable(srv, fn
+      use_value(source, fn
         :disconnected -> sentinel
         state -> Map.get(state, item_id)
       end)
@@ -228,7 +246,7 @@ end
 
 Key points about this implementation:
 
-- **`use_observable/1` + `use_observable/2`** — resolves the server, then
+- **`use_source/1` + `use_value/2`** — resolves the server, then
   projects to a single item, so only updates to `item_id` trigger a re-render
   of this fiber.
 - **`use_state`** — tracks held quantity locally; the server is the source of
@@ -314,7 +332,7 @@ The pattern generalises to any domain concept that combines state and
 subscriptions:
 
 1. Create a module (or add to an existing one) and `import Filament.Hooks`.
-2. Write a function that calls one or more of `use_state`, `use_observable`,
+2. Write a function that calls one or more of `use_state`, `use_value`,
    and `use_effect` unconditionally at its top level.
 3. Return whatever tuple or value the caller needs.
 4. Import and call it at the top level of `render/1` in your components.
@@ -323,7 +341,35 @@ Because hook slot identity is component-local, two components using the same
 custom hook each get independent slot storage — there is no shared state
 between them.
 
+## Transport-agnostic subscription
+
+`use_value/2` accepts any `%Filament.Source{}` regardless of which
+transport backs it. The struct carries a `transport` module that
+implements the `Filament.Cell` behaviour and the `data` the transport
+needs (a pid, an Agent ref, a struct — whatever).
+
+The `Filament.Observable.GenServer` transport ships with Filament;
+non-GenServer transports (in-process structs, focus trackers, custom
+backends) can be added without changing the hook.
+
+```elixir
+def render(_assigns) do
+  source = MyApp.AgentCell.cell(agent_pid)
+  # or: Filament.Source.new(MyApp.AgentCell, agent_pid)
+
+  count = use_value(source, fn
+    :disconnected -> 0
+    state -> state.count
+  end)
+
+  ~F"<span>{count}</span>"
+end
+```
+
+See the **[Cells guide](cells.html)** for the transport authoring
+contract.
+
 ## API reference
 
 See `Filament.Hooks` for the full `@spec` signatures of `use_state/1`,
-`use_observable/1`, `use_observable/2`, and `use_effect/2`.
+`use_source/1`, `use_value/2`, and `use_effect/2`.
