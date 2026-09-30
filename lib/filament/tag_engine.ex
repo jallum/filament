@@ -1240,22 +1240,24 @@ defmodule Filament.TagEngine do
   end
 
   defp build_special_expr_ast(state, %{for: _for_expr, if: if_expr} = tag_meta) do
-    for_expr = maybe_keyed(tag_meta)
+    for_expr = tag_meta.for
+    body = special_loop_body(state, tag_meta)
 
     for_ast =
       quote do
-        for unquote(for_expr), unquote(if_expr), do: unquote(invoke_subengine(state, :handle_end, []))
+        for unquote(for_expr), unquote(if_expr), do: unquote(body)
       end
 
     {:fragment, for_ast}
   end
 
   defp build_special_expr_ast(state, %{for: _for_expr} = tag_meta) do
-    for_expr = maybe_keyed(tag_meta)
+    for_expr = tag_meta.for
+    body = special_loop_body(state, tag_meta)
 
     for_ast =
       quote do
-        for unquote(for_expr), do: unquote(invoke_subengine(state, :handle_end, []))
+        for unquote(for_expr), do: unquote(body)
       end
 
     {:fragment, for_ast}
@@ -1273,14 +1275,22 @@ defmodule Filament.TagEngine do
 
   defp build_special_expr_ast(_state, %{}), do: nil
 
-  defp maybe_keyed(%{key: key_expr, for: for_expr}) do
-    # we already validated that the for expression has the correct shape in
-    # validate_quoted_special_attr
-    {:<-, for_meta, [lhs, rhs]} = for_expr
-    {:<-, [keyed_comprehension: true, key_expr: key_expr] ++ for_meta, [lhs, rhs]}
-  end
+  defp special_loop_body(state, tag_meta) do
+    body = invoke_subengine(state, :handle_end, [])
 
-  defp maybe_keyed(%{for: for_expr}), do: for_expr
+    case Map.fetch(tag_meta, :key) do
+      {:ok, key} ->
+        # Element keys do not own component fibers, but the key expression is
+        # still part of the loop's lexical scope and must be evaluated there.
+        quote do
+          _ = unquote(key)
+          unquote(body)
+        end
+
+      :error ->
+        body
+    end
+  end
 
   ## Slot helpers
 

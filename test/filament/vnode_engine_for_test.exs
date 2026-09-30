@@ -80,6 +80,24 @@ defmodule Filament.VNodeEngineForTest do
     end
   end
 
+  test "an element key uses its generator binding, including with a filter" do
+    for filter <- ["", " :if={visible}"] do
+      source =
+        "<div :for={{label, visible, idx} <- rows} :key={send(self(), {:key, idx})}#{filter}><span>{label}</span></div>"
+
+      ast = compile(source)
+
+      warning =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          eval(ast, rows: [{"One", true, 1}, {"Two", false, 2}])
+        end)
+
+      refute warning =~ ~s(variable "idx" is unused)
+      assert_receive {:key, 1}
+      if filter == "", do: assert_receive({:key, 2}), else: refute_receive({:key, 2})
+    end
+  end
+
   describe "JSX-block {for x <- xs do} ... {end}" do
     test "wraps body output in a fragment" do
       ast = compile("{for x <- xs do}<span>{x}</span>{end}")
