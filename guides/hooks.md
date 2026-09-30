@@ -71,7 +71,7 @@ connects.
 
 `use_value/2` subscribes this fiber's hook slot to the source and
 returns the projected value. The projection function receives
-`:disconnected` when the source is `nil` or the mount is not yet live,
+`:disconnected` when the source is `nil`, unavailable, or subscriptions are disabled,
 letting it return a safe default.
 
 The argument to `use_source/1` is either:
@@ -80,16 +80,23 @@ The argument to `use_source/1` is either:
   `cell/1` constructor that `use Filament.Observable.GenServer` injects
   (or `Filament.Source.new/2` for non-GenServer transports).
 - A zero-arity factory function returning a `%Filament.Source{}` —
-  called on the first connected render (and again if the underlying
-  transport dies). Use this when the component owns the server's
-  lifecycle.
+  called on the first connected render, and again on a later render of the
+  same component if the underlying transport has died. Use this when the
+  component owns the server's lifecycle.
+
+A reader follows a server across a restart when its source names the server
+(a registered name or a `{:via, ...}` tuple): `use_value/2` resubscribes to
+whichever process holds the name. A source holding a pid goes stale when that
+process exits. Call `use_value/2` in the component that calls `use_source/1`,
+whose factory then runs again, or address the server by name.
 - For a factory that closes over a changing resource ID, use
   `use_source(factory_fn, key)`. A changed key replaces the cached source
   even if the old transport remains reachable.
 
-The struct exposes transport-specific data inside the hook. A domain hook
-can return the underlying server handle so components can pass it to domain
-actions without handling `Source` themselves:
+The struct exposes transport-specific data inside the hook. Domain hooks
+can use the underlying server handle for subscriptions while companion
+actions resolve the stable session ID for commands. Components handle neither
+`Source` nor Registry details:
 
 ```elixir
 # In CartWeb.Hooks
@@ -109,9 +116,13 @@ def use_cart_count(session_id) do
   end)
 end
 
+def add_item(session_id, item) do
+  Cart.Server.add_item(Cart.Server.via_registry(session_id), item)
+end
+
 # In components
 count = use_cart_count(session_id)
-on_click={fn -> Cart.Server.add_item(session_id, item) end}
+on_click={fn -> CartWeb.Hooks.add_item(session_id, item) end}
 
 # Component owns the server lifecycle — no `cell/1` override needed; the
 # default constructor wraps any server reference

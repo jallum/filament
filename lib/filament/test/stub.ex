@@ -2,13 +2,14 @@ defmodule Filament.Test.Stub do
   @moduledoc """
   Convenience API for creating and driving observable stubs in tests.
 
-  Usage in mount opts:
+  Start a stub and pass its pid to a domain hook through component props:
 
-      stubs: [{CartServer, fn _req -> %{items: [], total: 0} end}]
+      {:ok, stub} = Filament.Test.Stub.start(fn _ -> %{items: []} end)
+      view = Filament.Test.mount!(CartBadge, %{cart: stub})
 
-  This creates a StubObservable for CartServer. Components calling
-  use_value({Filament.Observable.GenServer, CartServer}, ...) receive
-  the stub's value instead.
+  The hook constructs `MyServer.cell(stub)` (or
+  `Filament.Source.new(Filament.Observable.GenServer, stub)`) and reads it
+  with `use_value/2`. Mount does not replace server references automatically.
 
   To push an update after mount:
 
@@ -33,7 +34,7 @@ defmodule Filament.Test.Stub do
   @doc """
   Push `new_state` to all current subscribers of the stub.
   Triggers the same notification path as a real observable's notify_observers/1,
-  including per-subscriber projection and change-or-bust from D3.
+  including transport projection and equality checks.
   """
   @spec push(stub :: pid(), new_state :: term()) :: :ok
   def push(stub, new_state) do
@@ -49,7 +50,7 @@ defmodule Filament.Test.Stub do
   end
 
   @doc """
-  Build the observable_stubs map expected by Filament.Test.mount/2.
+  Build a map of server labels to stub pids for explicit test wiring.
   Starts a StubObservable for each {server, stub_fn} pair.
   Returns `{stubs_map, pids}` where `stubs_map` is `%{server => pid}` and
   `pids` is the list of started stub pids (for cleanup in on_exit).

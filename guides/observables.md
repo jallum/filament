@@ -120,10 +120,10 @@ session_id)` internally. The key ensures a changed session does not reuse
 the previous cart. The hook returns `nil` when subscriptions are disabled;
 `use_cart_count/1` then supplies the disconnected value.
 
-Components call domain actions with the handle they received:
+Components call the hook module's companion actions with the same session ID:
 
 ```elixir
-on_click={fn -> Cart.Server.add_item(session_id, item) end}
+on_click={fn -> CartWeb.Hooks.add_item(session_id, item) end}
 ```
 
 Or use a sentinel to branch on the disconnected case:
@@ -153,16 +153,18 @@ todos = use_value(source, fn
 end)
 ```
 
-The server starts on the first render that reads sources (including HTTP
-rendering by default). Resource teardown is a separate lifecycle choice; unsubscribing a
-reader does not automatically stop the server.
+The server starts on the first render that reads sources. The HTTP render
+reads sources by default, and a server it started would outlive the request,
+so a view whose factory starts a server per visitor sets
+`static_subscribe: false`. Resource teardown is a separate lifecycle choice;
+unsubscribing a reader does not automatically stop the server.
 
 This eliminates the need to start the server in `mount/3` and thread it as a prop —
 the LiveView reduces to:
 
 ```elixir
 defmodule TodoWeb.TodoLive do
-  use Filament.LiveView
+  use Filament.LiveView, static_subscribe: false
   def root_component, do: TodoWeb.Components.TodoList
 end
 ```
@@ -182,8 +184,9 @@ subscriber: the **last raw state** it sent to that subscriber. When
 2. If equal, skip — the subscriber already has this raw state.
 3. If different, deliver the raw state to the subscriber process and update
    `last_raw`.
-4. The subscriber fiber applies its projection function (with the current closure)
-   and updates the component only if the projected result also changed.
+4. The subscriber fiber applies the projection function from its last render and
+   rerenders only if the projected result changed. Either way it keeps the new
+   raw state, so the next render projects from current data.
 
 Consider two components subscribed to the same `Cart.Server`:
 
@@ -195,12 +198,12 @@ When a user changes the price of an item without adding or removing it:
 1. `Cart.Server` calls `notify_observers(new_state)`.
 2. Both subscribers receive the new raw state (it differs from their `last_raw`).
 3. `CartView`: projected output differs → re-render.
-4. `CartBadge`: `item_count(new_state) == item_count(last_state)` (count unchanged)
-   → **update suppressed** → no re-render.
+4. `CartBadge`: `item_count(new_state) === item_count(last_state)` (count
+   unchanged) → **render skipped**; the new raw state is kept for its next render.
 
-Filament uses strict inequality (`!==`) for both comparisons. Primitives and atoms
-compare by value; maps and structs compare by identity. If your projection returns
-a map you should return the same struct whenever the relevant fields haven't changed.
+Both comparisons use strict inequality (`!==`), which compares maps and structs
+structurally and distinguishes numeric types such as `1` and `1.0`.
+A new map with equal contents is an unchanged value.
 
 The projection test from `examples/cart/test/cart_test.exs` demonstrates this
 directly:
@@ -236,7 +239,9 @@ end
   the raw state the client receives immediately (used as the seed for change-or-bust
   tracking and passed through the projection fn for the first render).
 - `{:error, reason, new_state}` — reject the subscription; the component's
-  `use_value` reads `:disconnected`.
+  `use_value` reads `:disconnected` and, as for a server it can't reach,
+  subscribes again with backoff (100 ms doubling to 5 s) while it's mounted.
+  A rejection is "not now": `handle_subscribe/2` sees each retry.
 
 `handle_subscribe/2` runs once per subscriber identity, and `handle_unsubscribe/2`
 once when that subscription ends — on unsubscribe or when the owner exits. When an
@@ -268,13 +273,14 @@ unwanted, for example a factory that starts a server per visitor.
 `CartView` handles item removal via a Phoenix event, but the pattern generalises to
 any mutation. The flow is:
 
-1. User interaction triggers a call to `Cart.Server.remove_item/2`.
+1. User interaction calls `CartWeb.Hooks.remove_item/2`, which addresses
+   `Cart.Server.remove_item/2` by the session's registered name.
 2. The server runs `notify_observers(new_state)`.
 3. Filament delivers raw state updates to each subscriber whose `last_raw` differs.
 4. Each subscribed component's fiber applies its projection and re-renders if the
    projected value changed.
 
-You do not need to do anything special in the component — just call the server and
+You do not need to do anything special in the component — call the companion action and
 let the observer push the update.
 
 ## Testing with rung-3

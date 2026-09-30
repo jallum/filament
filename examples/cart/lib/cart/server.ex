@@ -24,16 +24,8 @@ defmodule Cart.Server do
     GenServer.start_link(__MODULE__, %Cart.State{}, gen_opts)
   end
 
-  def add_item(session_id, %Cart.Item{} = item) when is_binary(session_id) do
-    add_item(via_registry(session_id), item)
-  end
-
   def add_item(server, %Cart.Item{} = item) do
     GenServer.call(server, {:add_item, item})
-  end
-
-  def remove_item(session_id, item_id) when is_binary(session_id) and is_binary(item_id) do
-    remove_item(via_registry(session_id), item_id)
   end
 
   def remove_item(server, item_id) when is_binary(item_id) do

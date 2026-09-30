@@ -14,8 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   LiveComponent convert resolved vnodes through `Filament.Web`.
 - `%Filament.Source{}` and the `Filament.Cell` transport behaviour for reactive
   values beyond GenServers.
-- `use_source/1` to bind a source and `use_value/2` to subscribe and project
-  its value.
+- `use_source/1,2` to bind a source, including factories keyed by resource
+  identity, and `use_value/2` to subscribe and project its value. The examples
+  show custom domain hooks that hide source construction from components.
 - `Filament.LiveView` unmounts its tree in `terminate/2`, running effect
   cleanups when the client disconnects. `Filament.Test.unmount/1` does the
   same for a test view.
@@ -24,33 +25,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that process exits, so a server restarted under a name or via-tuple
   reaches its readers without a reload. A subscribe that can't reach its
   source retries with backoff (100 ms doubling to 5 s) until it connects or
-  the reader unmounts. Requires OTP 27 or later, for tagged monitors.
+  the reader unmounts; so does one whose `handle_subscribe/2` rejected it.
+  Requires OTP 27 or later, for tagged monitors.
 
 ### Changed
 
-- **Breaking:** `use_observable` now goes through `Filament.Cell`. The hook
-  takes a cell tuple `{transport, data}` (or a 0-arity factory returning
-  one) instead of a raw GenServer reference. For an observable GenServer
-  the migration is mechanical — wrap the server pid in a tuple:
+- **Breaking:** replace `use_observable/1,2` with `use_source/1,2` and
+  `use_value/2`. Sources are structs, not `{transport, data}` tuples:
 
   ```elixir
-  # Before
+  # Before (0.5.x)
   count = use_observable(server, fn :disconnected -> 0; s -> s.count end)
 
   # After
-  cell  = {Filament.Observable.GenServer, server}
-  count = use_observable(cell,   fn :disconnected -> 0; s -> s.count end)
+  source = MyServer.cell(server)
+  count = use_value(source, fn :disconnected -> 0; s -> s.count end)
   ```
 
-  The factory form (`use_observable/1`) returns the cell, which can then
-  be passed as a prop to children that subscribe with their own
-  projections.
-
-- `Filament.Observable.GenServer.handle_unsubscribe/2` is now invoked
-  with the cell-subscriber tuple `{owner_pid, fiber_id, slot_index}`
-  rather than the old `%Subscriber{}` struct. Servers that read
-  `subscriber.pid` need to destructure the tuple instead.
-
+  When resolving a server from an identifier, put
+  `use_source(fn -> MyServer.cell(id) end, id)` inside a domain hook.
+  See the migration guide for the full 0.5.x upgrade.
+- Reactive hooks subscribe to raw state and run the user projection during
+  rendering, so projections can capture current local state. Equal raw writes
+  produce no delivery. A changed raw value is kept in the slot but skips the
+  render when every projected value is unchanged (`===`), as in 0.5.6.
+- **Breaking:** `handle_unsubscribe/2` receives the opaque subscriber tuple
+  `{owner_pid, fiber_id, slot_index, generation}`. Destructure this tuple rather
+  than reading the former `Subscriber.pid` field.
+- **Breaking:** component `render/1` and `Reconciler.mount/3` / `update/4`
+  produce vnode output. Low-level callers use `Filament.Web.to_rendered/1`
+  or `to_iodata/1` for Phoenix/HTML output; the adapters do this automatically.
 - **Breaking:** components render only when their inputs change. A parent's
   render reuses each child whose props are unchanged (`===`), with its whole
   subtree; a child's state or `use_value` update renders that child alone,
@@ -78,6 +82,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** components rendered by the same parent component with the
   same module and `:key` raise `ArgumentError`
   instead of sharing one fiber and its state.
+- **Breaking:** a slot entry (`<:header>`) must be a direct child of its
+  component, as in HEEx; inside `{if}`, `{for}`, `{case}` or an element it
+  was hoisted out and rendered regardless. Use `:if` or `:for` on the entry.
+  A tag opened in a block must close in it; both are now syntax errors with
+  a location instead of compiler crashes.
 - A repeat subscribe under the same identity, as after a saturation notice, is
   a refresh: it calls neither `handle_subscribe/2` nor `handle_unsubscribe/2`,
   so held resources survive, and it replies with `handle_current/1`. The
@@ -118,6 +127,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   state, and stale messages from replaced subscriptions are ignored.
 - LiveComponent handles batched Cell updates while preserving its root output.
 - A cell server no longer crashes notifying a subscriber on another node.
+- `Filament.LiveComponent` renders inside a real LiveView, whose diff engine
+  requires a single root tag. A component rendering one element is marked
+  as rooted.
+- A component whose `render/1` returns `false` renders nothing, as `nil`
+  does.
+- Keyed components whose keys differ only beyond `inspect/1`'s default
+  limits, or in struct fields hidden by a custom `Inspect`, get separate
+  fibers.
+- A click on a handler removed by a later render runs nothing; it no longer
+  fires the capture handlers of the target's ancestors. `Filament.Test`
+  runs handlers taking a push function, sending `{:push_event, event,
+  payload}` to the test process.
 - A `Filament.LiveView` receiving a message it doesn't handle logs it and
   continues, as Phoenix does, instead of crashing. A view with its own
   `handle_info/2` ends with `def handle_info(msg, socket), do: super(msg, socket)`.
@@ -127,10 +148,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unused-variable warnings for bindings used only by the key.
 - The 0.5.6 observable fixes apply on the cell transport: the injected
   cell subscribe, current-value, unsubscribe and `:DOWN` handlers keep
-  the server's `timeout/1`; a cell subscriber that has exited is skipped
-  quietly until its `:DOWN`; and `use_value` skips the render when every
-  projected value is unchanged (`===`), keeping the fresh raw value for
-  the next render.
+  the server's `timeout/1`, and a cell subscriber that has exited is
+  skipped quietly until its `:DOWN`.
 
 ### Removed
 

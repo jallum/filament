@@ -26,6 +26,11 @@ defmodule CartWeb.Hooks do
       state -> Cart.State.item_count(state)
     end)
   end
+
+  # The companion action accepts the same stable session ID.
+  def add_item(session_id, item) do
+    Cart.Server.add_item(Cart.Server.via_registry(session_id), item)
+  end
 end
 
 defmodule CartWeb.Components.CartBadge do
@@ -43,7 +48,7 @@ defmodule CartWeb.Components.CartBadge do
 end
 
 # A parent passes session_id to children and calls
-# Cart.Server.add_item(session_id, item) in event handlers.
+# CartWeb.Hooks.add_item(session_id, item) in event handlers.
 ```
 
 ## What it does
@@ -85,15 +90,19 @@ LiveView to skip reading sources during the HTTP render and show the
 to `use_value/2` to extract only the slice of state the component
 cares about. The function receives `:disconnected` or the raw server state and
 runs on the client when an update arrives and is refreshed on every render, so it
-can safely close over local component state such as filters or selections. If every
-projected value is unchanged (`===`), the component does not re-render. The latest
-raw state is retained for the next render, including local filter changes. This
-keeps large UIs fast without manual shouldComponentUpdate logic.
+can safely close over local component state such as filters or selections. Equal
+raw state writes are suppressed at the transport. If every projected value is
+unchanged (`===`), the component does not re-render; the latest raw state is
+retained for the next render, including local filter changes.
 
 ```elixir
 # CartBadge reads its domain value without handling a Source.
 count = use_cart_count(cart)
 ```
+
+**Keyed component identity.** A child component with `:key` retains its hook
+state as a list is reordered. The reconciler matches component instances by
+key, and the web adapter produces incremental LiveView diffs.
 
 **Renders follow inputs.** A component renders only when its props change
 (`!==`), its own state changes, or a value it reads with `use_value` changes.
@@ -170,6 +179,8 @@ refute render_text(view) =~ "Search commands"
 # mix.exs
 {:filament, "~> 0.5"}
 ```
+
+Filament needs Elixir 1.18+, Erlang/OTP 27+ and Phoenix LiveView 1.2+.
 
 ## Examples
 
