@@ -2,13 +2,15 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-09-30T00:06:36Z",
+  "close_reason": "Fixed in 6990371 on PR #7: HTML :key expressions execute in generator scope. Regression covers key-only bindings with and without :if; 506 tests and all CI jobs pass.",
   "created": "2026-05-14T22:05:43Z",
   "description": "Reproducer (in octo_pi_tui2):\n\n  apps/octo_pi_tui2/lib/octo_pi/tui2/defaults/transcript.ex:42\n    \u003cdiv :for={{msg, spacer_before?, idx} \u003c- rows} :key={idx}\u003e\n      \u003cdiv :if={spacer_before?}\u003e \u003c/div\u003e\n      \u003cMessageItem message={msg} /\u003e\n    \u003c/div\u003e\n\nCompiler emits:\n  warning: variable \"idx\" is unused (if the variable is not meant to be\n  used, prefix it with an underscore)\n\nBut idx IS used — by the sibling :key={idx} attribute on the same element.\nThe :for codegen and the :key codegen appear to be analysed in separate\nscopes, so the :key reference doesn't satisfy the :for binding's usage\ncheck.\n\nWorkaround in calling code: prefix as _idx (but :key still references\n'idx', which then becomes a real unused-var). Currently dodgeable only\nby leaving the warning, which conflicts with the host project's\n'warnings are errors' policy.\n\nExpected: a :for-bound variable referenced inside a sibling special\nattr (:key, :if) on the same element should count as 'used'.",
   "id": "flm-xdx",
   "labels": [],
   "priority": 3,
-  "status": "open",
+  "status": "closed",
   "title": ":for binding shows as unused when only consumed by sibling :key",
   "type": "task",
-  "updated_at": "2026-05-14T22:05:43Z"
+  "updated_at": "2026-09-30T00:06:36Z"
 }
