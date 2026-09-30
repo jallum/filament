@@ -188,7 +188,7 @@ subscriber: the **last raw state** it sent to that subscriber. When
 3. If different, deliver the raw state to the subscriber process and update
    `last_raw`.
 4. The subscriber fiber applies its projection function (with the current closure)
-   and updates the component only if the projected result also changed.
+   and rerenders with that projected value.
 
 Consider two components subscribed to the same `Cart.Server`:
 
@@ -199,13 +199,13 @@ When a user changes the price of an item without adding or removing it:
 
 1. `Cart.Server` calls `notify_observers(new_state)`.
 2. Both subscribers receive the new raw state (it differs from their `last_raw`).
-3. `CartView`: projected output differs → re-render.
-4. `CartBadge`: `item_count(new_state) == item_count(last_state)` (count unchanged)
-   → **update suppressed** → no re-render.
+3. Both components rerender and compute fresh projections.
+4. `CartBadge` still displays the same count; its unchanged output need not
+   produce a DOM change, but the render pass was not suppressed.
 
-Filament uses strict inequality (`!==`) for both comparisons. Primitives and atoms
-compare by value; maps and structs compare by identity. If your projection returns
-a map you should return the same struct whenever the relevant fields haven't changed.
+The transport uses strict inequality (`!==`), which compares maps and structs
+structurally and distinguishes numeric types such as `1` and `1.0`.
+A new map with equal contents is an unchanged value.
 
 The projection test from `examples/cart/test/cart_test.exs` demonstrates this
 directly:
@@ -287,8 +287,7 @@ any mutation. The flow is:
    `Cart.Server.remove_item/2` by the session's registered name.
 2. The server runs `notify_observers(new_state)`.
 3. Filament delivers raw state updates to each subscriber whose `last_raw` differs.
-4. Each subscribed component's fiber applies its projection and re-renders if the
-   projected value changed.
+4. Each subscribed component's fiber rerenders and applies its current projection.
 
 You do not need to do anything special in the component — call the companion action and
 let the observer push the update.
