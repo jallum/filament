@@ -90,7 +90,12 @@ defmodule Filament.Observable.GenServer do
               old_sub ->
                 Process.demonitor(old_sub.ref, [:flush])
                 ref = Process.monitor(sub_key)
-                new_sub = %{old_sub | pid: sub_key, ref: ref, proj_keys: sub_info.proj_keys}
+                new_sub = %{old_sub | pid: sub_key, ref: ref, proj_keys: sub_info.proj_keys, stale: false}
+
+                {:ok, initial_value, new_state} =
+                  Filament.Observable.GenServer.handoff_value(__MODULE__, old_sub, new_sub, state)
+
+                new_sub = %{new_sub | last_raw: initial_value}
                 new_subs = subs |> Map.delete(handoff_source) |> Map.put(sub_key, new_sub)
                 Process.put(:__filament_subscribers__, new_subs)
 
@@ -99,16 +104,17 @@ defmodule Filament.Observable.GenServer do
                   sub_key
                 )
 
-                {:reply, {:ok, old_sub.last_raw}, state}
+                {:reply, {:ok, initial_value}, new_state}
             end
 
           # Same process adding another proj_key
           Map.has_key?(subs, sub_key) ->
             existing = Map.get(subs, sub_key)
             merged = %{existing | proj_keys: Map.merge(existing.proj_keys, sub_info.proj_keys)}
+            {:ok, initial_value, new_state} = __MODULE__.handle_subscribe(merged, state)
+            merged = %{merged | stale: false, last_raw: initial_value}
             Process.put(:__filament_subscribers__, Map.put(subs, sub_key, merged))
-            {:ok, initial_value, _} = __MODULE__.handle_subscribe(merged, state)
-            {:reply, {:ok, initial_value}, state}
+            {:reply, {:ok, initial_value}, new_state}
 
           # New subscriber
           true ->
@@ -190,6 +196,13 @@ defmodule Filament.Observable.GenServer do
 
   # ── Module-level helpers (called from injected code above) ───────────────
 
+  # Active session handoff retains its snapshot; stale handoff must recover
+  # from current state so the replacement process never inherits a missed update.
+  @doc false
+  def handoff_value(mod, %{stale: true}, new_subscriber, state), do: mod.handle_subscribe(new_subscriber, state)
+
+  def handoff_value(_mod, previous, _new_subscriber, state), do: {:ok, previous.last_raw, state}
+
   @doc false
   def do_fresh_subscribe(mod, sub_info, sub_key, subs, state) do
     ref = Process.monitor(sub_key)
@@ -197,7 +210,7 @@ defmodule Filament.Observable.GenServer do
 
     case mod.handle_subscribe(subscriber, state) do
       {:ok, initial_value, new_state} ->
-        stored = %{subscriber | last_raw: initial_value}
+        stored = %{subscriber | last_raw: initial_value, stale: false}
         Process.put(:__filament_subscribers__, Map.put(subs, sub_key, stored))
         put_session_index(sub_info.session_token, sub_key)
         {:reply, {:ok, initial_value}, new_state}
@@ -234,9 +247,13 @@ defmodule Filament.Observable.GenServer do
 
   defp notify_subscriber(subscriber, new_state, depth_result, max_mailbox_depth) do
     cond do
+      # A stale subscriber is silent until subscribe supplies a fresh snapshot.
+      subscriber.stale ->
+        subscriber
+
       saturated_depth?(depth_result, max_mailbox_depth) ->
         log_and_resubscribe(subscriber, depth_result, max_mailbox_depth)
-        subscriber
+        %{subscriber | stale: true}
 
       new_state === subscriber.last_raw ->
         subscriber
