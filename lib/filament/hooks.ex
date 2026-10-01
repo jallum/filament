@@ -480,10 +480,10 @@ defmodule Filament.Hooks do
 
       matches ->
         {at, 1} = List.last(matches)
-        <<fiber_id::binary-size(at), ":", index::binary>> = ref
+        index = binary_part(ref, at + 1, byte_size(ref) - at - 1)
 
         case Integer.parse(index) do
-          {idx, ""} when idx >= 0 -> {:ok, fiber_id, idx}
+          {idx, ""} when idx >= 0 -> {:ok, binary_part(ref, 0, at), idx}
           _ -> :error
         end
     end
