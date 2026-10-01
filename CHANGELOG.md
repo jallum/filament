@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Send saturation recovery notices once per episode, resuming delivery from fresh state after resubscription.
+
 ### Security
 
 ## [0.5.2] - 2026-09-28
