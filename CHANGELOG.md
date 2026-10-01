@@ -17,9 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Send saturation recovery notices once per episode, resuming delivery from fresh state after resubscription.
-
 ### Security
+
+## [0.5.3] - 2026-10-01
+
+### Fixed
+
+- A subscriber whose mailbox overflows now gets one recovery notice per
+  overflow, not one per state change. Before this, every update during an
+  overflow sent the already-overloaded process another notice. The
+  subscriber now gets no updates until it resubscribes, and resubscribing
+  (including a session handoff to a replacement process) always returns the
+  current state, never the last value sent before the overflow (#24).
 
 ## [0.5.2] - 2026-09-28
 
