@@ -1171,9 +1171,8 @@ defmodule Filament.TagEngine do
   # Compile-time `on_*` → `phx-*` + `register_event_handler` rewrite for the
   # vnode codegen path. Mirrors `Filament.HTMLEngine.transform_event_pair/1`'s
   # logic so VNodeEngine-emitted attrs match the wire format the LiveView
-  # adapter dispatches through. Closure memoisation (Phase 1.4.5) then
-  # detects the `register_event_handler(fn)` call sites and wraps them with
-  # `memo_at` for stable closures across renders.
+  # adapter dispatches through. Handlers register during the eager vnode
+  # render pass, while the component context is active.
   defp transform_event_attr_for_vnode({"on_key", v}) do
     wrapped =
       quote do

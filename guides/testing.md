@@ -140,20 +140,20 @@ Unspecified modifiers default to `false`.
 
 ## Observable stubs
 
-Components that call `use_value` need a source to subscribe to. In
-tests, start an in-process stub via `Filament.Test.Stub.start/1` and
-wrap it in a `%Filament.Source{}`:
+Components whose domain hooks call `use_value` need a server to subscribe
+to. In tests, start an in-process stub via `Filament.Test.Stub.start/1`
+and pass its pid as the domain handle:
 
 ```elixir
 alias Filament.Test.Stub
 
 test "shows item count" do
-  {:ok, stub} = Stub.start(fn _req -> %{items: ["a", "b", "c"]} end)
+  state = %Cart.State{items: [%Cart.Item{id: "a", quantity: 3}]}
+  {:ok, stub} = Stub.start(fn _req -> state end)
 
-  source = Filament.Source.new(Filament.Observable.GenServer, stub)
-  view = mount!(CartBadge, %{source: source})
+  view = mount!(CartBadge, %{cart: stub})
 
-  assert render_text(view) =~ "3 items"
+  assert view.rendered_html =~ ~s(data-count="3")
 end
 ```
 
@@ -172,16 +172,16 @@ afterward to drain the resulting `:cell_update` message and re-render:
 
 ```elixir
 test "re-renders when server state changes" do
-  {:ok, stub} = Stub.start(fn _req -> %{items: []} end)
-  source = Filament.Source.new(Filament.Observable.GenServer, stub)
-  view = mount!(CartBadge, %{source: source})
+  {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
+  view = mount!(CartBadge, %{cart: stub})
 
-  assert render_text(view) =~ "0 items"
+  assert view.rendered_html =~ ~s(data-count="0")
 
-  Stub.push(stub, %{items: ["a", "b"]})
+  item = %Cart.Item{id: "a", quantity: 2}
+  Stub.push(stub, Cart.State.add_item(%Cart.State{}, item))
   view = Filament.Test.update(view)
 
-  assert render_text(view) =~ "2 items"
+  assert view.rendered_html =~ ~s(data-count="2")
 end
 ```
 
@@ -193,18 +193,17 @@ assertion until it passes or a timeout is reached:
 
 ```elixir
 test "count updates after async server push" do
-  {:ok, stub} = Stub.start(fn _req -> %{items: []} end)
-  source = Filament.Source.new(Filament.Observable.GenServer, stub)
-  view = mount!(CartBadge, %{source: source})
+  {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
+  view = mount!(CartBadge, %{cart: stub})
 
   spawn(fn ->
     Process.sleep(50)
-    Stub.push(stub, %{items: ["a"]})
+    Stub.push(stub, Cart.State.add_item(%Cart.State{}, %Cart.Item{id: "a"}))
   end)
 
   Filament.Test.eventually(fn ->
     view = Filament.Test.update(view)
-    render_text(view) =~ "1 item"
+    view.rendered_html =~ ~s(data-count="1")
   end, timeout: 500)
 end
 ```

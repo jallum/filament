@@ -79,27 +79,23 @@ The default `handle_subscribe/2` returns `{:ok, state, state}` (the current stat
 as the initial value). Override it to reject subscriptions or return a different
 initial value.
 
-## Subscribing from a component: use_value/2
+## Subscribing through a domain hook
 
-`use_value/2` takes a `%Filament.Source{}` (returned by `use_source/1`) and
-a projection function. The projection receives either `:disconnected`
-(before the WebSocket is established) or the raw state broadcast by the
-server. The `CartBadge` component receives the source as a prop and
-projects the item count:
+`use_value/2` takes a `%Filament.Source{}` and a projection function. The
+projection receives either `:disconnected` or the raw state broadcast by
+the server. `CartWeb.Hooks` owns this detail; `CartBadge` calls a hook
+named for the value it needs:
 
 ```elixir
 defmodule CartWeb.Components.CartBadge do
   use Filament.Component
+  import CartWeb.Hooks, only: [use_cart_count: 1]
 
   defcomponent do
-    prop(:source, :any, default: nil)
+    prop(:cart, :any, default: nil)
 
-    def render(%{source: source}) do
-      count =
-        use_value(source, fn
-          :disconnected -> 0
-          s -> Cart.State.item_count(s)
-        end)
+    def render(%{cart: cart}) do
+      count = use_cart_count(cart)
 
       ~F"""
       <span class="cart-badge" data-count={count}>
@@ -111,38 +107,35 @@ defmodule CartWeb.Components.CartBadge do
 end
 ```
 
-The parent component binds the source once and passes it as a prop:
+The parent passes stable session identity; each child resolves it through its
+domain hook:
 
 ```elixir
 def render(%{session_id: session_id}) do
-  source = use_source(fn -> Cart.Server.cell(session_id) end)
-
   ~F"""
-  <CartBadge source={source} />
-  <CartItems source={source} />
+  <CartBadge cart={session_id} />
+  <CartItems cart={session_id} />
   """
 end
 ```
 
-`use_source/1` accepts a `%Filament.Source{}` directly or a 0-arity
-factory fn that builds one (and is called on first connected render —
-useful when an `ensure_started` lookup or a `start_link` is needed).
-Returns `nil` during disconnected (HTTP) renders. `use_value/2` then
-calls the projection with `:disconnected` so callers can return a
-safe initial value.
+`use_cart_count/1` calls `use_cart/1`, which uses
+`use_source(fn -> Cart.Server.cell(session_id) end,
+session_id)` internally. The key ensures a changed session does not reuse
+the previous cart. The hook returns `nil` when subscriptions are disabled;
+`use_cart_count/1` then supplies the disconnected value.
 
-Components that need to invoke server actions in event handlers reach
-through `source.data` for the underlying transport reference:
+Components call the hook module's companion actions with the same session ID:
 
 ```elixir
-on_click={fn -> Cart.Server.add_item(source.data, item) end}
+on_click={fn -> CartWeb.Hooks.add_item(session_id, item) end}
 ```
 
 Or use a sentinel to branch on the disconnected case:
 
 ```elixir
-cart = use_value(source, fn :disconnected -> nil; s -> s end)
-if cart == nil, do: render_loading(), else: render_cart(cart)
+cart_state = use_cart_state(session_id)
+if cart_state == nil, do: render_loading(), else: render_cart(cart_state)
 ```
 
 On subsequent renders (WebSocket-connected), the hook applies the
@@ -150,10 +143,8 @@ projection to the latest raw state received from the server.
 
 ## Server lifecycle with a factory function
 
-When the component owns the server's lifecycle, pass a factory function
-to `use_source/1`. The factory must return a `%Filament.Source{}` —
-typically by starting the server and wrapping the pid via the
-`cell/1` constructor that `use Filament.Observable.GenServer` injects:
+When a component starts a server, put the factory inside a custom hook.
+`use_source/1` accepts a factory returning `%Filament.Source{}`:
 
 ```elixir
 source = use_source(fn ->
@@ -167,19 +158,9 @@ todos = use_value(source, fn
 end)
 ```
 
-The server starts when the component first mounts in a connected
-render and can stop itself in `handle_unsubscribe/2` when the last
-subscriber leaves:
-
-```elixir
-@impl Filament.Observable
-def handle_unsubscribe(_subscriber, state) do
-  # Stop when the last subscriber (component) unmounts:
-  {:stop, :normal, state}
-  # Or keep running:
-  # {:ok, state}
-end
-```
+The server starts on the first render with subscriptions enabled
+(including HTTP rendering by default). Resource teardown is a separate lifecycle choice; unsubscribing a
+reader does not automatically stop the server.
 
 This eliminates the need to start the server in `mount/3` and thread it as a prop —
 the LiveView reduces to:
@@ -191,9 +172,10 @@ defmodule TodoWeb.TodoLive do
 end
 ```
 
-On the **first render** (HTTP pre-connect), `use_source/1` returns `nil` because
-subscribing during an HTTP render would create zombie subscribers. `use_value/2`
-calls the projection function with `:disconnected` instead.
+With `static_subscribe: false`, `use_source/1` returns `nil` during HTTP
+rendering and `use_value/2` calls the projection with `:disconnected`.
+The default subscribes during HTTP rendering; process termination cleans up
+the temporary subscription, and the WebSocket process subscribes anew.
 
 ## Projections and change-or-bust
 
@@ -206,7 +188,7 @@ subscriber: the **last raw state** it sent to that subscriber. When
 3. If different, deliver the raw state to the subscriber process and update
    `last_raw`.
 4. The subscriber fiber applies its projection function (with the current closure)
-   and updates the component only if the projected result also changed.
+   and rerenders with that projected value.
 
 Consider two components subscribed to the same `Cart.Server`:
 
@@ -217,13 +199,13 @@ When a user changes the price of an item without adding or removing it:
 
 1. `Cart.Server` calls `notify_observers(new_state)`.
 2. Both subscribers receive the new raw state (it differs from their `last_raw`).
-3. `CartView`: projected output differs → re-render.
-4. `CartBadge`: `item_count(new_state) == item_count(last_state)` (count unchanged)
-   → **update suppressed** → no re-render.
+3. Both components rerender and compute fresh projections.
+4. `CartBadge` still displays the same count; its unchanged output need not
+   produce a DOM change, but the render pass was not suppressed.
 
-Filament uses strict inequality (`!==`) for both comparisons. Primitives and atoms
-compare by value; maps and structs compare by identity. If your projection returns
-a map you should return the same struct whenever the relevant fields haven't changed.
+The transport uses strict inequality (`!==`), which compares maps and structs
+structurally and distinguishes numeric types such as `1` and `1.0`.
+A new map with equal contents is an unchanged value.
 
 The projection test from `examples/cart/test/cart_test.exs` demonstrates this
 directly:
@@ -301,13 +283,13 @@ this category.
 `CartView` handles item removal via a Phoenix event, but the pattern generalises to
 any mutation. The flow is:
 
-1. User interaction triggers a call to `Cart.Server.remove_item/2`.
+1. User interaction calls `CartWeb.Hooks.remove_item/2`, which addresses
+   `Cart.Server.remove_item/2` by the session's registered name.
 2. The server runs `notify_observers(new_state)`.
 3. Filament delivers raw state updates to each subscriber whose `last_raw` differs.
-4. Each subscribed component's fiber applies its projection and re-renders if the
-   projected value changed.
+4. Each subscribed component's fiber rerenders and applies its current projection.
 
-You do not need to do anything special in the component — just call the server and
+You do not need to do anything special in the component — call the companion action and
 let the observer push the update.
 
 ## Testing with rung-3

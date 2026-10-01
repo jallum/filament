@@ -21,13 +21,11 @@ defmodule CartWeb.Components.Cart do
     end
 
     def render(%{session_id: session_id}) do
-      source = use_source(fn -> Cart.Server.cell(session_id) end)
-
       ~F"""
       <div class="page">
         <header class="page-header">
           <h1>Shopping Demo</h1>
-          <CartBadge source={source} />
+          <CartBadge cart={session_id} />
         </header>
 
         <section class="products">
@@ -36,8 +34,8 @@ defmodule CartWeb.Components.Cart do
               <div class="product-name">{p.name}</div>
               <div class="product-price">{format_price(p.price_cents)}</div>
               <button class="btn-add" on_click={fn ->
-                Cart.Server.add_item(
-                  source.data,
+                CartWeb.Hooks.add_item(
+                  session_id,
                   %Cart.Item{id: p.id, name: p.name, price_cents: p.price_cents}
                 )
               end}>Add to Cart</button>
@@ -45,7 +43,7 @@ defmodule CartWeb.Components.Cart do
           {end}
         </section>
 
-        <CartItems source={source} />
+        <CartItems cart={session_id} />
       </div>
       """
     end

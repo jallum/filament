@@ -13,7 +13,7 @@ defmodule Filament.Renderer do
   3. Call component.render(props)
   4. Collect new fibers, hook slots, and effects from context
   5. Clear render context
-  6. Return the 6-tuple of rendered output and accumulated context fields.
+  6. Return the 8-tuple of rendered output and accumulated context fields.
   """
   @spec render(module(), map(), RenderContext.t()) ::
           {term(), %{non_neg_integer() => term()}, list(), %{String.t() => Fiber.t()},

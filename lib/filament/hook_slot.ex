@@ -9,6 +9,7 @@ defmodule Filament.HookSlot do
     * `{deps, cleanup}` — `use_effect`. `cleanup` is a 0-arity fn or `nil`.
       Disambiguated from the `use_state` shape by `cleanup`'s arity.
     * `{:cell_resolved, cell}` — `use_source` (resolved cell handle).
+    * `{:cell_resolved, cell, key}` — keyed factory source.
     * `{:cell_subscribed, cell, raw, subscriber}` — `use_value`; subscriber includes a generation token.
     * `{:cell_resubscribe, cell, subscriber}` — refresh pending; retains cleanup identity.
     * `:uninitialized` — slot never committed, or disabled mid-render.
