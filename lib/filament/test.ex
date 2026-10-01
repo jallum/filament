@@ -417,10 +417,8 @@ defmodule Filament.Test do
   end
 
   defp dispatch_event(view, "filament:" <> ref, params) do
-    case String.split(ref, ":", parts: 2) do
-      [fiber_id_str, index_str] ->
-        handler_index = String.to_integer(index_str)
-
+    case Filament.Hooks.parse_event_ref(ref) do
+      {:ok, fiber_id_str, handler_index} ->
         handler =
           Filament.FiberTree.get_event_handler(
             view.fiber_tree,
@@ -441,7 +439,7 @@ defmodule Filament.Test do
             {:ok, flush_messages(view)}
         end
 
-      _other ->
+      :error ->
         {:error, {:bad_ref_format, ref}}
     end
   end

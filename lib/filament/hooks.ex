@@ -467,4 +467,25 @@ defmodule Filament.Hooks do
     Process.put(:filament_render_context, new_ctx)
     "#{fiber_id_str}:#{idx}"
   end
+
+  @doc false
+  # A wire ref's fiber id and handler index (`register_event_handler/1`).
+  # The index is digits only, so the last colon is the separator, whatever
+  # the fiber id holds: a keyed child's key may have colons of its own.
+  @spec parse_event_ref(String.t()) :: {:ok, String.t(), non_neg_integer()} | :error
+  def parse_event_ref(ref) when is_binary(ref) do
+    case :binary.matches(ref, ":") do
+      [] ->
+        :error
+
+      matches ->
+        {at, 1} = List.last(matches)
+        <<fiber_id::binary-size(at), ":", index::binary>> = ref
+
+        case Integer.parse(index) do
+          {idx, ""} when idx >= 0 -> {:ok, fiber_id, idx}
+          _ -> :error
+        end
+    end
+  end
 end

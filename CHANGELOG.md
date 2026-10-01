@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A click on a keyed child whose key holds a colon (`:key={"type: fmj"}`)
+  no longer crashes the LiveView. An event ref is its fiber id, a colon
+  and the handler's index, and a keyed child's fiber id holds its key, so
+  the ref was read up to the key's own colon and the rest taken for the
+  index. It's now read from its last colon: the index is digits only, so
+  that colon is always the separator, whatever the key holds, and the
+  ref is no longer for it. `Filament.Test` reads refs the same way.
+
 ### Security
 
 ## [0.5.3] - 2026-10-01
