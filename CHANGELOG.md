@@ -48,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Send saturation recovery notices once per episode, resuming delivery from fresh state after resubscription.
+
 - Removed descendants run cleanup exactly once; keyed descendants retain
   state, and stale messages from replaced subscriptions are ignored.
 - LiveComponent handles batched Cell updates while preserving its root output.
