@@ -18,7 +18,8 @@ defmodule Filament.VNodeCompiler do
 
     in_scope = MapSet.new(Map.keys(caller.versioned_vars), fn {name, _ctx} -> name end)
     in_scope_list = MapSet.to_list(in_scope)
-    assign_and_emit(hoisted, {in_scope_list, in_scope_list})
+    template = {caller.module, caller.function, caller.line, :erlang.md5(source)}
+    assign_and_emit(hoisted, {in_scope_list, in_scope_list}, template)
   end
 
   # ─── Dynamic hoisting ────────────────────────────────────────────────────────
@@ -377,10 +378,40 @@ defmodule Filament.VNodeCompiler do
   # Single-pass walk that assigns compile-time indices to every memo and event site
   # and emits memo_at/event_at calls directly. Does NOT recurse into fn literals,
   # so only the linear render body is affected (not PLV comprehension entry fns).
-  defp assign_and_emit(ast, rv) do
-    {result, {_t_ctr, e_ctr}} = do_walk(ast, rv, {0, 0})
-    floor_call = quote do: Filament.Hooks.set_event_handler_floor(unquote(e_ctr))
-    {:__block__, [], [floor_call, result]}
+  defp assign_and_emit(ast, rv, template) do
+    {result, {t_ctr, e_ctr}} = do_walk(ast, rv, {0, 0})
+
+    if t_ctr == 0 and e_ctr == 0 do
+      result
+    else
+      base = Macro.unique_var(:event_base, __MODULE__)
+      scope = Macro.unique_var(:template_scope, __MODULE__)
+      result = scope_template_slots(result, base, scope)
+
+      quote do
+        {unquote(base), unquote(scope)} =
+          Filament.Hooks.reserve_template(unquote(Macro.escape(template)), unquote(e_ctr))
+
+        unquote(result)
+      end
+    end
+  end
+
+  defp scope_template_slots(ast, base, scope) do
+    Macro.postwalk(ast, fn
+      {{:., _, [{:__aliases__, _, [:Filament, :Hooks]}, :event_at]} = callee, call_meta, [slot, handler]} ->
+        offset = quote do: unquote(base) + unquote(slot)
+        {callee, call_meta, [offset, handler]}
+
+      {{:., _, [{:__aliases__, _, [:Filament, :Hooks]}, :memo_at]} = callee, call_meta, [{:t, slot}, deps, factory]} ->
+        # A moved event range invalidates cached markup and handler replay ranges.
+        key = quote do: {:t, unquote(scope), unquote(slot)}
+        deps = quote do: [unquote(base) | unquote(deps)]
+        {callee, call_meta, [key, deps, factory]}
+
+      node ->
+        node
+    end)
   end
 
   defp do_walk({:fn, _, _} = node, _rv, counters), do: {node, counters}
