@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Prevent helper and repeated ~F templates from sharing event refs or memo slots, including cached loop handlers.
+- Support ~F cond blocks with inline clauses and markup branches.
 
 ### Security
 
