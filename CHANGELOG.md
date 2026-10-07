@@ -17,10 +17,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Prevent helper and repeated ~F templates from sharing event refs or memo slots, including cached loop handlers.
-- Support ~F cond blocks with inline clauses and markup branches.
-
 ### Security
+
+## [0.5.5] - 2026-10-07
+
+### Added
+
+- `~F` templates now support `{cond do}` blocks. Before this, a `cond`
+  in a template failed to compile. Each clause can render markup or a
+  short inline expression, and clauses can contain other blocks (`case`,
+  `cond`, `for`). Only the first matching clause is evaluated, and if no
+  clause matches, `CondClauseError` is raised as in plain Elixir. A `cond`
+  with no clauses, or a clause outside a block, raises a clear parse
+  error (#30).
+
+  ```elixir
+  ~F"""
+  {cond do}
+    {count == 0 ->}<button on_click={fn -> set_count.(1) end}>start</button>
+    {true ->}<button on_click={fn -> set_count.(0) end}>finish</button>
+  {end}
+  """
+
+  ~F|<p>{cond do}{n > 1 -> "big"}{true -> "small"}{end}</p>|
+  ```
+
+### Fixed
+
+- Clicking a button rendered by a helper function's `~F` template now
+  always runs that button's own handler. Before this, a helper template
+  (or one helper called more than once) could get the same event refs as
+  the template around it or as a `:for` loop's cached handlers, so a
+  click could run another button's handler. The same overlap could make
+  helpers share memoized results. This also holds when a conditional
+  helper is removed and the buttons after it shift position (#29).
 
 ## [0.5.4] - 2026-10-01
 
