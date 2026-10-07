@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Support ~F cond blocks with inline clauses and markup branches.
+
 ### Security
 
 ## [0.5.4] - 2026-10-01
