@@ -32,7 +32,9 @@ defmodule Filament.RenderContext do
     # %{module() => non_neg_integer()} - per-module counter for stable child fiber IDs.
     # Using a per-module counter means the Nth instance of a given component keeps a
     # stable ID regardless of how many other component types were rendered before it.
-    child_component_indices: %{}
+    child_component_indices: %{},
+    # Per-template invocation counters keep repeated helpers in separate memo scopes.
+    template_indices: %{}
   ]
 
   @type t :: %__MODULE__{
@@ -49,6 +51,7 @@ defmodule Filament.RenderContext do
           subscribe_enabled: boolean(),
           session_token: String.t() | nil,
           hook_slots: %{non_neg_integer() => term()},
-          child_component_indices: %{module() => non_neg_integer()}
+          child_component_indices: %{module() => non_neg_integer()},
+          template_indices: %{term() => non_neg_integer()}
         }
 end

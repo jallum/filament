@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Prevent helper and repeated ~F templates from sharing event refs or memo slots, including cached loop handlers.
+
 ### Security
 
 ## [0.5.4] - 2026-10-01

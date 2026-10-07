@@ -421,7 +421,35 @@ defmodule Filament.Hooks do
       after_ctx = Process.get(:filament_render_context)
       replayed = Map.take(fiber.event_handlers, Enum.to_list(e_start..(e_end - 1)))
       merged = Map.merge(after_ctx.new_event_handlers, replayed)
-      Process.put(:filament_render_context, %{after_ctx | new_event_handlers: merged})
+
+      Process.put(:filament_render_context, %{
+        after_ctx
+        | new_event_handlers: merged,
+          event_handler_index: max(after_ctx.event_handler_index, e_end)
+      })
+    end
+  end
+
+  # Reserve static events before evaluating a template: nested helpers and loops
+  # allocate after this range. Memo scopes distinguish call sites and repeated calls.
+  @doc false
+  def reserve_template(template, event_count) do
+    case Process.get(:filament_render_context) do
+      nil ->
+        {0, {template, 0}}
+
+      ctx ->
+        index = Map.get(ctx.template_indices, template, 0)
+        base = ctx.event_handler_index
+
+        updated = %{
+          ctx
+          | event_handler_index: base + event_count,
+            template_indices: Map.put(ctx.template_indices, template, index + 1)
+        }
+
+        Process.put(:filament_render_context, updated)
+        {base, {template, index}}
     end
   end
 
@@ -441,10 +469,14 @@ defmodule Filament.Hooks do
   @doc false
   def set_event_handler_floor(n) when is_integer(n) do
     case Process.get(:filament_render_context) do
-      nil -> :ok
+      nil ->
+        :ok
+
       ctx when ctx.event_handler_index < n ->
         Process.put(:filament_render_context, %{ctx | event_handler_index: n})
-      _ -> :ok
+
+      _ ->
+        :ok
     end
   end
 
