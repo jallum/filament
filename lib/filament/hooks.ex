@@ -52,6 +52,7 @@ defmodule Filament.Hooks do
   """
 
   alias Filament.Observable.Subscriber
+  alias Filament.Observable.Subscription
   alias Filament.RenderContext
 
   @doc false
@@ -264,7 +265,7 @@ defmodule Filament.Hooks do
     if ctx.subscribe_enabled do
       server = resolve_server(server_or_fn, previous, ctx)
       {value, raw} = resolve_value(server, project, slot_index, previous, ctx)
-      commit_slot(slot_index, {:subscribed, server, raw})
+      commit_slot(slot_index, %Subscription{server: server, raw: raw, project: project, value: value})
       value
     else
       commit_slot(slot_index, :uninitialized)
@@ -274,7 +275,7 @@ defmodule Filament.Hooks do
 
   defp resolve_server(factory_fn, previous, _ctx) when is_function(factory_fn, 0) do
     case previous do
-      {:subscribed, pid, _raw} when is_pid(pid) ->
+      %Subscription{server: pid} when is_pid(pid) ->
         if Process.alive?(pid), do: pid, else: call_factory(factory_fn)
 
       {:resolved, pid} when is_pid(pid) ->
@@ -301,18 +302,18 @@ defmodule Filament.Hooks do
       :uninitialized ->
         do_subscribe(server, project, ctx, slot_index)
 
-      {:subscribed, ^server, prev_raw} ->
+      %Subscription{server: ^server, raw: prev_raw} ->
         # Same server — re-apply project with current closure.
         # Prefer fresher raw state from new_hook_slots (server update since last render).
         raw =
           case Map.get(ctx.new_hook_slots, slot_index) do
-            {:subscribed, _, new_raw} -> new_raw
+            %Subscription{raw: new_raw} -> new_raw
             _ -> prev_raw
           end
 
         {project.(raw), raw}
 
-      {:subscribed, old_server, _prev_raw} ->
+      %Subscription{server: old_server} ->
         # Server changed — remove our projection from old server, subscribe to new.
         maybe_remove_projection(ctx, old_server, slot_index)
         do_subscribe(server, project, ctx, slot_index)

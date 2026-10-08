@@ -72,6 +72,9 @@ defmodule Filament.LiveComponent do
          |> Phoenix.Component.assign(:_filament_rendered, new_rendered)
          |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
 
+      {:cached, new_tree} ->
+        {:ok, Phoenix.Component.assign(socket, :_filament_tree, new_tree)}
+
       :ignore ->
         {:ok, socket}
     end
@@ -161,25 +164,17 @@ defmodule Filament.LiveComponent do
   end
 
   defp process_filament_msg({:filament_observable_updates, updates}, tree, owner_pid) do
-    new_tree = Filament.LiveView.apply_observable_updates(tree, updates)
+    {new_tree, changed?} = Filament.LiveView.apply_observable_updates(tree, updates)
 
-    affected =
-      updates
-      |> Enum.map(fn {fid, _, _} -> fid end)
-      |> Enum.uniq()
-      |> Enum.find(&Map.has_key?(new_tree, &1))
+    if changed? do
+      root = Map.fetch!(new_tree, "root")
 
-    case affected do
-      nil ->
-        :ignore
+      {final_tree, rendered, pending_effects} =
+        Reconciler.update(new_tree, "root", root.props, owner_pid: owner_pid)
 
-      fiber_id ->
-        fiber = Map.get(new_tree, fiber_id)
-
-        {final_tree, rendered, pending_effects} =
-          Reconciler.update(new_tree, fiber_id, fiber.props, owner_pid: owner_pid)
-
-        {:ok, final_tree, rendered, pending_effects}
+      {:ok, final_tree, rendered, pending_effects}
+    else
+      {:cached, new_tree}
     end
   end
 

@@ -37,9 +37,9 @@ defmodule Filament.LiveView do
       end
   """
 
-  alias Filament.Reconciler
-
   import Phoenix.Component, only: [sigil_H: 2]
+
+  alias Filament.Reconciler
 
   @callback root_component() :: module()
 
@@ -330,9 +330,10 @@ defmodule Filament.LiveView do
 
   @doc false
   def handle_observable_updates(tree, updates, socket, rerender_fn) do
-    new_tree = apply_observable_updates(tree, updates)
+    {new_tree, changed?} = apply_observable_updates(tree, updates)
+    socket = Phoenix.Component.assign(socket, :_filament_tree, new_tree)
 
-    if Enum.any?(updates, fn {fid, _, _} -> Map.has_key?(tree, fid) end) do
+    if changed? do
       {:noreply, rerender_fn.(socket, new_tree)}
     else
       {:noreply, socket}
@@ -341,23 +342,17 @@ defmodule Filament.LiveView do
 
   @doc false
   def apply_observable_updates(tree, updates) do
-    Enum.reduce(updates, tree, fn {fiber_id, slot_index, new_value}, acc ->
-      case Map.get(acc, fiber_id) do
-        nil -> acc
-        fiber -> apply_slot_update(acc, fiber_id, fiber, slot_index, new_value)
+    Enum.reduce(updates, {tree, false}, fn {fiber_id, slot_index, raw}, {tree, changed?} ->
+      with %{hook_slots: slots} = fiber <- Map.get(tree, fiber_id),
+           %Filament.Observable.Subscription{} = subscription <- Map.get(slots, slot_index) do
+        value = subscription.project.(raw)
+        updated = %{subscription | raw: raw, value: value}
+        fiber = %{fiber | hook_slots: Map.put(slots, slot_index, updated)}
+        {Map.put(tree, fiber_id, fiber), changed? or value !== subscription.value}
+      else
+        _ -> {tree, changed?}
       end
     end)
-  end
-
-  defp apply_slot_update(tree, fiber_id, fiber, slot_index, new_value) do
-    new_slot =
-      case Map.get(fiber.hook_slots, slot_index, :uninitialized) do
-        {:subscribed, s, _} -> {:subscribed, s, new_value}
-        _ -> {:subscribed, nil, new_value}
-      end
-
-    new_slots = Map.put(fiber.hook_slots, slot_index, new_slot)
-    Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
   end
 
   @doc false
