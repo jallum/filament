@@ -132,6 +132,28 @@ defmodule Filament.Observable.BackpressureTest do
     end)
   end
 
+  test "dead subscribers awaiting DOWN are silent and leave healthy delivery intact" do
+    pid = spawn_sleeper()
+    ref = Process.monitor(pid)
+    Process.exit(pid, :kill)
+    assert_receive {:DOWN, ^ref, :process, ^pid, _}
+
+    dead = %Subscriber{pid: pid, proj_keys: %{{"dead", 0} => true}, last_raw: 1}
+    healthy = %Subscriber{pid: self(), proj_keys: %{{"healthy", 0} => true}, last_raw: 1}
+    subs = %{pid => dead, self() => healthy}
+
+    logs =
+      capture_log(fn ->
+        updated = Filament.Observable.GenServer.notify_each(subs, 2, 100)
+        assert updated[pid] === dead
+        assert updated[self()].last_raw === 2
+        Logger.flush()
+      end)
+
+    assert logs == ""
+    assert_receive {:filament_observable_updates, [{"healthy", 0, 2}]}
+  end
+
   test "5. warning logged on saturation" do
     observable = start_supervised!({PressureCounter, 1})
     sub_pid = spawn_sleeper()

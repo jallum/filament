@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Skip observable rerenders when projected values are unchanged, retaining fresh raw state and current projection closures.
+- Skip dead observable subscribers quietly while their monitor cleanup is pending.
 
 ### Security
 
