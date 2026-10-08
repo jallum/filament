@@ -28,7 +28,17 @@ defmodule Filament.Observable do
   @callback handle_unsubscribe(subscriber :: term(), state :: term()) ::
               {:ok, new_state :: term()}
 
-  @optional_callbacks handle_subscribe: 2, handle_unsubscribe: 2
+  @doc """
+  The GenServer timeout Filament's own handlers return with: the
+  subscribe call, projection removal, and a subscriber's `:DOWN`.
+
+  A server that keeps a timeout (`{:noreply, state, ms}`) returns the
+  same one here, from its state, so a subscriber coming or going doesn't
+  cancel it. Defaults to `:infinity`: no timeout.
+  """
+  @callback timeout(state :: term()) :: timeout()
+
+  @optional_callbacks handle_subscribe: 2, handle_unsubscribe: 2, timeout: 1
 
   # ── Public API ──────────────────────────────────────────────────────────────
 
