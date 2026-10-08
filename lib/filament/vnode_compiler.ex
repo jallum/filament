@@ -44,41 +44,22 @@ defmodule Filament.VNodeCompiler do
     # bindings — skip fn literals entirely so they're left intact.
     stripped = strip_outer_change_tracking(hoisted)
 
-    # Pass 3: hoist register_event_handler calls out of comprehension entry fns.
-    # PLV calls those fns from its diff engine (outside our render pass), so any
-    # hook call inside them crashes. Move the registrations to before the fn in
-    # the for-loop body — they close over the pre-computed refs.
-    #
-    # For keyed comprehensions (:for + :key on a component tag), this pass also
-    # rewrites TagEngine.component(...) calls to component_keyed(..., key) before
-    # hoisting, so the child fiber is identified by key rather than position.
-    hoist_comprehension_handlers(stripped)
+    # Prepare comprehension entries that need the render context as a whole.
+    # Keeping their control flow intact preserves branch guards and bindings.
+    prepare_comprehension_entries(stripped)
   end
 
-  # Walk the AST looking for comprehension entry tuples and hoist any
-  # register_event_handler(fn_expr) or TagEngine.component(...) calls out of the
-  # entry fn body to new variable bindings immediately before the fn. The fn
-  # closes over those vars.
-  #
-  # PLV emits two entry-tuple shapes:
-  #   {nil, var_map, entry_fn}        — non-keyed comprehensions
-  #   {key_expr, var_map, entry_fn}   — keyed comprehensions (`:for` + `:key`)
-  #
-  # Both must be hoisted: PLV's diff engine re-calls entry fns outside the
-  # Filament render context, and any hook or component call left inside an entry
-  # fn body would crash there.
-  #
-  # Uses prewalk so that keyed for-loops (:for + :key on a component tag) are
-  # visited before their bodies: when the generator carries keyed_comprehension: true
-  # metadata, component(...) calls in the body are rewritten to component_keyed(...)
-  # in place, so the subsequent entry-tuple hoisting picks up the keyed variant.
-  defp hoist_comprehension_handlers(ast) do
+  # LiveView evaluates entry functions again during diffing, outside our render
+  # context. Run context-dependent entries once now and let their functions
+  # return the prepared dynamics. Never extract calls from inside a branch.
+  # Keyed component comprehensions also pass their key to the child renderer.
+  defp prepare_comprehension_entries(ast) do
     Macro.prewalk(ast, fn
       {:for, for_meta, [{:<-, gen_meta, [_lhs, _rhs]} | _rest] = args} ->
         inject_key_into_for(for_meta, gen_meta, args)
 
       {:{}, tuple_meta, [key, map_expr, {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body]}]}]} ->
-        hoist_entry_tuple(tuple_meta, key, map_expr, fn_meta, arrow_meta, fn_args, fn_body)
+        prepare_entry_tuple(tuple_meta, key, map_expr, fn_meta, arrow_meta, fn_args, fn_body)
 
       other ->
         other
@@ -113,33 +94,17 @@ defmodule Filament.VNodeCompiler do
     end)
   end
 
-  defp hoist_entry_tuple(tuple_meta, key, map_expr, fn_meta, arrow_meta, fn_args, fn_body) do
-    {fn_body1, reg_hoisted} = extract_reg_handlers(fn_body)
-    {fn_body2, comp_hoisted} = extract_component_calls(fn_body1)
-    all_hoisted = reg_hoisted ++ comp_hoisted
-    assigns = Enum.map(all_hoisted, fn {var, expr} -> {:=, [], [var, expr]} end)
+  defp prepare_entry_tuple(tuple_meta, key, map_expr, fn_meta, arrow_meta, fn_args, fn_body) do
+    entry_fn = {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body]}]}
+    tuple = {:{}, tuple_meta, [key, map_expr, entry_fn]}
 
-    {entry_fn, assigns} =
-      if has_render_context_call?(fn_body2) do
-        # Nested comprehensions are lazy: their entries are constructed when
-        # LiveView evaluates this entry function, outside the render pass.
-        # Evaluate the parent entry now, while its generator variables and
-        # render context are available, then return those prepared dynamics.
-        prepared = {:"fentry_#{System.unique_integer([:positive, :monotonic])}", [], nil}
-        original_fn = {:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body2]}]}
-        prepare = {:=, [], [prepared, quote(do: unquote(original_fn).(%{}, false))]}
-        trivial_fn = {:fn, fn_meta, [{:->, arrow_meta, [fn_args, prepared]}]}
-        {trivial_fn, assigns ++ [prepare]}
-      else
-        {{:fn, fn_meta, [{:->, arrow_meta, [fn_args, fn_body2]}]}, assigns}
-      end
-
-    new_tuple = {:{}, tuple_meta, [key, map_expr, entry_fn]}
-
-    if assigns == [] do
-      new_tuple
+    if has_render_context_call?(fn_body) do
+      prepared = Macro.unique_var(:prepared_entry, __MODULE__)
+      prepare = {:=, [], [prepared, quote(do: unquote(entry_fn).(%{}, false))]}
+      cached_fn = {:fn, fn_meta, [{:->, arrow_meta, [fn_args, prepared]}]}
+      {:__block__, [], [prepare, {:{}, tuple_meta, [key, map_expr, cached_fn]}]}
     else
-      {:__block__, [], assigns ++ [new_tuple]}
+      tuple
     end
   end
 
@@ -159,80 +124,6 @@ defmodule Filament.VNodeCompiler do
 
     found
   end
-
-  # Replace register_event_handler(fn_expr) calls in fn_body with fresh variable refs.
-  # Returns {new_fn_body, [{var_ast, original_register_expr}]}.
-  defp extract_reg_handlers(fn_body) do
-    base = System.unique_integer([:positive, :monotonic])
-
-    {new_body, {_counter, hoisted}} =
-      postwalk_in_comprehension(fn_body, {base, []}, fn
-        {{:., meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]}, call_meta, [fn_expr]},
-        {counter, acc} ->
-          var_name = :"freh_#{counter}"
-          var_ast = {var_name, [], nil}
-
-          original =
-            {{:., meta, [{:__aliases__, alias_meta, [:Filament, :Hooks]}, :register_event_handler]}, call_meta,
-             [fn_expr]}
-
-          {var_ast, {counter + 1, [{var_ast, original} | acc]}}
-
-        other, acc ->
-          {other, acc}
-      end)
-
-    {new_body, Enum.reverse(hoisted)}
-  end
-
-  # Replace Filament.TagEngine.component(...) calls in fn_body with fresh variable refs.
-  # Returns {new_fn_body, [{var_ast, original_component_expr}]}.
-  #
-  # Child component renders must happen eagerly (with the Filament render context
-  # active) so their wire refs are computed correctly. PLV's diff engine re-calls
-  # comprehension entry fns outside the render context, so any component call left
-  # inside an entry fn would produce wrong "root:0" wire refs.
-  defp extract_component_calls(fn_body) do
-    base = System.unique_integer([:positive, :monotonic])
-
-    {new_body, {_counter, hoisted}} =
-      postwalk_in_comprehension(fn_body, {base, []}, fn
-        {{:., _, [{:__aliases__, _, [:Filament, :TagEngine]}, comp_fn]}, _, _} = node, {counter, acc}
-        when comp_fn in [:component, :component_keyed] ->
-          var_name = :"fchild_#{counter}"
-          var_ast = {var_name, [], nil}
-          {var_ast, {counter + 1, [{var_ast, node} | acc]}}
-
-        other, acc ->
-          {other, acc}
-      end)
-
-    {new_body, Enum.reverse(hoisted)}
-  end
-
-  # A nested comprehension has its own generator bindings. Its entry tuple is
-  # visited separately by hoist_comprehension_handlers/1, after the enclosing
-  # tuple, so do not lift its handlers or components into the outer loop.
-  defp postwalk_in_comprehension({:for, _, _} = node, acc, _fun), do: {node, acc}
-  defp postwalk_in_comprehension({:fn, _, _} = node, acc, _fun), do: {node, acc}
-
-  defp postwalk_in_comprehension({tag, meta, args}, acc, fun) when is_list(args) do
-    {args, acc} = Enum.map_reduce(args, acc, &postwalk_in_comprehension(&1, &2, fun))
-    fun.({tag, meta, args}, acc)
-  end
-
-  defp postwalk_in_comprehension({left, right}, acc, fun) do
-    {left, acc} = postwalk_in_comprehension(left, acc, fun)
-    {right, acc} = postwalk_in_comprehension(right, acc, fun)
-    fun.({left, right}, acc)
-  end
-
-  defp postwalk_in_comprehension(list, acc, fun) when is_list(list) do
-    {list, acc} = Enum.map_reduce(list, acc, &postwalk_in_comprehension(&1, &2, fun))
-    fun.(list, acc)
-  end
-
-  defp postwalk_in_comprehension(node, acc, fun), do: fun.(node, acc)
 
   # Walk the AST stripping outer Phoenix change-tracking variable assignments
   # without descending into fn literals (comprehension entry fns own their bindings).
@@ -565,6 +456,10 @@ defmodule Filament.VNodeCompiler do
       end)
 
     names
+  end
+
+  defp free_nil_names({:case, _, [subject, [do: clauses]]}, bound) do
+    MapSet.union(free_nil_names(subject, bound), free_nil_names({:fn, [], clauses}, bound))
   end
 
   defp free_nil_names({:fn, _, clauses}, bound) do
