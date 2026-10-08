@@ -1596,7 +1596,25 @@ defmodule Filament.TagEngine do
     {merge_component_attrs(roots, attrs, line), attr_info}
   end
 
-  defp build_component_assigns(type_component, attrs, line, tag_meta, tag_close_meta, state) do
+  defp build_component_assigns({"remote component", name} = type, attrs, line, open, close, state) do
+    case name |> String.split(".") |> List.last() do
+      <<first, _::binary>> when first in ?A..?Z ->
+        {special, roots, attrs, attr_info} = split_component_attrs(type, attrs, state)
+        raise_if_let!(special[":let"], state.file)
+        children = invoke_subengine(state, :handle_end, [])
+        {slots, slot_info, state} = pop_slots(state)
+        assigns = merge_component_attrs(roots, attrs ++ [children: children] ++ slots, line)
+        {assigns, attr_info, slot_info, state}
+
+      _ ->
+        build_slot_component_assigns(type, attrs, line, open, close, state)
+    end
+  end
+
+  defp build_component_assigns(type, attrs, line, open, close, state),
+    do: build_slot_component_assigns(type, attrs, line, open, close, state)
+
+  defp build_slot_component_assigns(type_component, attrs, line, tag_meta, tag_close_meta, state) do
     {special, roots, attrs, attr_info} = split_component_attrs(type_component, attrs, state)
 
     clauses =
