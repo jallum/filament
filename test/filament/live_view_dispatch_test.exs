@@ -6,6 +6,7 @@ defmodule Filament.LiveViewDispatchTest do
   """
   use ExUnit.Case, async: false
 
+  alias Filament.Experimental.Hooks, as: ExperimentalHooks
   alias Filament.LiveView
   alias Phoenix.LiveView.Lifecycle
   alias Phoenix.LiveView.Socket
@@ -66,5 +67,41 @@ defmodule Filament.LiveViewDispatchTest do
 
     assert {:noreply, returned} = LiveView.dispatch_filament_event("root:0", %{}, sock)
     assert returned == sock
+  end
+
+  test "a stale ref fires no ancestor capture handlers" do
+    parent =
+      Filament.Fiber.new(
+        id: "root",
+        component: __MODULE__,
+        capture_handlers: %{0 => {fn _ -> send(self(), :captured) end, :all}}
+      )
+
+    leaf = Filament.Fiber.new(id: "root.leaf", component: __MODULE__, parent_id: "root", event_handlers: %{})
+    sock = socket(%{_filament_tree: %{"root" => parent, "root.leaf" => leaf}})
+
+    assert {:noreply, ^sock} = LiveView.dispatch_filament_event("root.leaf:0", %{}, sock)
+    refute_received :captured
+  end
+
+  defmodule PushComp do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      def render(_props) do
+        ref = ExperimentalHooks.use_event_ref(fn params, push -> push.("echo", params) end)
+
+        ~F"""
+        <button phx-click={ref}>go</button>
+        """
+      end
+    end
+  end
+
+  test "Filament.Test runs a handler taking a push function" do
+    view = Filament.Test.mount!(PushComp, %{})
+    assert {:ok, _view} = Filament.Test.click(view, "button")
+    assert_received {:push_event, "filament:root:0:echo", %{}}
   end
 end

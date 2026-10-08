@@ -80,9 +80,11 @@ defmodule Filament.Observable.GenServer do
 
   @doc """
   `Filament.Cell` callback: the server's pid, or `nil` when it isn't running.
-  Names and via-tuples resolve to whichever process is registered now.
+  Names and via-tuples resolve to whichever process is registered now. A pid
+  on another node is returned as is; monitoring it reports whether it lives.
   """
   @impl Filament.Cell
+  def whereis(server) when is_pid(server) and node(server) != node(), do: server
   def whereis(server) when is_pid(server), do: if(Process.alive?(server), do: server)
   def whereis(server), do: GenServer.whereis(server)
 

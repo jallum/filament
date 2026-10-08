@@ -153,6 +153,29 @@ defmodule Filament.TagEngine.SlotConsumerTest do
       refute children |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "ok"
     end
 
+    test "children keep the whitespace between inline elements" do
+      ast =
+        compile("""
+        <Filament.TagEngine.SlotConsumerTest.Layout.Layout><b>Hello</b> <i>world</i></Filament.TagEngine.SlotConsumerTest.Layout.Layout>
+        """)
+
+      assert {:component, _, %{children: children}, nil} = eval(ast)
+      assert children |> Filament.Web.to_iodata() |> IO.iodata_to_binary() == "<b>Hello</b> <i>world</i>"
+    end
+
+    test "whitespace around named slots passes no children" do
+      ast =
+        compile("""
+        <Filament.TagEngine.SlotConsumerTest.Layout.Layout>
+          <:header>H</:header>
+          <:body>B</:body>
+        </Filament.TagEngine.SlotConsumerTest.Layout.Layout>
+        """)
+
+      assert {:component, _, assigns, nil} = eval(ast)
+      refute Map.has_key?(assigns, :children)
+    end
+
     test "regular props on the component tag are preserved alongside slot assigns" do
       ast =
         compile("""

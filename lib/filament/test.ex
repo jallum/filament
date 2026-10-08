@@ -121,6 +121,10 @@ defmodule Filament.Test do
   Simulate a click on the element matching `selector`.
   Finds the `phx-click` attribute, dispatches the event handler, flushes resulting
   state updates, and re-renders. Returns `{:ok, updated_view}` or `{:error, reason}`.
+
+  A handler taking a push function, as `Filament.Experimental.Hooks.use_event_ref/1`
+  allows, sends `{:push_event, event, payload}` to the test process for each
+  push, where LiveView would call `Phoenix.LiveView.push_event/3`.
   """
   @spec click(t(), selector :: String.t()) :: {:ok, t()} | {:error, term()}
   def click(%__MODULE__{} = view, selector) do
@@ -403,32 +407,29 @@ defmodule Filament.Test do
   end
 
   defp dispatch_event(view, "filament:" <> ref, params) do
-    case Filament.Hooks.parse_event_ref(ref) do
-      {:ok, fiber_id_str, handler_index} ->
-        handler =
-          Filament.FiberTree.get_event_handler(
-            view.fiber_tree,
-            fiber_id_str,
-            handler_index
-          )
-
-        case handler do
-          nil ->
-            {:error, {:stale_handler, ref}}
-
-          fun when is_function(fun, 0) or is_function(fun, 1) ->
-            Filament.Core.dispatch_event(view.fiber_tree, fiber_id_str, handler_index, params)
-            {:ok, flush_messages(view)}
-        end
-
-      :error ->
-        {:error, {:bad_ref_format, ref}}
+    with {:ok, fiber_id, index} <- Filament.Hooks.parse_event_ref(ref),
+         handler when handler != nil <- Filament.FiberTree.get_event_handler(view.fiber_tree, fiber_id, index) do
+      run_handler(handler, view.fiber_tree, {fiber_id, index}, params)
+      {:ok, flush_messages(view)}
+    else
+      nil -> {:error, {:stale_handler, ref}}
+      :error -> {:error, {:bad_ref_format, ref}}
     end
   end
 
   defp dispatch_event(_view, ref, _params) do
     {:error, {:not_filament_event, ref}}
   end
+
+  # As in LiveView, where each push becomes a `push_event/3`.
+  defp run_handler(handler, _tree, {fiber_id, index}, params) when is_function(handler, 2) do
+    handler.(params, fn event, payload ->
+      send(self(), {:push_event, "filament:#{fiber_id}:#{index}:#{event}", payload})
+    end)
+  end
+
+  defp run_handler(_handler, tree, {fiber_id, index}, params),
+    do: Filament.Core.dispatch_event(tree, fiber_id, index, params)
 
   defp flush_messages(view) do
     receive do

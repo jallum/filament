@@ -31,6 +31,18 @@ defmodule Filament.WebToRenderedTest do
       assert r.dynamic.(false) == []
     end
 
+    test "only a single element at the top is a root" do
+      assert render({:element, "div", [], []}).root
+      refute render({:fragment, [{:element, "a", [], []}, {:element, "b", [], []}]}).root
+      refute render({:text, "x"}).root
+    end
+
+    test "a component rendering nil or false renders nothing" do
+      for output <- [nil, false] do
+        assert html({:element, "div", [], [{:component, Mod, %{}, nil, output}]}) == "<div></div>"
+      end
+    end
+
     test "pure-static element" do
       r = render({:element, "div", [], [{:text, "hi"}]})
       assert r.static == ["<div>hi</div>"]

@@ -277,17 +277,24 @@ defmodule Filament.LiveView do
         tree = socket.assigns._filament_tree
         target_handler = Filament.FiberTree.get_event_handler(tree, fiber_id_str, handler_index)
 
-        if is_function(target_handler, 2) do
+        cond do
+          # A ref from before a render that removed its handler runs nothing,
+          # not even its ancestors' capture handlers.
+          is_nil(target_handler) ->
+            {:noreply, socket}
+
           # 2-arity handlers (use_event_ref push pattern) need socket access for
           # `Phoenix.LiveView.push_event`, which is web-specific. They bypass
           # the Core dispatcher and run directly with the socket-aware shim.
-          invoke_2arity_handler(target_handler, params, socket, "filament:" <> ref)
-        else
+          is_function(target_handler, 2) ->
+            invoke_2arity_handler(target_handler, params, socket, "filament:" <> ref)
+
           # All other handlers go through `Filament.Core.dispatch_event`, which
           # walks fiber ancestry firing capture handlers root-to-target before
           # the target's bubble handler. Backend-agnostic.
-          _ = Filament.Core.dispatch_event(tree, fiber_id_str, handler_index, params)
-          {:noreply, socket}
+          true ->
+            _ = Filament.Core.dispatch_event(tree, fiber_id_str, handler_index, params)
+            {:noreply, socket}
         end
 
       :error ->

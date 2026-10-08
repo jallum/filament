@@ -81,6 +81,16 @@ defmodule Filament.FiberTest do
       assert child_id == "root.Elixir.Filament.FiberTest.AnotherComponent[key=42]"
     end
 
+    test "keys differing past inspect's default limits get distinct ids", %{parent: parent} do
+      long = String.duplicate("a", 5_000)
+
+      ids =
+        for key <- [long <> "1", long <> "2", Enum.to_list(1..60), Enum.to_list(1..61)],
+            do: Fiber.child_id(parent.id, AnotherComponent, {:key, key})
+
+      assert ids == Enum.uniq(ids)
+    end
+
     test "produces deterministic ID with {:key, :atom}", %{parent: parent} do
       child_id = Fiber.child_id(parent.id, AnotherComponent, {:key, :atom})
       assert child_id == "root.Elixir.Filament.FiberTest.AnotherComponent[key=:atom]"

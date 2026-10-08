@@ -323,7 +323,11 @@ defmodule Filament.Hooks do
         commit_slot(slot_index, {:cell_subscribed, cell, raw, subscriber, projection, value})
         value
 
-      {:disconnected, subscriber} ->
+      # The timer owns the next attempt: a monitor that fires at once, on a
+      # name not registered on a remote node, would skip the backoff.
+      {:disconnected, {_owner, _fiber_id, _slot, ref} = subscriber} ->
+        Process.demonitor(ref, [:flush])
+
         attempts =
           case previous do
             {:cell_retry, ^cell, _subscriber, n} -> n

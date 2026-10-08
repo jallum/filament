@@ -32,6 +32,25 @@ defmodule Filament.Hooks.UseValueTest do
     end
   end
 
+  # Names a process that has exited, so its monitor fires at once, and
+  # counts subscribe attempts.
+  defmodule DeadTransport do
+    @moduledoc false
+    @behaviour Filament.Cell
+
+    @impl true
+    def subscribe({_dead, counter}, _subscriber, _projection), do: :counters.add(counter, 1, 1) && :disconnected
+
+    @impl true
+    def current(_data, _projection), do: :disconnected
+
+    @impl true
+    def unsubscribe(_data, _subscriber), do: :ok
+
+    @impl true
+    def whereis({dead, _counter}), do: dead
+  end
+
   defmodule CellComp do
     @moduledoc false
     use Filament.Component
@@ -391,6 +410,23 @@ defmodule Filament.Hooks.UseValueTest do
 
       send(self(), {:cell_update, subscriber, 9})
       assert view |> Filament.Test.update() |> Filament.Test.render_text() == "disconnected"
+    end
+
+    test "backs off when the named process is already gone" do
+      counter = :counters.new(1, [])
+      dead = spawn(fn -> :ok end)
+      ref = Process.monitor(dead)
+      assert_receive {:DOWN, ^ref, :process, ^dead, _}
+
+      view = Filament.Test.mount!(CellComp.CellComp, %{cell: Filament.Source.new(DeadTransport, {dead, counter})})
+      deadline = System.monotonic_time(:millisecond) + 350
+
+      view
+      |> Stream.iterate(&Filament.Test.update/1)
+      |> Enum.find(fn _ -> System.monotonic_time(:millisecond) > deadline end)
+
+      # The first attempt, then retries at 100 ms and 300 ms.
+      assert :counters.get(counter, 1) <= 3
     end
 
     test "unmounting stops reconnecting", %{name: name} do

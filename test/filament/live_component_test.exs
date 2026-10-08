@@ -93,6 +93,17 @@ defmodule Filament.LiveComponentTest do
       assert html =~ "World"
     end
 
+    # Phoenix renders a LiveComponent only when its output has one static tag
+    # at the root.
+    test "marks a component rendering one element as rooted" do
+      {:ok, socket} = Filament.LiveComponent.mount(test_socket())
+
+      for component <- [LabelComp, CounterComp] do
+        {:ok, socket} = Filament.LiveComponent.update(%{id: "t", component: component}, socket)
+        assert socket.assigns._filament_rendered.root
+      end
+    end
+
     test "props are passed to the component" do
       {:ok, socket} = Filament.LiveComponent.mount(test_socket())
       assigns = %{id: "t", component: LabelComp, label: "Custom"}

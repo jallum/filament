@@ -54,10 +54,14 @@ defmodule Filament.Web do
       static: static,
       dynamic: fn _track -> dynamic end,
       fingerprint: fingerprint(static),
-      root: false,
+      root: root?(walked),
       caller: :not_available
     }
   end
+
+  # One element at the top, which a LiveComponent's output must be.
+  @doc false
+  def root?(vnode), do: match?({:element, _, _, _}, vnode)
 
   # LiveView treats equal fingerprints as the same template, so hash the whole
   # static list rather than a narrow digest of it.
@@ -94,6 +98,7 @@ defmodule Filament.Web do
   defp component_dynamic(%Filament.Template{} = template), do: to_rendered(template)
   defp component_dynamic(%Rendered{} = r), do: r
   defp component_dynamic(other) when is_tuple(other) or is_list(other), do: to_rendered(other)
+  defp component_dynamic(other) when other in [nil, false], do: ""
   defp component_dynamic(other), do: Safe.to_iodata(other)
 
   defp walk_child_rendered(%Filament.Template{} = template, state), do: push_dynamic(state, to_rendered(template))

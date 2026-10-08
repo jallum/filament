@@ -14,7 +14,7 @@ defmodule Filament.Web.Template do
         static: template.static,
         fingerprint: template.fingerprint,
         dynamic: fn _track -> Enum.map(bindings, &encode/1) end,
-        root: false,
+        root: Filament.Web.root?(template.vnode),
         caller: :not_available
       }
     else

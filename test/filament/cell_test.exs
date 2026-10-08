@@ -130,6 +130,14 @@ defmodule Filament.CellTest do
   end
 
   describe "Cell.whereis/1" do
+    test "returns a GenServer pid on another node without asking whether it lives" do
+      # A pid on node :"other@host", built from its external term format.
+      node = "other@host"
+      remote = :erlang.binary_to_term(<<131, 88, 100, byte_size(node)::16, node::binary, 1::32, 0::32, 1::32>>)
+
+      assert Cell.whereis(Filament.Source.new(Filament.Observable.GenServer, remote)) == remote
+    end
+
     test "is :unknown for a transport without the callback" do
       {:ok, agent} = TestCell.start_link(%{})
       assert Cell.whereis(Filament.Source.new(TestCell, agent)) == :unknown

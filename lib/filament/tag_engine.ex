@@ -401,9 +401,28 @@ defmodule Filament.TagEngine do
     |> continue(tokens)
   end
 
-  defp jsx_end(_state, _tokens) do
-    raise CompileError, description: "{end} without matching {if}, {for}, {case}, or {cond}"
+  # A block's branches each build their own vnodes, so every tag opened in one
+  # must close in it, and a tag can't close one opened outside the block.
+  defp close_block_tags!(state, meta, token) do
+    case innermost_block(state) do
+      nil when token == "{end}" ->
+        raise_syntax_error!("{end} without matching {if}, {for}, {case}, or {cond}", meta, state)
+
+      {:jsx_block, kind, _, %{tag_depth: depth}} when length(state.tags) > depth ->
+        [{_type, name, _attrs, tag_meta} | _] = state.tags
+
+        raise_syntax_error!(
+          "<#{name}> at line #{tag_meta.line} must be closed before #{token} of its {#{kind}}",
+          meta,
+          state
+        )
+
+      _ ->
+        state
+    end
   end
+
+  defp innermost_block(state), do: Enum.find(state.stack, &match?({:jsx_block, _, _, _}, &1))
 
   defp invoke_subengine(%{subengine: subengine, substate: substate}, fun, args) do
     apply(subengine, fun, [substate | args])
@@ -423,8 +442,15 @@ defmodule Filament.TagEngine do
     %{state | tags: [token | state.tags]}
   end
 
-  defp pop_tag!(%{tags: [{type, tag_name, _attrs, _meta} = tag | tags]} = state, {:close, type, tag_name, _}) do
-    {tag, %{state | tags: tags}}
+  defp pop_tag!(%{tags: [{type, tag_name, _attrs, _meta} = tag | tags]} = state, {:close, type, tag_name, close_meta}) do
+    case innermost_block(state) do
+      {:jsx_block, kind, _, %{tag_depth: depth} = block_meta} when length(tags) < depth ->
+        message = "</#{tag_name}> closes a tag opened outside the {#{kind}} at line #{block_meta.line}"
+        raise_syntax_error!(message, close_meta, state)
+
+      _ ->
+        {tag, %{state | tags: tags}}
+    end
   end
 
   defp pop_tag!(
@@ -472,39 +498,39 @@ defmodule Filament.TagEngine do
       {:if_block, cond_ast} ->
         state
         |> push_substate_to_stack()
-        |> push_stack_item({:jsx_block, :if, cond_ast, meta})
+        |> push_stack_item({:jsx_block, :if, cond_ast, Map.put(meta, :tag_depth, length(state.tags))})
         |> update_subengine(:handle_begin, [])
         |> continue(tokens)
 
       {:for_block, for_args} ->
         state
         |> push_substate_to_stack()
-        |> push_stack_item({:jsx_block, :for, for_args, meta})
+        |> push_stack_item({:jsx_block, :for, for_args, Map.put(meta, :tag_depth, length(state.tags))})
         |> update_subengine(:handle_begin, [])
         |> continue(tokens)
 
       {:case_block, subject} ->
         state
         |> push_substate_to_stack()
-        |> push_stack_item({:jsx_block, :case, subject, meta})
+        |> push_stack_item({:jsx_block, :case, subject, Map.put(meta, :tag_depth, length(state.tags))})
         |> update_subengine(:handle_begin, [])
         |> continue(tokens)
 
       {:cond_block, nil} ->
         state
         |> push_substate_to_stack()
-        |> push_stack_item({:jsx_block, :cond, nil, meta})
+        |> push_stack_item({:jsx_block, :cond, nil, Map.put(meta, :tag_depth, length(state.tags))})
         |> update_subengine(:handle_begin, [])
         |> continue(tokens)
 
       {:jsx_clause, clause} ->
-        jsx_clause(state, clause, meta, opts, tokens)
+        state |> close_block_tags!(meta, "clause") |> jsx_clause(clause, meta, opts, tokens)
 
       :jsx_else ->
-        jsx_else(state, meta, tokens)
+        state |> close_block_tags!(meta, "{else}") |> jsx_else(meta, tokens)
 
       :jsx_end ->
-        jsx_end(state, tokens)
+        state |> close_block_tags!(meta, "{end}") |> jsx_end(tokens)
 
       :expr ->
         quoted = Code.string_to_quoted!(value, opts)
@@ -518,17 +544,12 @@ defmodule Filament.TagEngine do
   # Text
 
   defp handle_token([{:text, text, %{line_end: line, column_end: column}} | tokens], state) do
-    cond do
-      text == "" ->
-        continue(state, tokens)
-
-      in_component_toplevel?(state) and String.match?(text, ~r/\A\s*\z/) ->
-        continue(state, tokens)
-
-      true ->
-        state
-        |> update_subengine(:handle_text, [[line: line, column: column], text])
-        |> continue(tokens)
+    if text == "" do
+      continue(state, tokens)
+    else
+      state
+      |> update_subengine(:handle_text, [[line: line, column: column], text])
+      |> continue(tokens)
     end
   end
 
@@ -599,12 +620,18 @@ defmodule Filament.TagEngine do
   # Slot sub-tag consumer: <:slot_name>...</:slot_name> inside a component tag
 
   defp handle_token([{:slot, slot_name, attrs, tag_meta} | tokens], state) do
-    if state.slots == [] do
-      raise_syntax_error!(
-        "slot syntax `<:#{slot_name}>` is only valid inside a component tag",
-        tag_meta,
-        state
-      )
+    cond do
+      state.slots == [] ->
+        raise_syntax_error!("slot syntax `<:#{slot_name}>` is only valid inside a component tag", tag_meta, state)
+
+      # As in HEEx: an entry inside a block or an element would be hoisted out
+      # of it. `:if` and `:for` on the entry place it conditionally.
+      not (match?([{:remote_component, _, _, _} | _], state.tags) and match?([{:substate, _} | _], state.stack)) ->
+        message = "slot entry `<:#{slot_name}>` must be a direct child of its component; use :if or :for on the entry"
+        raise_syntax_error!(message, tag_meta, state)
+
+      true ->
+        :ok
     end
 
     slot_atom = String.to_atom(slot_name)
@@ -1028,10 +1055,11 @@ defmodule Filament.TagEngine do
   # Filament-style components (`<Module />`) lower to `Mod.render(props)` at
   # walk time; the `<Module.fun />` Phoenix HEEx form (with a lowercase fun
   # name) isn't supported here.
-  defp build_filament_component_ast(_state, mod_ast, fun, assigns, key_ast, line) do
+  defp build_filament_component_ast(state, mod_ast, fun, assigns, key_ast, line) do
     if fun != :render do
       raise CompileError,
         description: "Filament VNode emission supports `<Module />` (fun=:render) only; got #{inspect(fun)}",
+        file: state.file,
         line: line
     end
 
@@ -1280,13 +1308,16 @@ defmodule Filament.TagEngine do
     quote line: line, do: Map.merge(unquote(regular_assigns), unquote(slot_assigns_ast))
   end
 
-  # Whitespace between a component's tags is skipped, so an empty body means
-  # the component holds only named slots and receives no `children` prop.
-  defp put_children(assigns, {:text, ""}, _line), do: assigns
-
+  # A body of whitespace alone, as around named slots, passes no `children`.
   defp put_children(assigns, children_ast, line) do
-    quote line: line, do: Map.put(unquote(assigns), :children, unquote(children_ast))
+    if blank?(children_ast),
+      do: assigns,
+      else: quote(line: line, do: Map.put(unquote(assigns), :children, unquote(children_ast)))
   end
+
+  defp blank?({:text, text}) when is_binary(text), do: String.trim(text) == ""
+  defp blank?({:fragment, children}) when is_list(children), do: Enum.all?(children, &blank?/1)
+  defp blank?(_ast), do: false
 
   defp parse_slot_default(attrs, state) do
     case List.keyfind(attrs, "default", 0) do
@@ -1294,17 +1325,6 @@ defmodule Filament.TagEngine do
       _ -> nil
     end
   end
-
-  # True directly inside a component's body: not within one of its elements
-  # or a slot capture substate.
-  defp in_component_toplevel?(state) do
-    match?([{:remote_component, _, _, _} | _], state.tags) and not in_slot_substate?(state.stack)
-  end
-
-  defp in_slot_substate?([{:slot_capture, _, _, _, _} | _]), do: true
-  defp in_slot_substate?([{:substate, _} | _]), do: false
-  defp in_slot_substate?([_ | rest]), do: in_slot_substate?(rest)
-  defp in_slot_substate?([]), do: false
 
   ## build_self_close_component_assigns/build_component_assigns
 
