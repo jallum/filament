@@ -34,14 +34,9 @@ defmodule Inventory.Server do
   # Automatic hold release when a component unsubscribes or its owner dies.
   @impl Filament.Observable
   def handle_unsubscribe(subscriber, state) do
-    holder =
-      case subscriber do
-        {pid, fiber_id, _, _} when is_pid(pid) -> {pid, fiber_id}
-        {pid, fiber_id, _} when is_pid(pid) -> {pid, fiber_id}
-        _ -> nil
-      end
+    {pid, fiber_id, _slot, _generation} = subscriber
 
-    case Map.pop(state.holds, holder) do
+    case Map.pop(state.holds, {pid, fiber_id}) do
       {nil, _} ->
         {:ok, state}
 
