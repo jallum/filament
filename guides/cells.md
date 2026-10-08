@@ -189,16 +189,21 @@ defmodule MyApp.AgentCell do
       new_subs = Map.put(state.subs, subscriber, {pid, projection, projected})
       {{:ok, projected}, %{state | subs: new_subs}}
     end)
+  catch
+    :exit, _ -> :disconnected
   end
 
+  # Idempotent, and quiet when the agent is gone: unmounting calls it.
   @impl Filament.Cell
   def unsubscribe(agent, subscriber) do
-    Agent.update(agent, fn s -> %{s | subs: Map.delete(s.subs, subscriber)} end)
+    Agent.cast(agent, fn s -> %{s | subs: Map.delete(s.subs, subscriber)} end)
   end
 
   @impl Filament.Cell
   def current(agent, projection) do
     Agent.get(agent, fn s -> projection.(s.value) end)
+  catch
+    :exit, _ -> :disconnected
   end
 
   def write(agent, new_value) do
@@ -212,7 +217,7 @@ defmodule MyApp.AgentCell do
     Map.new(subs, fn {sub, {pid, projection, last}} ->
       new_projected = projection.(new_value)
 
-      if new_projected != last do
+      if new_projected !== last do
         send(pid, {:cell_update, sub, new_projected})
       end
 
