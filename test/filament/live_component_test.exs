@@ -233,7 +233,7 @@ defmodule Filament.LiveComponentTest do
     assert_receive {:cell_updates, updates}
     updates = updates ++ [{{self(), "missing", 0}, 99}]
     {:ok, socket} = Filament.LiveComponent.update(%{filament_msg: {:cell_updates, updates}}, socket)
-    assert_receive :root_rendered
+    # Only the children read the value; the root's inputs are unchanged.
     refute_receive :root_rendered
 
     assert socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary() ==
@@ -241,7 +241,7 @@ defmodule Filament.LiveComponentTest do
 
     [child | _] = socket.assigns._filament_tree["root"].children
     {:ok, socket} = Filament.LiveComponent.update(%{filament_msg: {:filament_set_state, child, 1, 7}}, socket)
-    assert_receive :root_rendered
+    refute_receive :root_rendered
     html = socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
     assert html =~ "<section>wrapper"
     assert html =~ "<span>10/7</span>"

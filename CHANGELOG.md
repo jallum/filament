@@ -32,6 +32,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than the old `%Subscriber{}` struct. Servers that read
   `subscriber.pid` need to destructure the tuple instead.
 
+- **Breaking:** components render only when their inputs change. A parent's
+  render reuses each child whose props are unchanged (`===`), with its whole
+  subtree; a child's state or `use_value` update renders that child alone,
+  not its ancestors; and setting state to the value it holds renders
+  nothing. Closures in props compare equal when they come from the same
+  `fn` and capture equal values. A component that read anything else during
+  render (ETS, the process dictionary, a GenServer call, a render-prop
+  function reading such data) and relied on an unrelated render to refresh
+  must take that data as a prop, state or `use_value` instead. This replaces
+  0.5.x's compiler-generated `memo_at` child memoization.
+
 - The 0.5.6 observable fixes apply on the cell transport: the injected
   cell subscribe, current-value, unsubscribe and `:DOWN` handlers keep
   the server's `timeout/1`; a cell subscriber that has exited is skipped

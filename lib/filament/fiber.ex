@@ -28,7 +28,13 @@ defmodule Filament.Fiber do
     event_handler_kinds: %{},
     # %{non_neg_integer() => :all | MapSet.t(atom())} — per-slot kinds
     # filter for capture handlers.
-    capture_handler_kinds: %{}
+    capture_handler_kinds: %{},
+    # term() | nil — walked output of the last render, reused while the
+    # fiber's props are unchanged and nothing below it is dirty
+    rendered: nil,
+    # nil | :self | :descendants — :self when the fiber's own state or a
+    # value it reads changed; :descendants on its ancestors
+    dirty: nil
   ]
 
   @type kinds :: :all | MapSet.t(atom())
@@ -43,6 +49,8 @@ defmodule Filament.Fiber do
           capture_handlers: %{non_neg_integer() => function()},
           event_handler_kinds: %{non_neg_integer() => kinds()},
           capture_handler_kinds: %{non_neg_integer() => kinds()},
+          rendered: term(),
+          dirty: nil | :self | :descendants,
           children: [String.t()],
           parent_id: String.t() | nil,
           status: :mounting | :stable | :updating | :unmounting

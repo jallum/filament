@@ -86,8 +86,7 @@ defmodule Filament.VNodeCompilerTest do
       refute h1_slot0 === h1_slot1, "distinct handlers must occupy distinct slots"
 
       # Advance count: use_state is hook slot 0 — change count 0 → 1
-      updated =
-        FiberTree.update_hook_slot(tree1, "root", 0, fn {_, setter} -> {1, setter} end)
+      {:ok, updated, "root"} = Filament.LiveView.apply_set_state(tree1, "root", 0, 1)
 
       {tree2, _, _} = Reconciler.update(updated, "root", %{}, owner_pid: self())
 
@@ -153,8 +152,7 @@ defmodule Filament.VNodeCompilerTest do
       handler1 = FiberTree.get_event_handler(tree1, "root", 0)
 
       # Advance count: slot 0 = {value, setter}, change value 0 → 1
-      updated =
-        FiberTree.update_hook_slot(tree1, "root", 0, fn {_, setter} -> {1, setter} end)
+      {:ok, updated, "root"} = Filament.LiveView.apply_set_state(tree1, "root", 0, 1)
 
       {tree2, _, _} = Reconciler.update(updated, "root", %{}, owner_pid: self())
       handler2 = FiberTree.get_event_handler(tree2, "root", 0)

@@ -382,8 +382,9 @@ defmodule Filament.LiveView do
   @doc """
   Apply a `:filament_set_state` message to the fiber tree without rendering.
 
-  Returns `{:ok, new_tree, fiber_id}` on success or `:ignore` if the target
-  fiber no longer exists. Caller decides which fiber to re-render from.
+  Returns `{:ok, new_tree, fiber_id}` with the fiber marked dirty, or
+  `:ignore` if the target fiber no longer exists or the slot already holds
+  the value (`===`). Caller decides which fiber to re-render from.
   """
   @spec apply_set_state(map(), String.t(), non_neg_integer(), term()) ::
           {:ok, map(), String.t()} | :ignore
@@ -393,9 +394,15 @@ defmodule Filament.LiveView do
         :ignore
 
       fiber ->
-        existing = Map.get(fiber.hook_slots, slot_index, {nil, nil})
-        new_slots = Map.put(fiber.hook_slots, slot_index, Filament.HookSlot.put_state_value(existing, new_value))
-        {:ok, Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots}), fiber_id}
+        case Map.get(fiber.hook_slots, slot_index, {nil, nil}) do
+          {old_value, setter} when is_function(setter, 1) and old_value === new_value ->
+            :ignore
+
+          existing ->
+            new_slots = Map.put(fiber.hook_slots, slot_index, Filament.HookSlot.put_state_value(existing, new_value))
+            tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
+            {:ok, Reconciler.mark_dirty(tree, fiber_id), fiber_id}
+        end
     end
   end
 
@@ -435,7 +442,7 @@ defmodule Filament.LiveView do
          true <- Filament.HookSlot.matches_subscriber?(slot, subscriber) do
       {new_slot, changed?} = update.(slot)
       new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: Map.put(fiber.hook_slots, slot_index, new_slot)})
-      if changed?, do: {:ok, new_tree, fiber_id}, else: {:cached, new_tree}
+      if changed?, do: {:ok, Reconciler.mark_dirty(new_tree, fiber_id), fiber_id}, else: {:cached, new_tree}
     else
       _ -> :ignore
     end

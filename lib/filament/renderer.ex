@@ -96,29 +96,20 @@ defmodule Filament.Renderer do
       hook_slots: hook_slots
     }
 
-    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers, child_event_handlers,
-     child_capture_handlers, child_event_handler_kinds, child_capture_handler_kinds} =
-      render(mod, props, child_ctx)
+    {child_fiber, descendant_fibers, child_pending_effects} =
+      if reusable?(existing_fiber, props) do
+        {rendered, descendants, effects} = reuse(existing_fiber, child_ctx)
+        {%{existing_fiber | rendered: rendered, dirty: nil, status: :stable}, descendants, effects}
+      else
+        render_child_fiber(existing_fiber, child_ctx, mod, props, key, parent_ctx.fiber_id)
+      end
 
-    child_fiber = %Fiber{
-      id: child_id,
-      key: key,
-      component: mod,
-      props: props,
-      hook_slots: Map.merge(hook_slots, child_new_hook_slots),
-      event_handlers: child_event_handlers,
-      capture_handlers: child_capture_handlers,
-      event_handler_kinds: child_event_handler_kinds,
-      capture_handler_kinds: child_capture_handler_kinds,
-      children: grandchild_fibers |> Map.filter(fn {_id, fiber} -> fiber.parent_id == child_id end) |> Map.keys(),
-      parent_id: parent_ctx.fiber_id,
-      status: if(existing_fiber, do: :stable, else: :mounting)
-    }
+    child_fiber = %{child_fiber | children: direct_children(descendant_fibers, child_id)}
 
     updated_new_fibers =
       parent_ctx.new_fibers
       |> Map.put(child_id, child_fiber)
-      |> Map.merge(grandchild_fibers)
+      |> Map.merge(descendant_fibers)
 
     Process.put(:filament_render_context, %{
       parent_ctx
@@ -127,8 +118,99 @@ defmodule Filament.Renderer do
         child_component_indices: indices_after
     })
 
-    rendered_child
+    child_fiber.rendered
   end
+
+  defp render_child_fiber(existing_fiber, child_ctx, mod, props, key, parent_id) do
+    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers, child_event_handlers,
+     child_capture_handlers, child_event_handler_kinds, child_capture_handler_kinds} =
+      render(mod, props, child_ctx)
+
+    child_fiber = %Fiber{
+      id: child_ctx.fiber_id,
+      key: key,
+      component: mod,
+      props: props,
+      hook_slots: Map.merge(child_ctx.hook_slots, child_new_hook_slots),
+      event_handlers: child_event_handlers,
+      capture_handlers: child_capture_handlers,
+      event_handler_kinds: child_event_handler_kinds,
+      capture_handler_kinds: child_capture_handler_kinds,
+      parent_id: parent_id,
+      status: if(existing_fiber, do: :stable, else: :mounting),
+      rendered: rendered_child
+    }
+
+    {child_fiber, grandchild_fibers, child_pending_effects}
+  end
+
+  defp direct_children(fibers, parent_id) do
+    fibers |> Map.filter(fn {_id, fiber} -> fiber.parent_id == parent_id end) |> Map.keys()
+  end
+
+  @doc """
+  Whether `fiber` can skip its render: it has a stored output, its props are
+  unchanged (`===`), and neither its own state nor a value it reads changed.
+  Closures in props compare equal when they come from the same code and
+  capture equal values.
+  """
+  @spec reusable?(Fiber.t() | nil, map()) :: boolean()
+  def reusable?(%Fiber{props: old_props, dirty: dirty, rendered: rendered}, props),
+    do: old_props === props and dirty != :self and not is_nil(rendered)
+
+  def reusable?(nil, _props), do: false
+
+  @doc """
+  Reuse a fiber's stored output without calling its `render/1`.
+
+  A clean subtree is returned as stored. When only descendants are dirty, the
+  stored output is walked again so each child component goes through
+  `render_component_child/4`, which renders the dirty ones and reuses the
+  rest. Returns `{rendered, descendant_fibers, pending_effects}`.
+  """
+  @spec reuse(Fiber.t(), RenderContext.t()) :: {term(), %{String.t() => Fiber.t()}, list()}
+  def reuse(%Fiber{dirty: nil} = fiber, context) do
+    {fiber.rendered, subtree(context.fiber_tree, fiber), []}
+  end
+
+  def reuse(%Fiber{dirty: :descendants} = fiber, context) do
+    Process.put(:filament_render_context, %{
+      context
+      | fiber_id: fiber.id,
+        new_fibers: %{},
+        pending_effects: [],
+        child_component_indices: %{}
+    })
+
+    try do
+      rendered = rewalk(fiber.rendered)
+      final_ctx = Process.get(:filament_render_context)
+      {rendered, final_ctx.new_fibers, final_ctx.pending_effects}
+    after
+      Process.delete(:filament_render_context)
+    end
+  end
+
+  defp subtree(tree, fiber) do
+    Enum.reduce(fiber.children || [], %{}, fn id, acc ->
+      case Map.fetch(tree, id) do
+        {:ok, child} -> acc |> Map.put(id, child) |> Map.merge(subtree(tree, child))
+        :error -> acc
+      end
+    end)
+  end
+
+  # Walked output keeps event refs resolved and child output inline, so only
+  # `:component` nodes need visiting. Child ids come out the same as in the
+  # original render because the component nodes are visited in the same order.
+  defp rewalk({:component, mod, props, key, _child_render}) do
+    {:component, mod, props, key, render_component_child(Process.get(:filament_render_context), mod, props, key || nil)}
+  end
+
+  defp rewalk({:element, tag, attrs, children}), do: {:element, tag, attrs, rewalk(children)}
+  defp rewalk({:fragment, children}), do: {:fragment, rewalk(children)}
+  defp rewalk(nodes) when is_list(nodes), do: Enum.map(nodes, &rewalk/1)
+  defp rewalk(node), do: node
 
   @doc false
   @spec render_component_child_keyed(RenderContext.t(), module(), map(), term()) :: term()

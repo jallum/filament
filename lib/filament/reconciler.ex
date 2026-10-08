@@ -51,7 +51,8 @@ defmodule Filament.Reconciler do
         capture_handlers: new_capture_handlers,
         event_handler_kinds: new_event_handler_kinds,
         capture_handler_kinds: new_capture_handler_kinds,
-        status: :stable
+        status: :stable,
+        rendered: rendered
     }
 
     tree = reconcile_children(%{"root" => root_fiber}, "root", root_fiber, new_fibers, owner_pid)
@@ -61,6 +62,10 @@ defmodule Filament.Reconciler do
 
   @doc """
   Updates a fiber with new props and reconciles children.
+
+  The fiber's `render/1` runs only when its props changed (`!==`) or it was
+  marked dirty with `mark_dirty/2`. Otherwise its stored output is reused,
+  and only dirty descendants render.
 
   ## Options
     * `:owner_pid` - the LiveView process that owns this render tree (default: nil)
@@ -75,15 +80,35 @@ defmodule Filament.Reconciler do
       Map.get(tree, fiber_id) ||
         raise ReconcilerError, "fiber #{inspect(fiber_id)} not found in tree"
 
-    # Update fiber props and status
-    updated_fiber = %{fiber | props: new_props, status: :updating}
-
     # Create context for re-render
     context = %RenderContext{
       fiber_id: fiber_id,
       fiber_tree: tree,
       owner_pid: owner_pid
     }
+
+    cond do
+      not Renderer.reusable?(fiber, new_props) -> render_fiber(tree, fiber, new_props, context, owner_pid)
+      fiber.dirty == nil -> {tree, fiber.rendered, []}
+      true -> reuse_fiber(tree, fiber, context, owner_pid)
+    end
+  end
+
+  defp reuse_fiber(tree, fiber, context, owner_pid) do
+    {rendered, new_fibers, pending_effects} = Renderer.reuse(fiber, context)
+    updated_fiber = %{fiber | rendered: rendered, dirty: nil}
+
+    final_tree =
+      tree
+      |> Map.put(fiber.id, updated_fiber)
+      |> reconcile_children(fiber.id, updated_fiber, new_fibers, owner_pid)
+
+    {final_tree, rendered, pending_effects}
+  end
+
+  defp render_fiber(tree, fiber, new_props, context, owner_pid) do
+    fiber_id = fiber.id
+    updated_fiber = %{fiber | props: new_props, status: :updating}
 
     # Re-render component
     {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers, new_capture_handlers,
@@ -97,7 +122,9 @@ defmodule Filament.Reconciler do
         event_handlers: new_event_handlers,
         capture_handlers: new_capture_handlers,
         event_handler_kinds: new_event_handler_kinds,
-        capture_handler_kinds: new_capture_handler_kinds
+        capture_handler_kinds: new_capture_handler_kinds,
+        rendered: rendered,
+        dirty: nil
     }
 
     # Create new tree with updated fiber
@@ -110,6 +137,31 @@ defmodule Filament.Reconciler do
       |> Map.update!(fiber_id, &%{&1 | status: :stable})
 
     {final_tree, rendered, pending_effects}
+  end
+
+  @doc """
+  Mark `fiber_id` for rendering on the next `update/4`, and its ancestors as
+  having a dirty descendant. Returns the tree unchanged if the fiber is gone.
+  """
+  @spec mark_dirty(fiber_tree(), String.t()) :: fiber_tree()
+  def mark_dirty(tree, fiber_id) do
+    case Map.fetch(tree, fiber_id) do
+      {:ok, fiber} -> tree |> Map.put(fiber_id, %{fiber | dirty: :self}) |> mark_ancestors(fiber.parent_id)
+      :error -> tree
+    end
+  end
+
+  # Every dirty fiber's ancestors are already marked, so stop at the first one.
+  defp mark_ancestors(tree, nil), do: tree
+
+  defp mark_ancestors(tree, fiber_id) do
+    case Map.fetch(tree, fiber_id) do
+      {:ok, %{dirty: nil} = fiber} ->
+        tree |> Map.put(fiber_id, %{fiber | dirty: :descendants}) |> mark_ancestors(fiber.parent_id)
+
+      _ ->
+        tree
+    end
   end
 
   @doc """

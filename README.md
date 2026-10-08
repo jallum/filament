@@ -122,9 +122,11 @@ count  = use_value(source, fn
 end)
 ```
 
-**Automatic memoization.** The `~F` compiler automatically wraps closure
-expressions and child component renders in `memo_at` calls. Stable subtrees
-skip re-evaluation without any annotation from the component author.
+**Renders follow inputs.** A component renders only when its props change
+(`!==`), its own state changes, or a value it reads with `use_value` changes.
+A parent's render reuses every child whose props are unchanged, and a
+child's update renders that child alone. Closures passed as props compare
+equal when they capture equal values, so callbacks need no memoization.
 
 **Composable custom hooks.** Any function that calls `use_state`,
 `use_value`, or `use_effect` is a custom hook. Domain behaviour — holds,

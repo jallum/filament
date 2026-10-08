@@ -162,6 +162,33 @@ the current server state.
 See the [Observables guide](observables.html) for the change-or-bust mechanism
 and projection patterns.
 
+## When a component renders
+
+A component renders only when one of its inputs changes:
+
+- its props (`!==` against the props it last rendered with),
+- a `use_state` value (setting the value it already holds does nothing), or
+- a value it reads with `use_value` (compared after projection).
+
+Nothing else triggers a render. When a parent renders, each child whose
+props are unchanged keeps its last output, along with its whole subtree.
+When a child's state changes, only that child renders; its ancestors keep
+their output.
+
+Closures in props compare by value: two closures from the same `fn` in the
+source, capturing equal values, are `===`. A parent that rebuilds
+`on_pick={fn -> set_picked.(item.id) end}` on every render does not
+re-render the child unless `item.id` changed. A closure capturing something
+created on each render, such as `make_ref()`, makes the child render every
+time.
+
+Anything a component reads *while rendering* must come from one of these
+inputs. A function prop called during render (a render prop) that reads
+ETS, the process dictionary or a GenServer is still `===` after that data
+changes, so the child keeps stale output. Pass the data itself, or read it
+with `use_value`. Event handlers are not affected: they run when the event
+fires and read current data then.
+
 ## use_effect
 
 ```elixir

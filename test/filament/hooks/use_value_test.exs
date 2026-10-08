@@ -319,8 +319,11 @@ defmodule Filament.Hooks.UseValueTest do
       {:ok, server2} = Counter.start_link(99)
       :persistent_term.put({__MODULE__, :pid_ref}, server2)
 
+      # Props are unchanged, so the render must be requested explicitly.
       {_tree2, walked, _} =
-        Reconciler.update(tree1, "root", %{factory: factory}, owner_pid: self())
+        tree1
+        |> Reconciler.mark_dirty("root")
+        |> Reconciler.update("root", %{factory: factory}, owner_pid: self())
 
       # Factory called a second time because cached pid was dead.
       assert :counters.get(counter, 1) == 2

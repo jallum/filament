@@ -10,7 +10,7 @@ defmodule Filament.Hooks do
     - `use_source/1` — bind a reactive source once (factory fn or cell tuple); returns a stable handle
     - `use_value/2` — read a projected value from a source and subscribe to its updates
     - `use_effect/2` — side-effect with optional cleanup
-    - `memo_at/3` and `event_at/2` — invoked by compiler-generated code from `~F` templates
+    - `event_at/2` — invoked by compiler-generated code from `~F` templates
 
   ## Pattern: use_source + use_value
 
