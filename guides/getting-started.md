@@ -10,12 +10,12 @@ and a clear mental model of the Filament component lifecycle.
 
 ## What you need
 
-- Elixir 1.17+ and Phoenix LiveView 1.0+
+- Elixir 1.18+, Erlang/OTP 27+ and Phoenix LiveView 1.2+
 - Add Filament to your project:
 
 ```elixir
 # mix.exs
-{:filament, "~> 0.4"}
+{:filament, "~> 0.6"}
 ```
 
 - Run `mix deps.get` and then `use Filament.Component` in any module where you
@@ -225,6 +225,10 @@ For lists, put `:for` and `:key` directly on the component tag:
 - A plain `{for ... do} ... {end}` block around component tags also works, but
   matches children by index — fine for small static lists, not for anything
   that can reorder or have items removed from the middle.
+- Unkeyed children are numbered per module in render order, so a conditional
+  component shifts its later siblings of the same module: when
+  `{if banner? do}<Notice/>{end}<Notice/>` starts showing the banner, the
+  banner takes the second notice's state. Give such siblings a `:key`.
 
 ## Testing with Filament.Test
 

@@ -14,7 +14,7 @@ defmodule Filament.Observable do
   raw value passed to the subscriber's projection function. The default
   accepts with `c:handle_current/1`'s value. Return
   `{:error, reason, new_state}` to reject; the subscriber then reads
-  `:disconnected`.
+  `:disconnected` and `use_value/2` retries with backoff while it's mounted.
 
   Runs once per subscriber identity. Subscribing again with the same identity
   refreshes the subscription, as after a full mailbox, without calling this

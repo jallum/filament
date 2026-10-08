@@ -12,9 +12,11 @@ defmodule Cart.Server do
   end
 
   # Override the default cell/1 from `use Filament.Observable.GenServer`
-  # so components can pass a session id directly.
+  # so components can pass a session id directly. The source names the
+  # server through the registry, so its readers follow it across a restart.
   def cell(session_id) when is_binary(session_id) do
-    Filament.Source.new(Filament.Observable.GenServer, ensure_started(session_id))
+    ensure_started(session_id)
+    Filament.Source.new(Filament.Observable.GenServer, via_registry(session_id))
   end
 
   # Public API
