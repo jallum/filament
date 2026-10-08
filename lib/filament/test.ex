@@ -455,7 +455,7 @@ defmodule Filament.Test do
         flush_messages(view)
 
       {:filament_observable_updates, updates} ->
-        tree = Filament.LiveView.apply_observable_updates(view.fiber_tree, updates)
+        {tree, _changed?} = Filament.LiveView.apply_observable_updates(view.fiber_tree, updates)
         flush_messages(%{view | fiber_tree: tree})
 
       {:filament_observable_resubscribe, fiber_id, slot_index} ->

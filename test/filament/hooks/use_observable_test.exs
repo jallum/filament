@@ -3,6 +3,7 @@ defmodule Filament.Hooks.UseObservableTest do
 
   alias Filament.Fiber
   alias Filament.Hooks
+  alias Filament.Observable.Subscription
   alias Filament.RenderContext
 
   defmodule TestObservable do
@@ -77,7 +78,7 @@ defmodule Filament.Hooks.UseObservableTest do
       end)
 
     assert value == 42
-    assert new_slots[0] == {:subscribed, observable, 42}
+    assert %Subscription{server: ^observable, raw: 42, value: 42} = new_slots[0]
   end
 
   test "2. stable re-render returns stored value without re-subscribing" do
@@ -96,7 +97,7 @@ defmodule Filament.Hooks.UseObservableTest do
       Fiber.new(
         id: "root",
         component: nil,
-        hook_slots: %{0 => {:subscribed, observable, 10}},
+        hook_slots: %{0 => %Subscription{server: observable, raw: 10, project: &Function.identity/1, value: 10}},
         status: :stable
       )
 
@@ -112,7 +113,7 @@ defmodule Filament.Hooks.UseObservableTest do
       end)
 
     assert value2 == 10
-    assert new_slots[0] == {:subscribed, observable, 10}
+    assert %Subscription{server: ^observable, raw: 10, value: 10} = new_slots[0]
 
     # Same owner_pid subscriber — still only one entry
     subs = TestObservable.get_subs(observable)
@@ -127,7 +128,7 @@ defmodule Filament.Hooks.UseObservableTest do
       Fiber.new(
         id: "root",
         component: nil,
-        hook_slots: %{0 => {:subscribed, obs_a, 1}},
+        hook_slots: %{0 => %Subscription{server: obs_a, raw: 1, project: &Function.identity/1, value: 1}},
         status: :stable
       )
 
@@ -153,7 +154,7 @@ defmodule Filament.Hooks.UseObservableTest do
       Fiber.new(
         id: "root",
         component: nil,
-        hook_slots: %{0 => {:subscribed, observable, 555}},
+        hook_slots: %{0 => %Subscription{server: observable, raw: 555, project: &Function.identity/1, value: 555}},
         status: :stable
       )
 
@@ -165,7 +166,13 @@ defmodule Filament.Hooks.UseObservableTest do
 
         updated_ctx = %{
           ctx
-          | new_hook_slots: Map.put(ctx.new_hook_slots, 0, {:subscribed, observable, 999})
+          | new_hook_slots:
+              Map.put(ctx.new_hook_slots, 0, %Subscription{
+                server: observable,
+                raw: 999,
+                project: &Function.identity/1,
+                value: 999
+              })
         }
 
         Process.put(:filament_render_context, updated_ctx)
@@ -213,7 +220,7 @@ defmodule Filament.Hooks.UseObservableTest do
       Fiber.new(
         id: "root",
         component: nil,
-        hook_slots: %{0 => {:subscribed, observable, 42}},
+        hook_slots: %{0 => %Subscription{server: observable, raw: 42, project: &Function.identity/1, value: 42}},
         status: :stable
       )
 
@@ -356,7 +363,9 @@ defmodule Filament.Hooks.UseObservableTest do
       Fiber.new(
         id: "root",
         component: nil,
-        hook_slots: %{0 => {:subscribed, observable, [1, 2, 3]}},
+        hook_slots: %{
+          0 => %Subscription{server: observable, raw: [1, 2, 3], project: &Function.identity/1, value: [1, 2, 3]}
+        },
         status: :stable
       )
 

@@ -39,7 +39,13 @@ defmodule Filament.Bench.Compat do
     def rendered(value), do: value
 
     def apply_message(tree, {:filament_observable_updates, updates}) do
-      {Filament.LiveView.apply_observable_updates(tree, updates), length(updates)}
+      updated =
+        case Filament.LiveView.apply_observable_updates(tree, updates) do
+          {updated, _changed?} -> updated
+          updated when is_map(updated) -> updated
+        end
+
+      {updated, length(updates)}
     end
 
     def apply_message(_tree, message), do: raise("unexpected transport message: #{inspect(message)}")
