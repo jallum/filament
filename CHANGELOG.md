@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- An observable server can keep a GenServer timeout. `Filament.Observable`
+  has an optional `timeout/1` callback, `:infinity` by default. Filament's
+  own handlers (subscribe, projection removal, a subscriber's `:DOWN`)
+  return the timeout it gives. Before this, any of those messages
+  arriving while a server waited on `{:noreply, state, ms}` cancelled the
+  timeout.
+
 ### Changed
 
 ### Deprecated

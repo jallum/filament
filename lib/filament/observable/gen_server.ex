@@ -10,6 +10,8 @@ defmodule Filament.Observable.GenServer do
       projection removal; auto-unsubscribes when the last projection is removed
     - `handle_info({:DOWN, ref, :process, pid, reason}, state)` —
       automatic subscriber cleanup when a LiveView process terminates
+    - `timeout/1` (overridable) — the GenServer timeout those handlers
+      return with; `:infinity` unless the server keeps one of its own
     - `notify_observers/1` — call this from your handlers whenever state changes
       to push raw state to all subscribed components
 
@@ -63,110 +65,65 @@ defmodule Filament.Observable.GenServer do
       @impl Filament.Observable
       def handle_unsubscribe(_subscriber, state), do: {:ok, state}
 
-      defoverridable handle_subscribe: 2, handle_unsubscribe: 2
+      @impl Filament.Observable
+      def timeout(_state), do: :infinity
+
+      defoverridable handle_subscribe: 2, handle_unsubscribe: 2, timeout: 1
 
       # ── Injected GenServer message handlers ──────────────────────────────
 
       @impl true
       def handle_call({:filament_subscribe, %Subscriber{} = sub_info}, _from, state) do
-        sub_key = sub_info.pid
-        subs = Process.get(:__filament_subscribers__, %{})
-        session_idx = Process.get(:__filament_session_index__, %{})
-        handoff_source = sub_info.session_token && Map.get(session_idx, sub_info.session_token)
-
-        cond do
-          # Handoff: same session token, different pid (WS replacing static render)
-          is_pid(handoff_source) and handoff_source != sub_key ->
-            case Map.get(subs, handoff_source) do
-              nil ->
-                Filament.Observable.GenServer.do_fresh_subscribe(
-                  __MODULE__,
-                  sub_info,
-                  sub_key,
-                  subs,
-                  state
-                )
-
-              old_sub ->
-                Process.demonitor(old_sub.ref, [:flush])
-                ref = Process.monitor(sub_key)
-                new_sub = %{old_sub | pid: sub_key, ref: ref, proj_keys: sub_info.proj_keys, stale: false}
-
-                {:ok, initial_value, new_state} =
-                  Filament.Observable.GenServer.handoff_value(__MODULE__, old_sub, new_sub, state)
-
-                new_sub = %{new_sub | last_raw: initial_value}
-                new_subs = subs |> Map.delete(handoff_source) |> Map.put(sub_key, new_sub)
-                Process.put(:__filament_subscribers__, new_subs)
-
-                Filament.Observable.GenServer.put_session_index(
-                  sub_info.session_token,
-                  sub_key
-                )
-
-                {:reply, {:ok, initial_value}, new_state}
-            end
-
-          # Same process adding another proj_key
-          Map.has_key?(subs, sub_key) ->
-            existing = Map.get(subs, sub_key)
-            merged = %{existing | proj_keys: Map.merge(existing.proj_keys, sub_info.proj_keys)}
-            {:ok, initial_value, new_state} = __MODULE__.handle_subscribe(merged, state)
-            merged = %{merged | stale: false, last_raw: initial_value}
-            Process.put(:__filament_subscribers__, Map.put(subs, sub_key, merged))
-            {:reply, {:ok, initial_value}, new_state}
-
-          # New subscriber
-          true ->
-            Filament.Observable.GenServer.do_fresh_subscribe(
-              __MODULE__,
-              sub_info,
-              sub_key,
-              subs,
-              state
-            )
-        end
+        __MODULE__
+        |> Filament.Observable.GenServer.subscribe(sub_info, state)
+        |> Filament.Observable.GenServer.keep_timeout(__MODULE__)
       end
 
       @impl true
       def handle_cast({:filament_remove_projection, sub_key, proj_key}, state) do
         subs = Process.get(:__filament_subscribers__, %{})
 
-        case Map.get(subs, sub_key) do
-          nil ->
-            {:noreply, state}
-
-          subscriber ->
-            new_proj_keys = Map.delete(subscriber.proj_keys, proj_key)
-
-            if map_size(new_proj_keys) == 0 do
-              Process.demonitor(subscriber.ref, [:flush])
-              Process.put(:__filament_subscribers__, Map.delete(subs, sub_key))
-              Filament.Observable.GenServer.delete_session_index(subscriber.session_token)
-              {:ok, new_state} = handle_unsubscribe(subscriber, state)
-              {:noreply, new_state}
-            else
-              updated = %{subscriber | proj_keys: new_proj_keys}
-              Process.put(:__filament_subscribers__, Map.put(subs, sub_key, updated))
+        case_result =
+          case Map.get(subs, sub_key) do
+            nil ->
               {:noreply, state}
-            end
-        end
+
+            subscriber ->
+              new_proj_keys = Map.delete(subscriber.proj_keys, proj_key)
+
+              if map_size(new_proj_keys) == 0 do
+                Process.demonitor(subscriber.ref, [:flush])
+                Process.put(:__filament_subscribers__, Map.delete(subs, sub_key))
+                Filament.Observable.GenServer.delete_session_index(subscriber.session_token)
+                {:ok, new_state} = handle_unsubscribe(subscriber, state)
+                {:noreply, new_state}
+              else
+                updated = %{subscriber | proj_keys: new_proj_keys}
+                Process.put(:__filament_subscribers__, Map.put(subs, sub_key, updated))
+                {:noreply, state}
+              end
+          end
+
+        Filament.Observable.GenServer.keep_timeout(case_result, __MODULE__)
       end
 
       @impl true
       def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
         subs = Process.get(:__filament_subscribers__, %{})
 
-        case Enum.find(subs, fn {_key, s} -> s.ref == ref end) do
-          nil ->
-            {:noreply, state}
+        case_result =
+          case Enum.find(subs, fn {_key, s} -> s.ref == ref end) do
+            nil ->
+              {:noreply, state}
 
-          {sub_key, subscriber} ->
-            Process.put(:__filament_subscribers__, Map.delete(subs, sub_key))
-            Filament.Observable.GenServer.delete_session_index(subscriber.session_token)
-            {:ok, new_state} = handle_unsubscribe(subscriber, state)
-            {:noreply, new_state}
-        end
+            {sub_key, subscriber} ->
+              Process.put(:__filament_subscribers__, Map.delete(subs, sub_key))
+              Filament.Observable.GenServer.delete_session_index(subscriber.session_token)
+              {:ok, new_state} = handle_unsubscribe(subscriber, state)
+              {:noreply, new_state}
+          end
+
+        Filament.Observable.GenServer.keep_timeout(case_result, __MODULE__)
       end
 
       # ── notify_observers/1 ───────────────────────────────────────────────
@@ -195,6 +152,74 @@ defmodule Filament.Observable.GenServer do
   end
 
   # ── Module-level helpers (called from injected code above) ───────────────
+
+  # A subscribe call's reply: a handoff, another projection, or a new subscriber.
+  @doc false
+  def subscribe(mod, sub_info, state) do
+    sub_key = sub_info.pid
+    subs = Process.get(:__filament_subscribers__, %{})
+    session_idx = Process.get(:__filament_session_index__, %{})
+    handoff_source = sub_info.session_token && Map.get(session_idx, sub_info.session_token)
+
+    cond do
+      # Handoff: same session token, different pid (WS replacing static render)
+      is_pid(handoff_source) and handoff_source != sub_key ->
+        case Map.get(subs, handoff_source) do
+          nil ->
+            do_fresh_subscribe(
+              mod,
+              sub_info,
+              sub_key,
+              subs,
+              state
+            )
+
+          old_sub ->
+            Process.demonitor(old_sub.ref, [:flush])
+            ref = Process.monitor(sub_key)
+            new_sub = %{old_sub | pid: sub_key, ref: ref, proj_keys: sub_info.proj_keys, stale: false}
+
+            {:ok, initial_value, new_state} =
+              handoff_value(mod, old_sub, new_sub, state)
+
+            new_sub = %{new_sub | last_raw: initial_value}
+            new_subs = subs |> Map.delete(handoff_source) |> Map.put(sub_key, new_sub)
+            Process.put(:__filament_subscribers__, new_subs)
+
+            put_session_index(
+              sub_info.session_token,
+              sub_key
+            )
+
+            {:reply, {:ok, initial_value}, new_state}
+        end
+
+      # Same process adding another proj_key
+      Map.has_key?(subs, sub_key) ->
+        existing = Map.get(subs, sub_key)
+        merged = %{existing | proj_keys: Map.merge(existing.proj_keys, sub_info.proj_keys)}
+        {:ok, initial_value, new_state} = mod.handle_subscribe(merged, state)
+        merged = %{merged | stale: false, last_raw: initial_value}
+        Process.put(:__filament_subscribers__, Map.put(subs, sub_key, merged))
+        {:reply, {:ok, initial_value}, new_state}
+
+      # New subscriber
+      true ->
+        do_fresh_subscribe(
+          mod,
+          sub_info,
+          sub_key,
+          subs,
+          state
+        )
+    end
+  end
+
+  # An injected handler's reply, with the server's own timeout, so that
+  # Filament's messages don't cancel it.
+  @doc false
+  def keep_timeout({:reply, reply, state}, mod), do: {:reply, reply, state, mod.timeout(state)}
+  def keep_timeout({:noreply, state}, mod), do: {:noreply, state, mod.timeout(state)}
 
   # Active session handoff retains its snapshot; stale handoff must recover
   # from current state so the replacement process never inherits a missed update.
