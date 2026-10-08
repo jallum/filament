@@ -64,7 +64,9 @@ end
 **JSX-like templates.** The `~F` sigil compiles HTML templates with
 `{expression}` interpolation, `{for item <- list do}…{end}` loops, and
 `<MyComponent prop={value} />` child component tags — the same mental model as
-JSX, in Elixir.
+JSX, in Elixir. Inline markup becomes
+its `children` prop: `<Page><h1>{title}</h1></Page>`. The wrapper renders it
+with `{children}`, just like any other prop.
 
 **Components with typed props.** `defcomponent` declares a component with
 `prop/3` — typed, validated, with required or default values. Each component

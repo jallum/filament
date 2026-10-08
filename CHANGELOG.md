@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Pass inline markup to module components as their children prop, without requiring an assigns variable.
+
 ### Security
 
 ## [0.5.5] - 2026-10-07
