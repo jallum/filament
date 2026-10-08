@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Skip observable rerenders when projected values are unchanged, retaining fresh raw state and current projection closures.
+
 ### Security
 
 ## [0.5.5] - 2026-10-07

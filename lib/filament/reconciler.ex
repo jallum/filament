@@ -2,6 +2,7 @@ defmodule Filament.Reconciler do
   @moduledoc false
 
   alias Filament.Fiber
+  alias Filament.Observable.Subscription
   alias Filament.ReconcilerError
   alias Filament.RenderContext
   alias Filament.Renderer
@@ -123,7 +124,7 @@ defmodule Filament.Reconciler do
         {_index, {_deps, cleanup}} when is_function(cleanup, 0) ->
           cleanup.()
 
-        {index, {:subscribed, server, _raw}} ->
+        {index, %Subscription{server: server}} ->
           Filament.Observable.remove_projection(server, owner_pid, fiber.id, index)
 
         {_index, {:resolved, _server}} ->
@@ -174,7 +175,7 @@ defmodule Filament.Reconciler do
           {_index, {_deps, cleanup}} when is_function(cleanup, 0) ->
             cleanup.()
 
-          {index, {:subscribed, server, _raw}} ->
+          {index, %Subscription{server: server}} ->
             Filament.Observable.remove_projection(server, owner_pid, fiber.id, index)
 
           {_index, {:resolved, _server}} ->
