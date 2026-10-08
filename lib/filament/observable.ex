@@ -27,5 +27,15 @@ defmodule Filament.Observable do
 
   @callback handle_current(state :: term()) :: {:ok, value :: term(), new_state :: term()}
 
-  @optional_callbacks handle_subscribe: 2, handle_unsubscribe: 2, handle_current: 1
+  @doc """
+  The GenServer timeout Filament's own handlers return with: subscribe,
+  unsubscribe and current-value calls, and a subscriber's `:DOWN`.
+
+  A server that keeps a timeout (`{:noreply, state, ms}`) returns the
+  same one here, from its state, so a subscriber coming or going doesn't
+  cancel it. Defaults to `:infinity`: no timeout.
+  """
+  @callback timeout(state :: term()) :: timeout()
+
+  @optional_callbacks handle_subscribe: 2, handle_unsubscribe: 2, handle_current: 1, timeout: 1
 end

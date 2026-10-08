@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- An observable server can keep a GenServer timeout. `Filament.Observable`
+  has an optional `timeout/1` callback, `:infinity` by default. Filament's
+  own handlers (cell subscribe, current-value reads, unsubscribe, a
+  subscriber's `:DOWN`)
+  return the timeout it gives. Before this, any of those messages
+  arriving while a server waited on `{:noreply, state, ms}` cancelled the
+  timeout.
+
 ### Changed
 
 - **Breaking:** `use_observable` now goes through `Filament.Cell`. The hook
@@ -45,6 +55,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Filament.RenderContext` no longer carries `observable_stubs` or
   `session_token` fields. Tests should construct cells against stub pids
   directly rather than relying on identifier-to-pid swap.
+
+### Fixed
+
+- Pass inline markup to module components as their `children` prop.
+  Before this, text or tags between a component's open and close tags
+  outside any `<:slot>` failed to compile.
+- Skip `use_value` rerenders when the projected value is unchanged. The
+  slot still keeps the fresh raw value, so the next render projects from
+  current state.
+- Skip dead cell subscribers quietly while their monitor cleanup is
+  pending, instead of logging them as saturated. The subscriber's
+  `:DOWN` removes the entry and runs `handle_unsubscribe/2`.
+
+### Security
+
+## [0.5.5] - 2026-10-07
+
+### Added
+
+- `~F` templates now support `{cond do}` blocks. Before this, a `cond`
+  in a template failed to compile. Each clause can render markup or a
+  short inline expression, and clauses can contain other blocks (`case`,
+  `cond`, `for`). Only the first matching clause is evaluated, and if no
+  clause matches, `CondClauseError` is raised as in plain Elixir. A `cond`
+  with no clauses, or a clause outside a block, raises a clear parse
+  error (#30).
+
+  ```elixir
+  ~F"""
+  {cond do}
+    {count == 0 ->}<button on_click={fn -> set_count.(1) end}>start</button>
+    {true ->}<button on_click={fn -> set_count.(0) end}>finish</button>
+  {end}
+  """
+
+  ~F|<p>{cond do}{n > 1 -> "big"}{true -> "small"}{end}</p>|
+  ```
+
+### Fixed
+
+- Clicking a button rendered by a helper function's `~F` template now
+  always runs that button's own handler. Before this, a helper template
+  (or one helper called more than once) could get the same event refs as
+  the template around it or as a `:for` loop's cached handlers, so a
+  click could run another button's handler. The same overlap could make
+  helpers share memoized results. This also holds when a conditional
+  helper is removed and the buttons after it shift position (#29).
+
+## [0.5.4] - 2026-10-01
+
+### Fixed
+
+- Clicking a keyed child whose key contains a colon (for example
+  `:key={"type: fmj"}`) no longer crashes the LiveView. Event refs are
+  sent to the client as `<fiber id>:<handler index>`, and a keyed child's
+  fiber id includes its key. Filament used to split the ref at the first
+  colon, so a colon inside the key broke it. It now splits at the last
+  colon, which is always the separator because the handler index is only
+  digits. A malformed ref is now ignored instead of crashing the LiveView.
+  `Filament.Test` reads refs the same way (#26).
+
+## [0.5.3] - 2026-10-01
+
+### Fixed
+
+- A subscriber whose mailbox overflows now gets one recovery notice per
+  overflow, not one per state change. Before this, every update during an
+  overflow sent the already-overloaded process another notice. The
+  subscriber now gets no updates until it resubscribes, and resubscribing
+  (including a session handoff to a replacement process) always returns the
+  current state, never the last value sent before the overflow (#24).
 
 ## [0.5.2] - 2026-09-28
 

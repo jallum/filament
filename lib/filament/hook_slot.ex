@@ -9,7 +9,9 @@ defmodule Filament.HookSlot do
     * `{deps, cleanup}` — `use_effect`. `cleanup` is a 0-arity fn or `nil`.
       Disambiguated from the `use_state` shape by `cleanup`'s arity.
     * `{:cell_resolved, cell}` — `use_source` (resolved cell handle).
-    * `{:cell_subscribed, cell, raw, subscriber}` — `use_value`; subscriber includes a generation token.
+    * `{:cell_subscribed, cell, raw, subscriber, projection, value}` — `use_value`;
+      subscriber includes a generation token; `projection` and `value` are
+      from the last render, so an update can tell whether the value changed.
     * `{:cell_resubscribe, cell, subscriber}` — refresh pending; retains cleanup identity.
     * `:uninitialized` — slot never committed, or disabled mid-render.
     * `:needs_resubscribe` — cell transport requested a resubscribe.
@@ -36,7 +38,7 @@ defmodule Filament.HookSlot do
     :ok
   end
 
-  def cleanup({:cell_subscribed, source, _raw, subscriber}, _ctx) do
+  def cleanup({:cell_subscribed, source, _raw, subscriber, _projection, _value}, _ctx) do
     Filament.Cell.unsubscribe(source, subscriber)
   end
 
@@ -80,27 +82,25 @@ defmodule Filament.HookSlot do
   @doc """
   Apply a new raw value to a `use_value` slot, preserving the existing
   source identity so unsubscribe-on-source-swap detection still works on
-  the next render.
+  the next render. The raw value is always kept; the result says whether
+  the last render's projection now gives a different value.
   """
-  @spec put_cell_value(slot :: term(), new_raw :: term()) ::
-          {:cell_subscribed, Filament.Source.t(), term(), term()}
-          | {:cell_subscribed, Filament.Source.t() | nil, term()}
-  def put_cell_value({:cell_subscribed, source, _old, subscriber}, new_raw) do
-    {:cell_subscribed, source, new_raw, subscriber}
+  @spec put_cell_value(slot :: term(), new_raw :: term()) :: {term(), changed? :: boolean()}
+  def put_cell_value({:cell_subscribed, source, _old, subscriber, projection, value}, new_raw) do
+    new_value = projection.(new_raw)
+    {{:cell_subscribed, source, new_raw, subscriber, projection, new_value}, new_value !== value}
   end
 
-  def put_cell_value({:cell_subscribed, source, _old}, new_raw) do
-    {:cell_subscribed, source, new_raw}
-  end
+  def put_cell_value({:cell_subscribed, source, _old}, new_raw), do: {{:cell_subscribed, source, new_raw}, true}
+  def put_cell_value(_other, new_raw), do: {{:cell_subscribed, nil, new_raw}, true}
 
-  def put_cell_value(_other, new_raw), do: {:cell_subscribed, nil, new_raw}
   @doc false
-  def matches_subscriber?({:cell_subscribed, _source, _raw, subscriber}, subscriber), do: true
+  def matches_subscriber?({:cell_subscribed, _source, _raw, subscriber, _projection, _value}, subscriber), do: true
   def matches_subscriber?({:cell_subscribed, _source, _raw}, {_owner, _fiber, _slot}), do: true
   def matches_subscriber?(_slot, _subscriber), do: false
 
   @doc false
-  def resubscribe({:cell_subscribed, source, _raw, subscriber}, subscriber) do
+  def resubscribe({:cell_subscribed, source, _raw, subscriber, _projection, _value}, subscriber) do
     {:cell_resubscribe, source, subscriber}
   end
 

@@ -302,22 +302,28 @@ defmodule Filament.Hooks do
     end
   end
 
+  # The slot keeps this render's projection and value, so an update that
+  # leaves the projected value unchanged can skip the next render.
   defp observable_subscribed(cell, projection, slot_index, previous, ctx) do
-    slot =
+    subscription =
       case previous do
-        {:cell_subscribed, ^cell, _raw, _subscriber} ->
-          previous
+        {:cell_subscribed, ^cell, raw, subscriber, _projection, _value} ->
+          {:ok, raw, subscriber}
 
         _ ->
           maybe_unsubscribe_observable(ctx, previous, slot_index)
           observable_subscribe_fresh(cell, slot_index, ctx)
       end
 
-    commit_slot(slot_index, slot)
+    case subscription do
+      {:ok, raw, subscriber} ->
+        value = projection.(raw)
+        commit_slot(slot_index, {:cell_subscribed, cell, raw, subscriber, projection, value})
+        value
 
-    case slot do
-      {:cell_subscribed, _cell, raw, _subscriber} -> projection.(raw)
-      :uninitialized -> projection.(:disconnected)
+      :disconnected ->
+        commit_slot(slot_index, :uninitialized)
+        projection.(:disconnected)
     end
   end
 
@@ -333,8 +339,8 @@ defmodule Filament.Hooks do
     subscriber = {ctx.owner_pid, ctx.fiber_id, slot_index, make_ref()}
 
     case Filament.Cell.subscribe(cell, subscriber, &Function.identity/1) do
-      {:ok, value} -> {:cell_subscribed, cell, value, subscriber}
-      :disconnected -> :uninitialized
+      {:ok, raw} -> {:ok, raw, subscriber}
+      :disconnected -> :disconnected
     end
   end
 
@@ -407,5 +413,26 @@ defmodule Filament.Hooks do
     }
 
     {idx, new_ctx}
+  end
+
+  @doc false
+  # A wire ref's fiber id and handler index (`register_event_handler/1`).
+  # The index is digits only, so the last colon is the separator, whatever
+  # the fiber id holds: a keyed child's key may have colons of its own.
+  @spec parse_event_ref(String.t()) :: {:ok, String.t(), non_neg_integer()} | :error
+  def parse_event_ref(ref) when is_binary(ref) do
+    case :binary.matches(ref, ":") do
+      [] ->
+        :error
+
+      matches ->
+        {at, 1} = List.last(matches)
+        index = binary_part(ref, at + 1, byte_size(ref) - at - 1)
+
+        case Integer.parse(index) do
+          {idx, ""} when idx >= 0 -> {:ok, binary_part(ref, 0, at), idx}
+          _ -> :error
+        end
+    end
   end
 end

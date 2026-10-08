@@ -56,7 +56,7 @@ defmodule Filament.SubscriptionGenerationTest do
   end
 
   defp subscriber(tree) do
-    {:cell_subscribed, _, _, subscriber} = tree["root"].hook_slots[0]
+    {:cell_subscribed, _, _, subscriber, _, _} = tree["root"].hook_slots[0]
     subscriber
   end
 

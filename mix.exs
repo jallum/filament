@@ -4,7 +4,7 @@ defmodule Filament.MixProject do
   def project do
     [
       app: :filament,
-      version: "0.5.2",
+      version: "0.5.5",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),

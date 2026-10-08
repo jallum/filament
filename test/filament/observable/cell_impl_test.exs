@@ -261,4 +261,71 @@ defmodule Filament.Observable.CellImplTest do
     GenServer.call(server, {:set, 0})
     assert_receive {:cell_update, ^subscriber, 0}
   end
+
+  # Keeps a timeout once armed: zero, so it fires as soon as a handler
+  # returns it. Arming itself returns none, so only Filament's handlers can.
+  defmodule WithTimeout do
+    @moduledoc false
+    use Filament.Observable.GenServer
+
+    def start_link(test_pid), do: GenServer.start_link(__MODULE__, test_pid)
+    def init(test_pid), do: {:ok, %{test: test_pid, armed: false}}
+
+    def handle_call(:arm, _from, state), do: {:reply, :ok, %{state | armed: true}}
+
+    def handle_info(:timeout, state) do
+      send(state.test, :timed_out)
+      {:noreply, %{state | armed: false}}
+    end
+
+    @impl Filament.Observable
+    def timeout(%{armed: true}), do: 0
+    def timeout(_state), do: :infinity
+  end
+
+  describe "the server's own timeout" do
+    setup do
+      pid = start_supervised!({WithTimeout, self()})
+      %{pid: pid, cell: Filament.Source.new(Filament.Observable.GenServer, pid)}
+    end
+
+    test "a subscribe keeps it", %{pid: pid, cell: cell} do
+      :ok = GenServer.call(pid, :arm)
+      refute_received :timed_out
+
+      assert {:ok, _state} = Cell.subscribe(cell, {self(), "root", 0, make_ref()}, &Function.identity/1)
+      assert_receive :timed_out
+    end
+
+    test "a current-value read keeps it", %{pid: pid, cell: cell} do
+      :ok = GenServer.call(pid, :arm)
+      assert %{armed: true} = Cell.current(cell, &Function.identity/1)
+      assert_receive :timed_out
+    end
+
+    test "an unsubscribe keeps it", %{pid: pid, cell: cell} do
+      sub = {self(), "root", 0, make_ref()}
+      {:ok, _state} = Cell.subscribe(cell, sub, &Function.identity/1)
+      :ok = GenServer.call(pid, :arm)
+
+      Cell.unsubscribe(cell, sub)
+      assert_receive :timed_out
+    end
+
+    test "a subscriber's exit keeps it", %{pid: pid, cell: cell} do
+      test = self()
+
+      subscriber =
+        spawn(fn ->
+          {:ok, _state} = Cell.subscribe(cell, {self(), "root", 0, make_ref()}, &Function.identity/1)
+          send(test, :subscribed)
+          receive do: (:exit -> :ok)
+        end)
+
+      assert_receive :subscribed
+      :ok = GenServer.call(pid, :arm)
+      send(subscriber, :exit)
+      assert_receive :timed_out
+    end
+  end
 end

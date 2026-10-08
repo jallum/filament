@@ -6,8 +6,11 @@ defmodule Filament.Observable.GenServer do
 
     - `handle_call({:filament_cell_subscribe, ...}, from, state)`,
       `handle_call({:filament_cell_current, ...}, from, state)`, and
-      `handle_cast({:filament_cell_unsubscribe, ...}, state)` —
+      `handle_call({:filament_cell_unsubscribe, ...}, from, state)` —
       `Filament.Cell` transport callbacks routed to module-level helpers
+    - `handle_info({:DOWN, ...}, state)` — removes a dead owner's cells
+    - `timeout/1` (overridable) — the GenServer timeout those handlers
+      return with; `:infinity` unless the server keeps one of its own
     - `notify_observers/1` — call this from your handlers whenever state
       changes; it walks the cell-subscriber map and pushes updates whose
       projected value has actually changed (change-or-bust)
@@ -98,7 +101,10 @@ defmodule Filament.Observable.GenServer do
       @impl Filament.Observable
       def handle_current(state), do: {:ok, state, state}
 
-      defoverridable handle_subscribe: 2, handle_unsubscribe: 2, handle_current: 1
+      @impl Filament.Observable
+      def timeout(_state), do: :infinity
+
+      defoverridable handle_subscribe: 2, handle_unsubscribe: 2, handle_current: 1, timeout: 1
 
       # ── Cell constructor ────────────────────────────────────────────────
 
@@ -131,28 +137,30 @@ defmodule Filament.Observable.GenServer do
 
       @impl true
       def handle_call({:filament_cell_subscribe, subscriber, projection}, from, state) do
-        Filament.Observable.GenServer.handle_cell_subscribe(
-          __MODULE__,
-          subscriber,
-          projection,
-          from,
-          state
-        )
+        __MODULE__
+        |> Filament.Observable.GenServer.handle_cell_subscribe(subscriber, projection, from, state)
+        |> Filament.Observable.GenServer.keep_timeout(__MODULE__)
       end
 
       @impl true
       def handle_call({:filament_cell_current, projection}, from, state) do
-        Filament.Observable.GenServer.handle_cell_current(__MODULE__, projection, from, state)
+        __MODULE__
+        |> Filament.Observable.GenServer.handle_cell_current(projection, from, state)
+        |> Filament.Observable.GenServer.keep_timeout(__MODULE__)
       end
 
       @impl true
       def handle_call({:filament_cell_unsubscribe, subscriber}, _from, state) do
-        Filament.Observable.GenServer.handle_cell_unsubscribe(__MODULE__, subscriber, state)
+        __MODULE__
+        |> Filament.Observable.GenServer.handle_cell_unsubscribe(subscriber, state)
+        |> Filament.Observable.GenServer.keep_timeout(__MODULE__)
       end
 
       @impl true
       def handle_info({:DOWN, _ref, :process, dead_pid, _reason}, state) do
-        Filament.Observable.GenServer.handle_cell_down(__MODULE__, dead_pid, state)
+        __MODULE__
+        |> Filament.Observable.GenServer.handle_cell_down(dead_pid, state)
+        |> Filament.Observable.GenServer.keep_timeout(__MODULE__)
       end
 
       # ── notify_observers/1 ───────────────────────────────────────────────
@@ -185,6 +193,12 @@ defmodule Filament.Observable.GenServer do
 
   # ── Module-level helpers (called from injected code above) ───────────────
 
+  # An injected handler's reply, with the server's own timeout, so that
+  # Filament's messages don't cancel it.
+  @doc false
+  def keep_timeout({:reply, reply, state}, mod), do: {:reply, reply, state, mod.timeout(state)}
+  def keep_timeout({:noreply, state}, mod), do: {:noreply, state, mod.timeout(state)}
+
   @doc false
   def handle_cell_subscribe(mod, subscriber, projection, _from, state) do
     {:ok, raw, new_state} = mod.handle_subscribe(subscriber, state)
@@ -195,7 +209,7 @@ defmodule Filament.Observable.GenServer do
     if old_entry && old_entry.monitor_ref, do: Process.demonitor(old_entry.monitor_ref, [:flush])
     ref = if send_pid != self(), do: Process.monitor(send_pid)
 
-    entry = %{pid: send_pid, projection: projection, last: projected, monitor_ref: ref}
+    entry = %{pid: send_pid, projection: projection, last: projected, monitor_ref: ref, stale: false}
     new_subs = Map.put(cell_subs, subscriber, entry)
     cache_identity_subscribe(cell_subs, new_subs, entry, raw)
     Process.put(:__filament_cell_subscribers__, new_subs)
@@ -320,29 +334,46 @@ defmodule Filament.Observable.GenServer do
   end
 
   defp notify_cell_pass(cell_subs, new_state, max_mailbox_depth) do
-    {updated_subs, deliveries, depths, identity?} =
-      Enum.reduce(cell_subs, {cell_subs, %{}, %{}, true}, fn {subscriber, entry},
-                                                             {updated, deliveries, depths, identity?} ->
+    # Each cell gets one recovery notice, but an owner gets one warning until
+    # all its stale cells have resubscribed or been removed.
+    stale_owners = MapSet.new(for {_sub, entry} <- cell_subs, Map.get(entry, :stale, false), do: entry.pid)
+
+    {updated_subs, deliveries, depths, identity?, _stale_owners} =
+      Enum.reduce(cell_subs, {cell_subs, %{}, %{}, true, stale_owners}, fn {subscriber, entry},
+                                                                           {updated, deliveries, depths, identity?,
+                                                                            stale_owners} ->
         {depth_result, depths} = owner_depth(entry.pid, depths)
         identity? = identity? and entry.projection === (&Function.identity/1)
 
         case update_cell_subscriber(subscriber, entry, new_state, depth_result, max_mailbox_depth) do
-          :drop ->
-            {Map.delete(updated, subscriber), deliveries, depths, false}
+          :dead ->
+            {updated, deliveries, depths, false, stale_owners}
 
           {_entry, :unchanged} ->
-            {updated, deliveries, depths, identity? and entry.last === new_state}
+            {updated, deliveries, depths, identity? and current_identity?(entry, new_state), stale_owners}
+
+          {updated_entry, :saturated} ->
+            log_saturated_owner_once(stale_owners, entry.pid, depth_result, max_mailbox_depth)
+
+            {Map.put(updated, subscriber, updated_entry), deliveries, depths, false,
+             MapSet.put(stale_owners, entry.pid)}
 
           {updated_entry, {:changed, value}} ->
             next_deliveries =
               Map.update(deliveries, updated_entry.pid, [{subscriber, value}], &[{subscriber, value} | &1])
 
-            {Map.put(updated, subscriber, updated_entry), next_deliveries, depths, identity?}
+            {Map.put(updated, subscriber, updated_entry), next_deliveries, depths, identity?, stale_owners}
         end
       end)
 
     Enum.each(deliveries, fn {pid, updates} -> deliver_cell_updates(pid, Enum.reverse(updates)) end)
     {updated_subs, if(identity?, do: depths)}
+  end
+
+  defp current_identity?(entry, value), do: not Map.get(entry, :stale, false) and entry.last === value
+
+  defp log_saturated_owner_once(stale_owners, pid, depth_result, max_depth) do
+    if !MapSet.member?(stale_owners, pid), do: log_saturated_cell(pid, depth_result, max_depth)
   end
 
   # Deliveries are sent after traversal, so all cells owned by a process see
@@ -362,12 +393,17 @@ defmodule Filament.Observable.GenServer do
     %{pid: pid, projection: proj, last: last} = entry
 
     cond do
+      # DOWN cleanup owns removal and handle_unsubscribe; a process that has
+      # already exited is not saturated.
       is_nil(depth_result) ->
-        :drop
+        :dead
+
+      Map.get(entry, :stale, false) ->
+        {entry, :unchanged}
 
       saturated_depth?(depth_result, max_mailbox_depth) ->
-        log_and_resubscribe_cell(sub, pid, depth_result, max_mailbox_depth)
-        {entry, :unchanged}
+        send(pid, {:cell_resubscribe, sub})
+        {Map.put(entry, :stale, true), :saturated}
 
       true ->
         new_projected = proj.(new_state)
@@ -386,21 +422,13 @@ defmodule Filament.Observable.GenServer do
   defp saturated_depth?({:message_queue_len, n}, max) when n >= max, do: true
   defp saturated_depth?(_, _), do: false
 
-  defp log_and_resubscribe_cell(sub, pid, depth_result, max_mailbox_depth) do
+  defp log_saturated_cell(pid, {:message_queue_len, depth}, max_mailbox_depth) do
     require Logger
-
-    depth_str =
-      case depth_result do
-        nil -> "dead"
-        {:message_queue_len, n} -> "#{n}"
-      end
 
     Logger.warning(
       "[Filament.Observable] cell subscriber #{inspect(pid)} " <>
-        "mailbox saturated (depth=#{depth_str}/#{max_mailbox_depth}), " <>
+        "mailbox saturated (depth=#{depth}/#{max_mailbox_depth}), " <>
         "dropping update"
     )
-
-    send(pid, {:cell_resubscribe, sub})
   end
 end

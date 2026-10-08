@@ -139,15 +139,18 @@ defmodule Filament.TagEngine.SlotConsumerTest do
       assert {:component, _, %{body: [%Entry{}]}, nil} = eval(ast)
     end
 
-    test "non-whitespace bare content inside component raises CompileError" do
-      assert_raise Phoenix.LiveView.TagEngine.Tokenizer.ParseError, ~r/unexpected content inside component/, fn ->
+    test "bare content inside component becomes the children prop beside slots" do
+      ast =
         compile("""
         <Filament.TagEngine.SlotConsumerTest.Layout.Layout>
           bare text
           <:body><span>ok</span></:body>
         </Filament.TagEngine.SlotConsumerTest.Layout.Layout>
         """)
-      end
+
+      assert {:component, _, %{body: [_], children: children}, nil} = eval(ast)
+      assert children |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "bare text"
+      refute children |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "ok"
     end
 
     test "regular props on the component tag are preserved alongside slot assigns" do

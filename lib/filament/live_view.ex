@@ -309,9 +309,8 @@ defmodule Filament.LiveView do
 
   @doc false
   def dispatch_filament_event(ref, params, socket) do
-    case String.split(ref, ":", parts: 2) do
-      [fiber_id_str, index_str] ->
-        handler_index = String.to_integer(index_str)
+    case Filament.Hooks.parse_event_ref(ref) do
+      {:ok, fiber_id_str, handler_index} ->
         tree = socket.assigns._filament_tree
         target_handler = Filament.FiberTree.get_event_handler(tree, fiber_id_str, handler_index)
 
@@ -328,7 +327,7 @@ defmodule Filament.LiveView do
           {:noreply, socket}
         end
 
-      _other ->
+      :error ->
         {:noreply, socket}
     end
   end
@@ -403,11 +402,13 @@ defmodule Filament.LiveView do
   @doc """
   Apply a `:cell_update` message to the fiber tree without rendering.
 
-  Returns `{:ok, new_tree, fiber_id}` on success or `:ignore` if the
-  subscriber tuple is malformed or the target fiber no longer exists.
+  Returns `{:ok, new_tree, fiber_id}` when the projected value changed,
+  `{:cached, new_tree}` when only the stored raw value changed (no render
+  needed), or `:ignore` if the subscriber tuple is malformed or the target
+  fiber no longer exists.
   """
   @spec apply_cell_update(map(), term(), term()) ::
-          {:ok, map(), String.t()} | :ignore
+          {:ok, map(), String.t()} | {:cached, map()} | :ignore
   def apply_cell_update(tree, subscriber, value) do
     update_cell_slot(tree, subscriber, &Filament.HookSlot.put_cell_value(&1, value))
   end
@@ -422,7 +423,7 @@ defmodule Filament.LiveView do
   @spec apply_cell_resubscribe(map(), term()) ::
           {:ok, map(), String.t()} | :ignore
   def apply_cell_resubscribe(tree, subscriber) do
-    update_cell_slot(tree, subscriber, &Filament.HookSlot.resubscribe(&1, subscriber))
+    update_cell_slot(tree, subscriber, &{Filament.HookSlot.resubscribe(&1, subscriber), true})
   end
 
   defp update_cell_slot(tree, subscriber, update) when is_tuple(subscriber) and tuple_size(subscriber) in [3, 4] do
@@ -432,8 +433,9 @@ defmodule Filament.LiveView do
     with {:ok, fiber} <- Map.fetch(tree, fiber_id),
          {:ok, slot} <- Map.fetch(fiber.hook_slots, slot_index),
          true <- Filament.HookSlot.matches_subscriber?(slot, subscriber) do
-      new_slots = Map.put(fiber.hook_slots, slot_index, update.(slot))
-      {:ok, Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots}), fiber_id}
+      {new_slot, changed?} = update.(slot)
+      new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: Map.put(fiber.hook_slots, slot_index, new_slot)})
+      if changed?, do: {:ok, new_tree, fiber_id}, else: {:cached, new_tree}
     else
       _ -> :ignore
     end
@@ -453,33 +455,30 @@ defmodule Filament.LiveView do
 
   @doc false
   def handle_cell_update(tree, subscriber, value, socket, rerender_fn) do
-    case apply_cell_update(tree, subscriber, value) do
-      {:ok, new_tree, _fid} -> {:noreply, rerender_fn.(socket, new_tree)}
-      :ignore -> {:noreply, socket}
-    end
+    tree |> apply_cell_update(subscriber, value) |> reply_after_cell_update(socket, rerender_fn)
   end
 
   @doc false
   def handle_cell_updates(tree, updates, socket, rerender_fn) do
-    case apply_cell_updates(tree, updates) do
-      {:ok, new_tree, _fiber_id} -> {:noreply, rerender_fn.(socket, new_tree)}
-      :ignore -> {:noreply, socket}
-    end
+    tree |> apply_cell_updates(updates) |> reply_after_cell_update(socket, rerender_fn)
   end
+
+  defp reply_after_cell_update({:ok, new_tree, _fiber_id}, socket, rerender_fn),
+    do: {:noreply, rerender_fn.(socket, new_tree)}
+
+  defp reply_after_cell_update({:cached, new_tree}, socket, _rerender_fn),
+    do: {:noreply, Phoenix.Component.assign(socket, :_filament_tree, new_tree)}
+
+  defp reply_after_cell_update(:ignore, socket, _rerender_fn), do: {:noreply, socket}
 
   @doc false
   def apply_cell_updates(tree, updates) when is_list(updates) do
     Enum.reduce(updates, :ignore, fn
       {subscriber, value}, result ->
-        current_tree =
-          case result do
-            {:ok, updated, _} -> updated
-            :ignore -> tree
-          end
-
-        case apply_cell_update(current_tree, subscriber, value) do
-          :ignore -> result
-          updated -> updated
+        case {result, apply_cell_update(result_tree(result, tree), subscriber, value)} do
+          {_, :ignore} -> result
+          {{:ok, _, fiber_id}, {:cached, updated}} -> {:ok, updated, fiber_id}
+          {_, updated} -> updated
         end
 
       _, result ->
@@ -488,6 +487,10 @@ defmodule Filament.LiveView do
   end
 
   def apply_cell_updates(_tree, _updates), do: :ignore
+
+  defp result_tree({:ok, tree, _fiber_id}, _tree), do: tree
+  defp result_tree({:cached, tree}, _tree), do: tree
+  defp result_tree(:ignore, tree), do: tree
 
   @doc false
   def handle_cell_resubscribe(tree, subscriber, socket, rerender_fn) do

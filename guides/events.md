@@ -92,12 +92,15 @@ in Core.
 
 ```elixir
 def dispatch_filament_event(ref, params, socket) do
-  [fiber_id, slot_str] = String.split(ref, ":", parts: 2)
-  slot = String.to_integer(slot_str)
-  tree = socket.assigns._filament_tree
+  # The handler index follows the last colon; a keyed fiber id may hold colons.
+  case Filament.Hooks.parse_event_ref(ref) do
+    {:ok, fiber_id, slot} ->
+      Filament.Core.dispatch_event(socket.assigns._filament_tree, fiber_id, slot, params)
+      {:noreply, socket}
 
-  Filament.Core.dispatch_event(tree, fiber_id, slot, params)
-  {:noreply, socket}
+    :error ->
+      {:noreply, socket}
+  end
 end
 ```
 

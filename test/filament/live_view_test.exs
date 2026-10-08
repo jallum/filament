@@ -65,6 +65,44 @@ defmodule Filament.LiveViewTest do
     end
   end
 
+  defmodule KeyedRow do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      prop(:label, :string)
+
+      def render(%{label: label}) do
+        ~F"""
+        <button data-key={label} on_click={fn -> send(self(), {:clicked, label}) end}>{label}</button>
+        """
+      end
+    end
+  end
+
+  defmodule KeyedRows do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      prop(:keys, :list)
+
+      def render(%{keys: keys}) do
+        ~F"""
+        <div>
+          <Filament.LiveViewTest.KeyedRow :for={key <- keys} :key={key} label={key} />
+        </div>
+        """
+      end
+    end
+  end
+
+  defmodule KeyedLiveView do
+    use Filament.LiveView
+
+    def root_component, do: KeyedRows
+  end
+
   describe "module injection" do
     test "injects mount/3 function" do
       assert function_exported?(CounterLiveView, :mount, 3)
@@ -184,6 +222,23 @@ defmodule Filament.LiveViewTest do
       }
 
       assert {:noreply, _socket} = CounterLiveView.handle_event("filament:test", %{}, socket)
+    end
+
+    test "dispatches to a keyed child whatever its key holds, colons too" do
+      keys = ["plain", "type: fmj", "a:1", "x:"]
+      {:ok, socket} = KeyedLiveView.mount(%{}, %{}, test_socket(%{keys: keys}))
+
+      html =
+        socket.assigns._filament_rendered
+        |> Safe.to_iodata()
+        |> IO.iodata_to_binary()
+        |> Floki.parse_fragment!()
+
+      for key <- keys do
+        [ref] = Floki.attribute(html, ~s(button[data-key="#{key}"]), "phx-click")
+        assert {:noreply, _socket} = KeyedLiveView.handle_event(ref, %{}, socket)
+        assert_received {:clicked, ^key}
+      end
     end
 
     test "forwards regular events to root component when handle_event/3 is defined" do
@@ -383,7 +438,7 @@ defmodule Filament.LiveViewTest do
       {:ok, socket} = CellLiveView.mount(%{}, %{}, socket)
 
       # Find the subscriber tuple (one slot exists on root after mount).
-      [{slot_index, {:cell_subscribed, _, _, subscriber}}] =
+      [{slot_index, {:cell_subscribed, _, _, subscriber, _, _}}] =
         Enum.to_list(socket.assigns._filament_tree["root"].hook_slots)
 
       {:noreply, socket} =
@@ -391,7 +446,7 @@ defmodule Filament.LiveViewTest do
 
       # After resubscribe, the slot should hold a fresh :cell_subscribed value
       # (set by the re-render which calls cell_subscribe_fresh).
-      assert {:cell_subscribed, _cell, _raw, refreshed_subscriber} =
+      assert {:cell_subscribed, _cell, _raw, refreshed_subscriber, _, _} =
                Map.fetch!(socket.assigns._filament_tree["root"].hook_slots, slot_index)
 
       refute refreshed_subscriber == subscriber
@@ -467,7 +522,7 @@ defmodule Filament.LiveViewTest do
       socket = test_socket(%{cell: cell})
       {:ok, socket} = CellLiveView.mount(%{}, %{}, socket)
 
-      [{slot_index, {:cell_subscribed, _, _, subscriber}}] =
+      [{slot_index, {:cell_subscribed, _, _, subscriber, _, _}}] =
         Enum.to_list(socket.assigns._filament_tree["root"].hook_slots)
 
       # Kill the server. The cell is now unreachable.

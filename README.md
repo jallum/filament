@@ -66,7 +66,9 @@ end
 **JSX-like templates.** The `~F` sigil compiles HTML templates with
 `{expression}` interpolation, `{for item <- list do}…{end}` loops, and
 `<MyComponent prop={value} />` child component tags — the same mental model as
-JSX, in Elixir.
+JSX, in Elixir. Inline markup between a component's tags becomes its
+`children` prop: `<Page><h1>{title}</h1></Page>`. The wrapper renders it with
+`{children}`, just like any other prop.
 
 **Components with typed props.** `defcomponent` declares a component with
 `prop/3` — typed, validated, with required or default values. Each component
@@ -104,9 +106,10 @@ re-fetching or re-running `handle_subscribe`.
 **Projections and change-or-bust.** Pass a projection function as the second
 argument to `use_value/2` to extract only the slice of state the component
 cares about. The function receives `:disconnected` or the raw server state and
-runs on the client at render time, so it can safely close over local component
-state such as filters or selections. If the projected value is unchanged after a
-mutation, the update is suppressed and the component does not re-render. This
+runs on the client when an update arrives and is refreshed on every render, so it
+can safely close over local component state such as filters or selections. If every
+projected value is unchanged (`===`), the component does not re-render. The latest
+raw state is retained for the next render, including local filter changes. This
 keeps large UIs fast without manual shouldComponentUpdate logic.
 
 ```elixir

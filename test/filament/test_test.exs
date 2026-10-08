@@ -26,6 +26,35 @@ defmodule Filament.TestTest do
     end
   end
 
+  defmodule KeyedComp do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent Row do
+      prop(:label, :string)
+
+      def render(%{label: label}) do
+        {clicked, set_clicked} = use_state(false)
+
+        ~F"""
+        <button data-key={label} on_click={fn -> set_clicked.(true) end}>{label}{if clicked, do: " clicked"}</button>
+        """
+      end
+    end
+
+    defcomponent Rows do
+      prop(:keys, :list)
+
+      def render(%{keys: keys}) do
+        ~F"""
+        <div>
+          <Filament.TestTest.KeyedComp.Row :for={key <- keys} :key={key} label={key} />
+        </div>
+        """
+      end
+    end
+  end
+
   defmodule ClassComp do
     @moduledoc false
     use Filament.Component
@@ -181,6 +210,18 @@ defmodule Filament.TestTest do
   test "click on nonexistent selector" do
     view = mount!(CounterComp.Counter, %{initial: 0})
     assert click(view, "#nonexistent") == {:error, {:no_element, "#nonexistent"}}
+  end
+
+  test "a keyed child's handler is found whatever its key holds, colons too" do
+    keys = ["plain", "type: fmj", "a:1", "x:"]
+    view = mount!(KeyedComp.Rows, %{keys: keys})
+
+    Enum.reduce(keys, view, fn key, view ->
+      refute render_text(view) =~ "#{key} clicked"
+      view = click!(view, ~s(button[data-key="#{key}"]))
+      assert render_text(view) =~ "#{key} clicked"
+      view
+    end)
   end
 
   test "key_down delivers key string and %Filament.KeyModifiers{} to the handler" do

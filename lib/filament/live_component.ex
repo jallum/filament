@@ -78,6 +78,9 @@ defmodule Filament.LiveComponent do
          |> Phoenix.Component.assign(:_filament_rendered, Filament.Web.to_rendered(new_rendered))
          |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
 
+      {:cached, new_tree} ->
+        {:ok, Phoenix.Component.assign(socket, :_filament_tree, new_tree)}
+
       :ignore ->
         {:ok, socket}
     end
@@ -152,5 +155,6 @@ defmodule Filament.LiveComponent do
     {:ok, final_tree, rendered, pending_effects}
   end
 
+  defp render_after_apply({:cached, new_tree}, _orig_tree, _owner_pid), do: {:cached, new_tree}
   defp render_after_apply(:ignore, _orig_tree, _owner_pid), do: :ignore
 end

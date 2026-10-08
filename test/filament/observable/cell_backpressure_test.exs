@@ -156,4 +156,100 @@ defmodule Filament.Observable.CellBackpressureTest do
     assert CellPressureCounter.get_cell_entry(server, blocked).last == 1
     assert CellPressureCounter.get_cell_entry(server, ready).last == 2
   end
+
+  test "one saturation notice per projection per episode, then fresh delivery after resubscription" do
+    server = start_supervised!({CellPressureCounter, 0})
+
+    owner = spawn(fn -> drainable_owner() end)
+
+    on_exit(fn -> Process.exit(owner, :kill) end)
+    first = subscribe_cell(server, owner, "first", 0)
+    second = subscribe_cell(server, owner, "second", 0)
+    healthy = subscribe_cell(server, self(), "healthy", 0)
+    flood_mailbox(owner, 110)
+
+    logs =
+      capture_log(fn ->
+        for value <- 1..20, do: CellPressureCounter.set(server, value)
+        Logger.flush()
+      end)
+
+    assert length(Regex.scan(~r/mailbox saturated/, logs)) == 1
+    {:messages, messages} = Process.info(owner, :messages)
+    assert Enum.count(messages, &match?({:cell_resubscribe, _}, &1)) == 2
+    assert length(messages) == 112
+    refute Enum.any?(messages, &(match?({:cell_updates, _}, &1) or match?({:cell_update, _, _}, &1)))
+    assert_receive {:cell_update, ^healthy, 20}
+    assert CellPressureCounter.get_cell_entry(server, first).last == 0
+    ref = make_ref()
+    send(owner, {:drain, self(), ref})
+    assert_receive {:drained, ^ref}
+    assert {:ok, 20} = Filament.Observable.GenServer.subscribe(server, first, &Function.identity/1)
+    CellPressureCounter.set(server, 21)
+    assert {:messages, [{:cell_update, ^first, 21}]} = Process.info(owner, :messages)
+    assert CellPressureCounter.get_cell_entry(server, second).stale
+    ref = make_ref()
+    send(owner, {:drain, self(), ref})
+    assert_receive {:drained, ^ref}
+    assert {:ok, 21} = Filament.Observable.GenServer.subscribe(server, second, &Function.identity/1)
+    assert CellPressureCounter.get_cell_entry(server, first).last == 21
+    assert capture_log(fn -> CellPressureCounter.set(server, 21) end) == ""
+    assert {:messages, []} = Process.info(owner, :messages)
+    CellPressureCounter.set(server, 22)
+    {:messages, messages} = Process.info(owner, :messages)
+    assert [{:cell_updates, updates}] = messages
+    assert Enum.sort(updates) == Enum.sort([{first, 22}, {second, 22}])
+    flood_mailbox(owner, 110)
+
+    logs =
+      capture_log(fn ->
+        for value <- 23..26, do: CellPressureCounter.set(server, value)
+        Logger.flush()
+      end)
+
+    assert length(Regex.scan(~r/mailbox saturated/, logs)) == 1
+    {:messages, messages} = Process.info(owner, :messages)
+    assert Enum.count(messages, &match?({:cell_resubscribe, _}, &1)) == 2
+  end
+
+  defp drainable_owner do
+    receive do
+      {:drain, caller, ref} ->
+        drain_mailbox()
+        send(caller, {:drained, ref})
+        drainable_owner()
+    end
+  end
+
+  defp drain_mailbox do
+    receive do
+      _ -> drain_mailbox()
+    after
+      0 -> :ok
+    end
+  end
+
+  test "dead subscribers awaiting DOWN are silent and leave healthy delivery intact" do
+    pid = spawn_sleeper()
+    ref = Process.monitor(pid)
+    Process.exit(pid, :kill)
+    assert_receive {:DOWN, ^ref, :process, ^pid, _}
+
+    dead_sub = {pid, "dead", 0, make_ref()}
+    healthy_sub = {self(), "healthy", 0, make_ref()}
+    dead = %{pid: pid, projection: &Function.identity/1, last: 1, monitor_ref: make_ref(), stale: false}
+    healthy = %{dead | pid: self()}
+    subs = %{dead_sub => dead, healthy_sub => healthy}
+
+    logs =
+      capture_log(fn ->
+        updated = Filament.Observable.GenServer.notify_cell_each(subs, 2, 100)
+        assert updated[dead_sub] === dead
+        assert updated[healthy_sub].last === 2
+        Logger.flush()
+      end)
+
+    assert logs == ""
+    assert_receive {:cell_update, ^healthy_sub, 2}
+  end
 end

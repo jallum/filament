@@ -269,20 +269,22 @@ defmodule Filament.TagEngine do
       trimmed == "else" -> :jsx_else
       trimmed == "end" -> :jsx_end
       block_opener?(trimmed) -> parse_block_opener(trimmed, opts)
-      String.ends_with?(trimmed, "->") -> {:jsx_clause, trimmed}
+      clause_expr?(trimmed, opts) -> {:jsx_clause, trimmed}
       true -> :expr
     end
   end
 
   defp block_opener?(trimmed) do
     (String.starts_with?(trimmed, "if ") or String.starts_with?(trimmed, "for ") or
-       String.starts_with?(trimmed, "case ")) and
+       String.starts_with?(trimmed, "case ") or String.starts_with?(trimmed, "cond ")) and
       String.ends_with?(trimmed, " do")
   end
 
   defp parse_block_opener(trimmed, opts) do
     placeholder =
-      if String.starts_with?(trimmed, "case "), do: "\n_ -> nil\nend", else: "\nnil\nend"
+      if String.starts_with?(trimmed, "case ") or String.starts_with?(trimmed, "cond "),
+        do: "\ntrue -> nil\nend",
+        else: "\nnil\nend"
 
     case Code.string_to_quoted(trimmed <> placeholder, opts) do
       {:ok, {:if, _, [cond_ast, [do: nil]]}} ->
@@ -294,6 +296,9 @@ defmodule Filament.TagEngine do
 
       {:ok, {:case, _, [subject, [do: [_]]]}} ->
         {:case_block, subject}
+
+      {:ok, {:cond, _, [[do: [_]]]}} ->
+        {:cond_block, nil}
 
       _ ->
         :expr
@@ -313,55 +318,80 @@ defmodule Filament.TagEngine do
     raise_syntax_error!("{else} without matching {if}", else_meta, state)
   end
 
-  defp jsx_clause(%{stack: [{:jsx_block, :case, _, _} | _]} = state, clause, meta, opts, tokens) do
+  defp clause_expr?(value, opts) do
+    String.ends_with?(value, "->") or
+      (String.contains?(value, "->") and
+         match?(
+           {:ok, {:case, _, [_, [do: [{:->, _, _}]]]}},
+           Code.string_to_quoted("case nil do\n" <> value <> "\nend", opts)
+         ))
+  end
+
+  defp jsx_clause(%{stack: [{:jsx_block, kind, _, _} | _]} = state, clause, meta, opts, tokens)
+       when kind in [:case, :cond] do
     _before_first_clause = invoke_subengine(state, :handle_end, [])
-    patterns = parse_case_clause!(clause, meta, opts, state)
+    {patterns, inline} = parse_clause!(kind, clause, meta, opts, state)
 
     state
     |> push_stack_item({:jsx_clause, patterns, [], meta})
     |> update_subengine(:handle_begin, [])
+    |> emit_inline_clause(inline)
     |> continue(tokens)
   end
 
   defp jsx_clause(
-         %{stack: [{:jsx_clause, patterns, clauses, clause_meta}, {:jsx_block, :case, _, _} | _]} = state,
+         %{stack: [{:jsx_clause, patterns, clauses, clause_meta}, {:jsx_block, kind, _, _} | _]} = state,
          clause,
          meta,
          opts,
          tokens
-       ) do
+       )
+       when kind in [:case, :cond] do
     body = invoke_subengine(state, :handle_end, [])
     completed = {:->, [line: clause_meta.line], [patterns, body]}
-    next_patterns = parse_case_clause!(clause, meta, opts, state)
+    {next_patterns, inline} = parse_clause!(kind, clause, meta, opts, state)
 
     state
     |> pop_stack_item()
     |> push_stack_item({:jsx_clause, next_patterns, [completed | clauses], meta})
     |> update_subengine(:handle_begin, [])
+    |> emit_inline_clause(inline)
     |> continue(tokens)
   end
 
   defp jsx_clause(state, _clause, meta, _opts, _tokens) do
-    raise_syntax_error!("case clause without matching {case ... do}", meta, state)
+    raise_syntax_error!("clause without matching {case ... do} or {cond do}", meta, state)
   end
 
-  defp parse_case_clause!(clause, meta, opts, state) do
-    case Code.string_to_quoted("case nil do\n" <> clause <> " nil\nend", opts) do
-      {:ok, {:case, _, [_, [do: [{:->, _, [patterns, nil]}]]]}} ->
-        patterns
+  defp parse_clause!(kind, clause, meta, opts, state) do
+    inline? = not String.ends_with?(String.trim(clause), "->")
+    opener = if kind == :case, do: "case nil do\n", else: "cond do\n"
+    body = if inline?, do: clause, else: clause <> " nil"
+
+    case Code.string_to_quoted(opener <> body <> "\nend", opts) do
+      {:ok, {^kind, _, args}} ->
+        case List.last(args) do
+          [do: [{:->, _, [patterns, expression]}]] -> {patterns, if(inline?, do: {:inline, expression})}
+          _ -> raise_syntax_error!("invalid #{kind} clause", meta, state)
+        end
 
       _ ->
-        raise_syntax_error!("invalid case clause", meta, state)
+        raise_syntax_error!("invalid #{kind} clause", meta, state)
     end
   end
 
+  defp emit_inline_clause(state, nil), do: state
+  defp emit_inline_clause(state, {:inline, expression}), do: update_subengine(state, :handle_expr, ["=", expression])
+
   defp jsx_end(
-         %{stack: [{:jsx_clause, patterns, clauses, clause_meta}, {:jsx_block, :case, subject, _} | _]} = state,
+         %{stack: [{:jsx_clause, patterns, clauses, clause_meta}, {:jsx_block, kind, subject, _} | _]} = state,
          tokens
-       ) do
+       )
+       when kind in [:case, :cond] do
     body = invoke_subengine(state, :handle_end, [])
     clauses = Enum.reverse([{:->, [line: clause_meta.line], [patterns, body]} | clauses])
-    ast = {:case, [], [subject, [do: clauses]]}
+    args = if kind == :case, do: [subject, [do: clauses]], else: [[do: clauses]]
+    ast = {kind, [], args}
 
     state
     |> pop_stack_item()
@@ -372,8 +402,8 @@ defmodule Filament.TagEngine do
     |> continue(tokens)
   end
 
-  defp jsx_end(%{stack: [{:jsx_block, :case, _, meta} | _]} = state, _tokens) do
-    raise_syntax_error!("{case ... do} requires at least one clause", meta, state)
+  defp jsx_end(%{stack: [{:jsx_block, kind, _, meta} | _]} = state, _tokens) when kind in [:case, :cond] do
+    raise_syntax_error!("{#{kind}#{if kind == :case, do: " ..."} do} requires at least one clause", meta, state)
   end
 
   defp jsx_end(%{stack: [{:jsx_else, then_body}, {:jsx_block, :if, cond_ast, _bm} | _]} = state, tokens) do
@@ -427,7 +457,7 @@ defmodule Filament.TagEngine do
   end
 
   defp jsx_end(_state, _tokens) do
-    raise CompileError, description: "{end} without matching {if}, {for}, or {case}"
+    raise CompileError, description: "{end} without matching {if}, {for}, {case}, or {cond}"
   end
 
   defp invoke_subengine(%{subengine: subengine, substate: substate}, fun, args) do
@@ -516,6 +546,13 @@ defmodule Filament.TagEngine do
         |> update_subengine(:handle_begin, [])
         |> continue(tokens)
 
+      {:cond_block, nil} ->
+        state
+        |> push_substate_to_stack()
+        |> push_stack_item({:jsx_block, :cond, nil, meta})
+        |> update_subengine(:handle_begin, [])
+        |> continue(tokens)
+
       {:jsx_clause, clause} ->
         jsx_clause(state, clause, meta, opts, tokens)
 
@@ -544,14 +581,6 @@ defmodule Filament.TagEngine do
 
       in_component_toplevel?(state) and String.match?(text, ~r/\A\s*\z/) ->
         continue(state, tokens)
-
-      in_component_toplevel?(state) ->
-        raise_syntax_error!(
-          "unexpected content inside component. " <>
-            "Wrap it in a named slot: `<:slot_name>content</:slot_name>`",
-          %{line: line, column: column},
-          state
-        )
 
       true ->
         state
@@ -600,7 +629,8 @@ defmodule Filament.TagEngine do
     end
   end
 
-  # Remote function component (with inner content — slot consumer form)
+  # Remote function component (with inner content). Named slots are captured
+  # by their own substates; any other inline markup becomes the `children` prop.
 
   defp handle_token([{:remote_component, name, attrs, tag_meta} | tokens], state) do
     attrs = postprocess_attrs(attrs, state)
@@ -615,6 +645,8 @@ defmodule Filament.TagEngine do
     |> set_root_on_not_tag()
     |> push_tag({:remote_component, name, {mod_ast, fun, regular_assigns, has_special?, special}, tag_meta})
     |> push_slots_frame()
+    |> push_substate_to_stack()
+    |> update_subengine(:handle_begin, [])
     |> continue(tokens)
   end
 
@@ -683,9 +715,12 @@ defmodule Filament.TagEngine do
     {{:remote_component, _name, {mod_ast, fun, regular_assigns, has_special?, special}, open_meta}, state} =
       pop_tag!(state, token)
 
+    children_ast = invoke_subengine(state, :handle_end, [])
+    state = pop_substate_from_stack(state)
     {slots_map, state} = pop_slots_frame(state)
     slot_assigns_ast = build_slot_assigns_ast(slots_map)
     full_assigns = merge_assigns_with_slots(regular_assigns, slot_assigns_ast, open_meta.line)
+    full_assigns = put_children(full_assigns, children_ast, open_meta.line)
 
     vnode_ast =
       if has_special? do
@@ -1357,6 +1392,14 @@ defmodule Filament.TagEngine do
     quote line: line, do: Map.merge(unquote(regular_assigns), unquote(slot_assigns_ast))
   end
 
+  # Whitespace between a component's tags is skipped, so an empty body means
+  # the component holds only named slots and receives no `children` prop.
+  defp put_children(assigns, {:text, ""}, _line), do: assigns
+
+  defp put_children(assigns, children_ast, line) do
+    quote line: line, do: Map.put(unquote(assigns), :children, unquote(children_ast))
+  end
+
   defp parse_slot_default(attrs, state) do
     case List.keyfind(attrs, "default", 0) do
       {"default", {:expr, _, _} = expr, _attr_meta} -> parse_expr!(expr, state.file)
@@ -1364,9 +1407,10 @@ defmodule Filament.TagEngine do
     end
   end
 
-  # True when we're directly inside a component's body (not inside a slot capture substate).
+  # True directly inside a component's body: not within one of its elements
+  # or a slot capture substate.
   defp in_component_toplevel?(state) do
-    state.slots != [] and not in_slot_substate?(state.stack)
+    match?([{:remote_component, _, _, _} | _], state.tags) and not in_slot_substate?(state.stack)
   end
 
   defp in_slot_substate?([{:slot_capture, _, _, _, _} | _]), do: true
