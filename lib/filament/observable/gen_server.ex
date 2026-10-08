@@ -245,6 +245,9 @@ defmodule Filament.Observable.GenServer do
     end)
   end
 
+  # DOWN cleanup owns removal; a process that has already exited is not saturated.
+  defp notify_subscriber(subscriber, _new_state, nil, _max_mailbox_depth), do: subscriber
+
   defp notify_subscriber(subscriber, new_state, depth_result, max_mailbox_depth) do
     cond do
       # A stale subscriber is silent until subscribe supplies a fresh snapshot.
@@ -265,22 +268,17 @@ defmodule Filament.Observable.GenServer do
     end
   end
 
-  defp saturated_depth?(nil, _max), do: true
   defp saturated_depth?({:message_queue_len, n}, max) when n >= max, do: true
   defp saturated_depth?(_, _), do: false
 
   defp log_and_resubscribe(subscriber, depth_result, max_mailbox_depth) do
     require Logger
 
-    depth_str =
-      case depth_result do
-        nil -> "dead"
-        {:message_queue_len, n} -> "#{n}"
-      end
+    {:message_queue_len, depth} = depth_result
 
     Logger.warning(
       "[Filament.Observable] subscriber #{inspect(subscriber.pid)} " <>
-        "mailbox saturated (depth=#{depth_str}/#{max_mailbox_depth}), " <>
+        "mailbox saturated (depth=#{depth}/#{max_mailbox_depth}), " <>
         "dropping update"
     )
 
