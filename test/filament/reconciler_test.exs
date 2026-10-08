@@ -213,7 +213,9 @@ defmodule Filament.ReconcilerTest do
           props: %{count: 1},
           status: :stable,
           parent_id: "root",
-          hook_slots: %{0 => {:subscribed, server, 42}}
+          hook_slots: %{
+            0 => %Filament.Observable.Subscription{server: server, raw: 42, project: &Function.identity/1, value: 42}
+          }
         )
 
       tree =
