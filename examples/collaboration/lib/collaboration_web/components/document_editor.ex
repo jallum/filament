@@ -10,17 +10,8 @@ defmodule CollaborationWeb.Components.DocumentEditor do
     def render(%{doc_id: doc_id}) do
       source = use_source(DocumentServer.cell(doc_id))
 
-      # NOTE: This LiveView uses static_subscribe: false (see CollaborationLive).
-      # With the default (static_subscribe: true), the HTTP render process would
-      # call handle_subscribe and increment presence before the old WebSocket tears
-      # down on reload, producing a momentary 1→2→1 spike. Setting
-      # static_subscribe: false means this projection returns :disconnected during
-      # the HTTP render and only subscribes once the real WebSocket session is
-      # established — so the presence count always reflects live connections only.
-      #
-      # We return a neutral struct for :disconnected so the static HTML contains the
-      # full document structure. The first-load WS patch then only updates the dynamic
-      # leaves (presence text, lock badge) rather than replacing the entire layout.
+      # A neutral struct for :disconnected keeps the full document structure
+      # in the HTML even when the server is unreachable.
       doc_view =
         use_value(source, fn
           :disconnected -> %{presence: 0, locked: false, lock_holder: nil}

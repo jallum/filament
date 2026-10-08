@@ -53,21 +53,20 @@ defmodule Filament.RendererTest do
     end
   end
 
-  describe "render/3" do
+  describe "render_fiber/3" do
     test "renders component with valid props" do
       context = %RenderContext{
         fiber_id: "root",
         fiber_tree: %{}
       }
 
-      {result, hook_slots, pending_effects, new_fibers, event_handlers, _capture_handlers, _evt_kinds, _cap_kinds} =
-        Renderer.render(TestHello.TestHello, %{name: "world"}, context)
+      {fiber, ctx} = render(TestHello.TestHello, %{name: "world"}, context)
 
-      assert is_tuple(result)
-      assert hook_slots == %{}
-      assert pending_effects == []
-      assert new_fibers == %{}
-      assert event_handlers == %{}
+      assert is_tuple(fiber.rendered)
+      assert fiber.hook_slots == %{}
+      assert ctx.pending_effects == []
+      assert ctx.new_fibers == %{}
+      assert fiber.event_handlers == %{}
     end
 
     test "produces HTML containing rendered content" do
@@ -76,8 +75,7 @@ defmodule Filament.RendererTest do
         fiber_tree: %{}
       }
 
-      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers, _capture_handlers, _evt_kinds, _cap_kinds} =
-        Renderer.render(TestHello.TestHello, %{name: "Alice"}, context)
+      {%{rendered: result}, _ctx} = render(TestHello.TestHello, %{name: "Alice"}, context)
 
       iodata = Filament.Web.to_iodata(result)
       html = IO.iodata_to_binary(iodata)
@@ -92,7 +90,7 @@ defmodule Filament.RendererTest do
       }
 
       assert_raise ArgumentError, ~r/required prop :name missing/, fn ->
-        Renderer.render(TestHello.TestHello, %{}, context)
+        render(TestHello.TestHello, %{}, context)
       end
     end
 
@@ -102,8 +100,7 @@ defmodule Filament.RendererTest do
         fiber_tree: %{}
       }
 
-      {result, _hook_slots, _pending_effects, _new_fibers, _event_handlers, _capture_handlers, _evt_kinds, _cap_kinds} =
-        Renderer.render(TestHello.TestHello, %{name: "Bob"}, context)
+      {%{rendered: result}, _ctx} = render(TestHello.TestHello, %{name: "Bob"}, context)
 
       iodata = Filament.Web.to_iodata(result)
       html = IO.iodata_to_binary(iodata)
@@ -116,11 +113,11 @@ defmodule Filament.RendererTest do
     test "clears render context after render" do
       context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
 
-      assert Renderer.current_context() == nil
+      assert Process.get(:filament_render_context) == nil
 
-      Renderer.render(TestHello.TestHello, %{name: "test"}, context)
+      render(TestHello.TestHello, %{name: "test"}, context)
 
-      assert Renderer.current_context() == nil
+      assert Process.get(:filament_render_context) == nil
     end
 
     test "restores previous context when nested" do
@@ -131,11 +128,11 @@ defmodule Filament.RendererTest do
       Process.put(:filament_render_context, outer_context)
 
       # Render with inner context
-      Renderer.render(TestHello.TestHello, %{name: "nested"}, inner_context)
+      render(TestHello.TestHello, %{name: "nested"}, inner_context)
 
       # Should restore outer context — note: old context is deleted after render,
       # so neither inner nor outer context remains
-      assert Renderer.current_context() == nil
+      assert Process.get(:filament_render_context) == nil
 
       # Cleanup
       Process.delete(:filament_render_context)
@@ -180,7 +177,7 @@ defmodule Filament.RendererTest do
       assert {:component, SimpleItem.SimpleItem, %{label: "x"}, nil, child_render} = walked
       assert child_render
 
-      child_id = Fiber.child_id(root_fiber, SimpleItem.SimpleItem, {:index, 0})
+      child_id = Fiber.child_id(root_fiber.id, SimpleItem.SimpleItem, {:index, 0})
       assert Map.has_key?(final_ctx.new_fibers, child_id)
     end
 
@@ -201,9 +198,8 @@ defmodule Filament.RendererTest do
 
       assert {:component, SimpleItem.SimpleItem, %{label: "x"}, "k1", _child} = walked
 
-      child_id = Fiber.child_id(root_fiber, SimpleItem.SimpleItem, {:key, "k1"})
+      child_id = Fiber.child_id(root_fiber.id, SimpleItem.SimpleItem, {:key, "k1"})
       assert Map.has_key?(final_ctx.new_fibers, child_id)
-      assert final_ctx.new_fibers[child_id].key == "k1"
     end
 
     test "raises on invalid vnode" do
@@ -223,46 +219,7 @@ defmodule Filament.RendererTest do
     end
   end
 
-  describe "current_context/0" do
-    test "returns nil when no context is set" do
-      assert Renderer.current_context() == nil
-    end
-
-    test "returns the current context when set" do
-      context = %RenderContext{fiber_id: "test", fiber_tree: %{}}
-      Process.put(:filament_render_context, context)
-
-      assert Renderer.current_context() == context
-
-      Process.delete(:filament_render_context)
-    end
-  end
-
-  describe "next_hook_slot/0" do
-    test "returns incrementing indices during render" do
-      context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
-
-      Process.put(:filament_render_context, context)
-
-      assert {0, ctx} = Renderer.next_hook_slot()
-      assert ctx.hook_index == 1
-
-      assert {1, ctx} = Renderer.next_hook_slot()
-      assert ctx.hook_index == 2
-
-      assert {2, _ctx} = Renderer.next_hook_slot()
-
-      Process.delete(:filament_render_context)
-    end
-
-    test "raises when called outside render context" do
-      assert_raise RuntimeError, ~r/hook called outside render context/, fn ->
-        Renderer.next_hook_slot()
-      end
-    end
-  end
-
-  describe "render_component_child_keyed/4" do
+  describe "render_component_child/4 with a key" do
     test "uses key-based fiber id" do
       root_fiber = Fiber.new(id: "root", component: __MODULE__)
 
@@ -274,18 +231,17 @@ defmodule Filament.RendererTest do
       }
 
       Process.put(:filament_render_context, context)
-      Renderer.render_component_child_keyed(context, SimpleItem.SimpleItem, %{label: "x"}, "my-key")
+      Renderer.render_component_child(context, SimpleItem.SimpleItem, %{label: "x"}, "my-key")
       final_ctx = Process.get(:filament_render_context)
       Process.delete(:filament_render_context)
 
-      expected_id = Fiber.child_id(root_fiber, SimpleItem.SimpleItem, {:key, "my-key"})
+      expected_id = Fiber.child_id(root_fiber.id, SimpleItem.SimpleItem, {:key, "my-key"})
       assert Map.has_key?(final_ctx.new_fibers, expected_id)
-      assert final_ctx.new_fibers[expected_id].key == "my-key"
     end
 
     test "preserves hook state across renders when key matches" do
       root_fiber = Fiber.new(id: "root", component: __MODULE__)
-      child_id = Fiber.child_id(root_fiber, StatefulComp.StatefulComp, {:key, "stable"})
+      child_id = Fiber.child_id(root_fiber.id, StatefulComp.StatefulComp, {:key, "stable"})
 
       context1 = %RenderContext{
         fiber_id: "root",
@@ -295,7 +251,7 @@ defmodule Filament.RendererTest do
       }
 
       Process.put(:filament_render_context, context1)
-      Renderer.render_component_child_keyed(context1, StatefulComp.StatefulComp, %{initial: 7}, "stable")
+      Renderer.render_component_child(context1, StatefulComp.StatefulComp, %{initial: 7}, "stable")
       ctx1 = Process.get(:filament_render_context)
       Process.delete(:filament_render_context)
 
@@ -310,28 +266,15 @@ defmodule Filament.RendererTest do
       }
 
       Process.put(:filament_render_context, context2)
-      Renderer.render_component_child_keyed(context2, StatefulComp.StatefulComp, %{initial: 7}, "stable")
+      Renderer.render_component_child(context2, StatefulComp.StatefulComp, %{initial: 7}, "stable")
       ctx2 = Process.get(:filament_render_context)
       Process.delete(:filament_render_context)
 
       second_fiber = ctx2.new_fibers[child_id]
-      assert second_fiber.status == :stable
       assert second_fiber.hook_slots == first_fiber.hook_slots
     end
   end
 
-  describe "hook_index isolation" do
-    test "each render starts with hook_index 0" do
-      context = %RenderContext{fiber_id: "root", fiber_tree: %{}}
-
-      Process.put(:filament_render_context, context)
-      assert {0, _} = Renderer.next_hook_slot()
-      assert {1, _} = Renderer.next_hook_slot()
-      Process.delete(:filament_render_context)
-
-      Process.put(:filament_render_context, context)
-      assert {0, _} = Renderer.next_hook_slot()
-      Process.delete(:filament_render_context)
-    end
-  end
+  defp render(component, props, context),
+    do: Renderer.render_fiber(Fiber.new(id: context.fiber_id, component: component), props, context)
 end

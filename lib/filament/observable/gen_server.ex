@@ -6,7 +6,7 @@ defmodule Filament.Observable.GenServer do
 
     - `handle_call({:filament_cell_subscribe, ...}, from, state)`,
       `handle_call({:filament_cell_current, ...}, from, state)`, and
-      `handle_call({:filament_cell_unsubscribe, ...}, from, state)` —
+      `handle_cast({:filament_cell_unsubscribe, ...}, state)` —
       `Filament.Cell` transport callbacks routed to module-level helpers
     - `handle_info({:DOWN, ...}, state)` — removes a dead owner's cells
     - `timeout/1` (overridable) — the GenServer timeout those handlers
@@ -57,16 +57,19 @@ defmodule Filament.Observable.GenServer do
   def subscribe(server, subscriber, projection) when is_function(projection, 1) do
     GenServer.call(server, {:filament_cell_subscribe, subscriber, projection})
   catch
-    :exit, _ -> :disconnected
+    :exit, {:timeout, _} ->
+      # The server may still subscribe after the caller gives up; remove it.
+      unsubscribe(server, subscriber)
+      :disconnected
+
+    :exit, _ ->
+      :disconnected
   end
 
+  # A cast, so that unmounting never waits on a busy server. The server
+  # handles it before any later request from the same owner.
   @impl Filament.Cell
-  def unsubscribe(server, subscriber) do
-    GenServer.call(server, {:filament_cell_unsubscribe, subscriber})
-    :ok
-  catch
-    :exit, _ -> :ok
-  end
+  def unsubscribe(server, subscriber), do: GenServer.cast(server, {:filament_cell_unsubscribe, subscriber})
 
   @impl Filament.Cell
   def current(server, projection) when is_function(projection, 1) do
@@ -81,6 +84,7 @@ defmodule Filament.Observable.GenServer do
   registered names and via-tuples are always treated as reachable
   (their lookup happens at call time anyway).
   """
+  @impl Filament.Cell
   def reachable?(server) when is_pid(server), do: Process.alive?(server)
   def reachable?(server), do: not is_nil(GenServer.whereis(server))
 
@@ -90,10 +94,12 @@ defmodule Filament.Observable.GenServer do
 
       use GenServer
 
+      @before_compile Filament.Observable.GenServer
+
       # ── Default Observable callbacks (overridable) ───────────────────────
 
       @impl Filament.Observable
-      def handle_subscribe(_subscriber, state), do: {:ok, state, state}
+      def handle_subscribe(_subscriber, state), do: handle_current(state)
 
       @impl Filament.Observable
       def handle_unsubscribe(_subscriber, state), do: {:ok, state}
@@ -150,16 +156,9 @@ defmodule Filament.Observable.GenServer do
       end
 
       @impl true
-      def handle_call({:filament_cell_unsubscribe, subscriber}, _from, state) do
+      def handle_cast({:filament_cell_unsubscribe, subscriber}, state) do
         __MODULE__
         |> Filament.Observable.GenServer.handle_cell_unsubscribe(subscriber, state)
-        |> Filament.Observable.GenServer.keep_timeout(__MODULE__)
-      end
-
-      @impl true
-      def handle_info({:DOWN, _ref, :process, dead_pid, _reason}, state) do
-        __MODULE__
-        |> Filament.Observable.GenServer.handle_cell_down(dead_pid, state)
         |> Filament.Observable.GenServer.keep_timeout(__MODULE__)
       end
 
@@ -191,6 +190,53 @@ defmodule Filament.Observable.GenServer do
     end
   end
 
+  # Wraps the module's own handle_info/2, if it has one: the `:DOWN` of a
+  # subscriber this server monitors removes its cells, and every other
+  # message reaches the module's handler unchanged. Without one, other
+  # messages are logged, as GenServer's default handler does.
+  @doc false
+  defmacro __before_compile__(env) do
+    # GenServer's default handler is generated in its own context.
+    {:v1, _kind, meta, _clauses} = Module.get_definition(env.module, {:handle_info, 2})
+    own_handler? = meta[:context] != GenServer
+
+    fallback =
+      if own_handler?,
+        do: quote(do: super(message, state)),
+        else: quote(do: Filament.Observable.GenServer.unexpected_info(__MODULE__, message, state))
+
+    # A definition here replaces an overridable one only once it is marked
+    # overridable again.
+    quote do
+      defoverridable handle_info: 2
+
+      # The message is matched elsewhere so that the type checker doesn't
+      # compare its shape with the module's own clauses.
+      @impl true
+      def handle_info(message, state) do
+        case Filament.Observable.GenServer.handle_cell_info(__MODULE__, message, state) do
+          {:handled, reply} -> reply
+          :pass -> unquote(fallback)
+        end
+      end
+    end
+  end
+
+  @doc false
+  def handle_cell_info(mod, {:DOWN, ref, :process, dead_pid, _reason}, state) do
+    if cell_monitor?(ref), do: {:handled, mod |> handle_cell_down(dead_pid, state) |> keep_timeout(mod)}, else: :pass
+  end
+
+  def handle_cell_info(_mod, _message, _state), do: :pass
+
+  @doc false
+  def unexpected_info(mod, message, state) do
+    require Logger
+
+    Logger.error("#{inspect(mod)} #{inspect(self())} received unexpected message in handle_info/2: #{inspect(message)}")
+    keep_timeout({:noreply, state}, mod)
+  end
+
   # ── Module-level helpers (called from injected code above) ───────────────
 
   # An injected handler's reply, with the server's own timeout, so that
@@ -200,21 +246,42 @@ defmodule Filament.Observable.GenServer do
   def keep_timeout({:noreply, state}, mod), do: {:noreply, state, mod.timeout(state)}
 
   @doc false
-  def handle_cell_subscribe(mod, subscriber, projection, _from, state) do
-    {:ok, raw, new_state} = mod.handle_subscribe(subscriber, state)
+  # A repeat subscribe with the same identity is a refresh, as after a
+  # saturation notice: the domain keeps its subscription, so neither
+  # handle_subscribe nor handle_unsubscribe runs, and the reply is the
+  # current value under the new projection.
+  def handle_cell_subscribe(mod, subscriber, projection, from, state) do
+    cell_subs = Process.get(:__filament_cell_subscribers__, %{})
+
+    case Map.fetch(cell_subs, subscriber) do
+      {:ok, entry} ->
+        {:ok, raw, new_state} = mod.handle_current(state)
+        projected = projection.(raw)
+        Process.delete(@notification_cache)
+        entry = %{entry | projection: projection, last: projected, stale: false}
+        Process.put(:__filament_cell_subscribers__, Map.put(cell_subs, subscriber, entry))
+        {:reply, {:ok, projected}, new_state}
+
+      :error ->
+        case mod.handle_subscribe(subscriber, state) do
+          {:ok, raw, new_state} -> add_cell_subscriber(subscriber, projection, from, raw, new_state)
+          {:error, _reason, new_state} -> {:reply, :disconnected, new_state}
+        end
+    end
+  end
+
+  defp add_cell_subscriber(subscriber, projection, {caller, _tag}, raw, state) do
+    # handle_subscribe may notify observers, so read the map after it.
     cell_subs = Process.get(:__filament_cell_subscribers__, %{})
     projected = projection.(raw)
-    send_pid = subscriber_pid(subscriber)
-    old_entry = Map.get(cell_subs, subscriber)
-    if old_entry && old_entry.monitor_ref, do: Process.demonitor(old_entry.monitor_ref, [:flush])
-    ref = if send_pid != self(), do: Process.monitor(send_pid)
-
-    entry = %{pid: send_pid, projection: projection, last: projected, monitor_ref: ref, stale: false}
+    pid = subscriber_pid(subscriber, caller)
+    ref = if pid != self(), do: Process.monitor(pid)
+    entry = %{pid: pid, projection: projection, last: projected, monitor_ref: ref, stale: false}
     new_subs = Map.put(cell_subs, subscriber, entry)
     cache_identity_subscribe(cell_subs, new_subs, entry, raw)
     Process.put(:__filament_cell_subscribers__, new_subs)
 
-    {:reply, {:ok, projected}, new_state}
+    {:reply, {:ok, projected}, state}
   end
 
   @doc false
@@ -229,15 +296,20 @@ defmodule Filament.Observable.GenServer do
 
     case Map.fetch(cell_subs, subscriber) do
       :error ->
-        {:reply, :ok, state}
+        {:noreply, state}
 
       {:ok, entry} ->
         if entry.monitor_ref, do: Process.demonitor(entry.monitor_ref, [:flush])
         Process.delete(@notification_cache)
         Process.put(:__filament_cell_subscribers__, Map.delete(cell_subs, subscriber))
         {:ok, new_state} = mod.handle_unsubscribe(subscriber, state)
-        {:reply, :ok, new_state}
+        {:noreply, new_state}
     end
+  end
+
+  @doc false
+  def cell_monitor?(ref) do
+    :__filament_cell_subscribers__ |> Process.get(%{}) |> Enum.any?(fn {_sub, entry} -> entry.monitor_ref == ref end)
   end
 
   @doc false
@@ -246,6 +318,9 @@ defmodule Filament.Observable.GenServer do
 
     {dead, alive} =
       Enum.split_with(cell_subs, fn {_sub, entry} -> entry.pid == dead_pid end)
+
+    # One monitor per cell: flush the owner's others so they aren't strays.
+    Enum.each(dead, fn {_sub, entry} -> Process.demonitor(entry.monitor_ref, [:flush]) end)
 
     Process.delete(@notification_cache)
     Process.put(:__filament_cell_subscribers__, Map.new(alive))
@@ -261,13 +336,13 @@ defmodule Filament.Observable.GenServer do
 
   # Locate the sender pid from a subscriber. By convention subscribers are
   # `{pid, ...}` tuples (matching how Filament's hooks layer keys subscribers
-  # on owner_pid); anything else falls back to the calling process.
-  defp subscriber_pid(sub) when is_tuple(sub) and tuple_size(sub) >= 1 do
+  # on owner_pid); any other identity is delivered to the calling process.
+  defp subscriber_pid(sub, caller) when is_tuple(sub) and tuple_size(sub) >= 1 do
     candidate = elem(sub, 0)
-    if is_pid(candidate), do: candidate, else: self()
+    if is_pid(candidate), do: candidate, else: caller
   end
 
-  defp subscriber_pid(_), do: self()
+  defp subscriber_pid(_sub, caller), do: caller
 
   # Only the known pure identity function may bypass projection evaluation.
   # Keep the exact subscriber map in the cache so subscription replacement
@@ -311,7 +386,7 @@ defmodule Filament.Observable.GenServer do
   end
 
   defp owner_ready?(pid, max_depth) do
-    case Process.info(pid, :message_queue_len) do
+    case mailbox_depth(pid) do
       {:message_queue_len, depth} when depth < max_depth -> true
       _ -> false
     end
@@ -324,12 +399,6 @@ defmodule Filament.Observable.GenServer do
       do: put_notification_cache(updated, value, owners),
       else: Process.delete(@notification_cache)
 
-    updated
-  end
-
-  @doc false
-  def notify_cell_each(cell_subs, new_state, max_mailbox_depth) do
-    {updated, _owners} = notify_cell_pass(cell_subs, new_state, max_mailbox_depth)
     updated
   end
 
@@ -384,10 +453,15 @@ defmodule Filament.Observable.GenServer do
         {depth, depths}
 
       :error ->
-        depth = Process.info(pid, :message_queue_len)
+        depth = mailbox_depth(pid)
         {depth, Map.put(depths, pid, depth)}
     end
   end
+
+  # Another node's mailbox can't be inspected: treat it as empty, and leave
+  # the owner's exit to its :DOWN.
+  defp mailbox_depth(pid) when node(pid) == node(), do: Process.info(pid, :message_queue_len)
+  defp mailbox_depth(_remote_pid), do: {:message_queue_len, 0}
 
   defp update_cell_subscriber(sub, entry, new_state, depth_result, max_mailbox_depth) do
     %{pid: pid, projection: proj, last: last} = entry

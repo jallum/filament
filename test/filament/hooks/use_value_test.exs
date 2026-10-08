@@ -124,7 +124,7 @@ defmodule Filament.Hooks.UseValueTest do
     end
   end
 
-  describe "subscribe_enabled = false (HTTP static mount)" do
+  describe "sources: :disconnected (HTTP static mount)" do
     test "use_value returns :disconnected projection during static render" do
       {:ok, server} = Counter.start_link(42)
       cell = Filament.Source.new(Filament.Observable.GenServer, server)
@@ -151,7 +151,7 @@ defmodule Filament.Hooks.UseValueTest do
       {_tree, walked, _} =
         Reconciler.mount(StaticComp.StaticComp, %{cell: cell},
           owner_pid: self(),
-          connected: false
+          sources: :disconnected
         )
 
       assert walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>no-server</p>"
@@ -171,7 +171,7 @@ defmodule Filament.Hooks.UseValueTest do
       Counter.increment(server)
       assert_receive {:cell_update, subscriber, 1}, 200
 
-      {:ok, tree2, _} = Filament.LiveView.apply_cell_update(tree1, subscriber, 1)
+      {:rerender, tree2} = Filament.LiveView.apply_message(tree1, {:cell_update, subscriber, 1})
 
       {_, walked3, _} =
         Reconciler.update(tree2, "root", %{cell: cell}, owner_pid: self())
@@ -191,7 +191,7 @@ defmodule Filament.Hooks.UseValueTest do
       assert walked1 |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>10</p>"
 
       # Sanity: server_a has one cell subscriber.
-      cell_subs_a = :sys.get_state(server_a) && cell_subscribers_in(server_a)
+      cell_subs_a = cell_subscribers_in(server_a)
       assert map_size(cell_subs_a) == 1
 
       # Re-render with a different cell — slot should detect the swap and
@@ -357,6 +357,8 @@ defmodule Filament.Hooks.UseValueTest do
   end
 
   defp cell_subscribers_in(server) do
+    # Wait for casts already sent, such as an unsubscribe.
+    :sys.get_state(server)
     {:dictionary, dict} = Process.info(server, :dictionary)
     Keyword.get(dict, :__filament_cell_subscribers__, %{})
   end

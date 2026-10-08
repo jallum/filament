@@ -11,20 +11,34 @@ defmodule Filament.Observable do
   Called when a new subscriber registers.
 
   Return `{:ok, initial_value, new_state}` to accept. `initial_value` is the
-  raw value passed to the subscriber's projection function.
+  raw value passed to the subscriber's projection function. The default
+  accepts with `c:handle_current/1`'s value. Return
+  `{:error, reason, new_state}` to reject; the subscriber then reads
+  `:disconnected`.
+
+  Runs once per subscriber identity. Subscribing again with the same identity
+  refreshes the subscription, as after a full mailbox, without calling this
+  or `c:handle_unsubscribe/2`.
   """
   @callback handle_subscribe(
               subscriber :: term(),
               state :: term()
             ) ::
               {:ok, initial_value :: term(), new_state :: term()}
+              | {:error, reason :: term(), new_state :: term()}
 
   @doc """
-  Called when a subscriber unsubscribes.
+  Called once when a subscription ends: the subscriber unsubscribed or its
+  owner process exited.
   """
   @callback handle_unsubscribe(subscriber :: term(), state :: term()) ::
               {:ok, new_state :: term()}
 
+  @doc """
+  The current raw value, for subscribes, `Filament.Cell.current/2` and
+  refreshes. Defaults to the whole state. A `c:handle_subscribe/2` that
+  accepts with another value must agree with this one.
+  """
   @callback handle_current(state :: term()) :: {:ok, value :: term(), new_state :: term()}
 
   @doc """

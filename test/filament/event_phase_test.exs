@@ -31,39 +31,13 @@ defmodule Filament.EventPhaseTest do
     :ok
   end
 
-  describe "event_at/3 with explicit phase" do
-    test "default phase is :bubble (back-compat with event_at/2)" do
-      Hooks.event_at(0, fn -> :clicked end)
-
-      ctx = Process.get(:filament_render_context)
-      assert is_function(Map.get(ctx.new_event_handlers, 0))
-      assert ctx.new_capture_handlers == %{}
-    end
-
-    test ":capture phase stores in a separate map" do
-      Hooks.event_at(0, fn -> :captured end, :capture)
-
-      ctx = Process.get(:filament_render_context)
-      assert ctx.new_event_handlers == %{}
-      assert is_function(Map.get(ctx.new_capture_handlers, 0))
-    end
-
-    test "capture and bubble at the same slot are distinct" do
-      Hooks.event_at(0, fn -> :bubble_at_0 end)
-      Hooks.event_at(0, fn -> :capture_at_0 end, :capture)
-
-      ctx = Process.get(:filament_render_context)
-      assert Map.get(ctx.new_event_handlers, 0).() == :bubble_at_0
-      assert Map.get(ctx.new_capture_handlers, 0).() == :capture_at_0
-    end
-  end
-
   describe "register_event_handler/2 with explicit phase" do
     test "default phase is :bubble" do
       _ref = Hooks.register_event_handler(fn -> :ok end)
 
       ctx = Process.get(:filament_render_context)
-      assert is_function(Map.get(ctx.new_event_handlers, 0))
+      assert {handler, :all} = Map.get(ctx.new_event_handlers, 0)
+      assert is_function(handler)
       assert ctx.event_handler_index == 1
     end
 
@@ -89,8 +63,8 @@ defmodule Filament.EventPhaseTest do
       fiber = %Filament.Fiber{
         id: "root",
         component: __MODULE__,
-        event_handlers: %{0 => bubble},
-        capture_handlers: %{0 => capture}
+        event_handlers: %{0 => {bubble, :all}},
+        capture_handlers: %{0 => {capture, :all}}
       }
 
       {:ok, tree: %{"root" => fiber}, bubble: bubble, capture: capture}

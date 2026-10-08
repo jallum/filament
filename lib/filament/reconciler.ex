@@ -15,128 +15,60 @@ defmodule Filament.Reconciler do
 
   ## Options
     * `:owner_pid` - the LiveView process that owns this render tree (default: nil)
+    * `:target` - `Filament.Web` for compiled LiveView output, otherwise portable vnodes (default: `Filament.VNode`)
+    * `:sources` - how `use_value/2` reads sources: `:subscribe`, `:current` (read once,
+      for a static render) or `:disconnected` (default: `:subscribe`)
   """
   @spec mount(module(), map(), keyword()) ::
           {fiber_tree(), walked_vnode(), list()}
   def mount(root_component, props, opts \\ []) do
-    owner_pid = Keyword.get(opts, :owner_pid)
-
-    # Create root fiber
-    root_fiber =
-      Fiber.new(
-        id: "root",
-        component: root_component,
-        props: props,
-        status: :mounting
-      )
-
-    # Create initial context
-    context = %RenderContext{
-      fiber_id: "root",
-      fiber_tree: %{},
-      owner_pid: owner_pid,
-      subscribe_enabled: Keyword.get(opts, :connected, true)
-    }
-
-    # Render the component
-    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers, new_capture_handlers,
-     new_event_handler_kinds, new_capture_handler_kinds} =
-      Renderer.render(root_component, props, context)
-
-    # Build initial tree with root and any discovered children
-    root_fiber = %{
-      root_fiber
-      | hook_slots: new_hook_slots,
-        event_handlers: new_event_handlers,
-        capture_handlers: new_capture_handlers,
-        event_handler_kinds: new_event_handler_kinds,
-        capture_handler_kinds: new_capture_handler_kinds,
-        status: :stable,
-        rendered: rendered
-    }
-
-    tree = reconcile_children(%{"root" => root_fiber}, "root", root_fiber, new_fibers, owner_pid)
-
-    {tree, rendered, pending_effects}
+    reconcile(%{}, Fiber.new(id: "root", component: root_component), props, opts)
   end
 
   @doc """
-  Updates a fiber with new props and reconciles children.
+  Updates the root fiber with new props and reconciles the tree.
 
-  The fiber's `render/1` runs only when its props changed (`!==`) or it was
+  The root's `render/1` runs only when its props changed (`!==`) or it was
   marked dirty with `mark_dirty/2`. Otherwise its stored output is reused,
-  and only dirty descendants render.
+  and only dirty descendants render. The output covers the whole tree.
 
-  ## Options
-    * `:owner_pid` - the LiveView process that owns this render tree (default: nil)
+  Takes the same options as `mount/3`.
   """
   @spec update(fiber_tree(), String.t(), map(), keyword()) ::
           {fiber_tree(), walked_vnode(), list()}
-  def update(tree, fiber_id, new_props, opts \\ []) do
-    owner_pid = Keyword.get(opts, :owner_pid)
+  def update(tree, "root", new_props, opts \\ []) do
+    root = Map.get(tree, "root") || raise ReconcilerError, "the tree has no root fiber"
+    reconcile(tree, root, new_props, opts)
+  end
 
-    # Fetch fiber
-    fiber =
-      Map.get(tree, fiber_id) ||
-        raise ReconcilerError, "fiber #{inspect(fiber_id)} not found in tree"
-
-    # Create context for re-render
+  # Renders what changed, then unmounts each child that a rendered fiber no
+  # longer renders. Clean subtrees stay in the tree untouched.
+  defp reconcile(tree, root, props, opts) do
     context = %RenderContext{
-      fiber_id: fiber_id,
+      fiber_id: "root",
       fiber_tree: tree,
-      owner_pid: owner_pid
+      owner_pid: Keyword.get(opts, :owner_pid),
+      sources: Keyword.get(opts, :sources, :subscribe),
+      target: Keyword.get(opts, :target, Filament.VNode)
     }
 
-    cond do
-      not Renderer.reusable?(fiber, new_props) -> render_fiber(tree, fiber, new_props, context, owner_pid)
-      fiber.dirty == nil -> {tree, fiber.rendered, []}
-      true -> reuse_fiber(tree, fiber, context, owner_pid)
-    end
+    {root, ctx} = Renderer.render_fiber(root, props, context)
+    fibers = Map.put(ctx.new_fibers, "root", root)
+
+    tree =
+      fibers
+      |> Enum.reduce(tree, fn {id, fiber}, tree -> unmount_removed(tree, Map.get(tree, id), fiber) end)
+      |> Map.merge(fibers)
+
+    {tree, target_output(root.rendered, opts), Enum.reverse(ctx.pending_effects)}
   end
 
-  defp reuse_fiber(tree, fiber, context, owner_pid) do
-    {rendered, new_fibers, pending_effects} = Renderer.reuse(fiber, context)
-    updated_fiber = %{fiber | rendered: rendered, dirty: nil}
+  defp unmount_removed(tree, %{children: children}, %{children: children}), do: tree
+  defp unmount_removed(tree, nil, _fiber), do: tree
 
-    final_tree =
-      tree
-      |> Map.put(fiber.id, updated_fiber)
-      |> reconcile_children(fiber.id, updated_fiber, new_fibers, owner_pid)
-
-    {final_tree, rendered, pending_effects}
-  end
-
-  defp render_fiber(tree, fiber, new_props, context, owner_pid) do
-    fiber_id = fiber.id
-    updated_fiber = %{fiber | props: new_props, status: :updating}
-
-    # Re-render component
-    {rendered, new_hook_slots, pending_effects, new_fibers, new_event_handlers, new_capture_handlers,
-     new_event_handler_kinds, new_capture_handler_kinds} =
-      Renderer.render(fiber.component, new_props, context)
-
-    # Commit hook slots and event handlers
-    updated_fiber = %{
-      updated_fiber
-      | hook_slots: new_hook_slots,
-        event_handlers: new_event_handlers,
-        capture_handlers: new_capture_handlers,
-        event_handler_kinds: new_event_handler_kinds,
-        capture_handler_kinds: new_capture_handler_kinds,
-        rendered: rendered,
-        dirty: nil
-    }
-
-    # Create new tree with updated fiber
-    new_tree = Map.put(tree, fiber_id, updated_fiber)
-
-    # Reconcile children
-    final_tree =
-      new_tree
-      |> reconcile_children(fiber_id, updated_fiber, new_fibers, owner_pid)
-      |> Map.update!(fiber_id, &%{&1 | status: :stable})
-
-    {final_tree, rendered, pending_effects}
+  defp unmount_removed(tree, old, fiber) do
+    kept = MapSet.new(fiber.children)
+    old.children |> Enum.reject(&MapSet.member?(kept, &1)) |> Enum.reduce(tree, &unmount_fiber(&2, &1))
   end
 
   @doc """
@@ -165,75 +97,30 @@ defmodule Filament.Reconciler do
   end
 
   @doc """
-  Marks all fibers as unmounting and runs cleanup functions and observable unsubscriptions.
-
-  ## Options
-    * `:owner_pid` - the LiveView process that owns this render tree (default: nil)
+  Runs every fiber's cleanup functions and observable unsubscriptions.
+  Options are accepted for symmetry with `mount/3` and ignored.
   """
   @spec unmount(fiber_tree(), keyword()) :: :ok
-  def unmount(tree, opts \\ []) do
-    owner_pid = Keyword.get(opts, :owner_pid)
-
-    tree
-    |> Map.values()
-    |> Enum.each(fn fiber ->
-      HookSlot.cleanup_all(fiber.hook_slots, owner_pid, fiber.id)
-      %{fiber | status: :unmounting}
-    end)
-
-    :ok
+  def unmount(tree, _opts \\ []) do
+    Enum.each(tree, fn {_id, fiber} -> HookSlot.cleanup_all(fiber.hook_slots) end)
   end
 
-  # Private reconciliation functions
-
-  defp reconcile_children(tree, parent_id, parent_fiber, new_fibers, owner_pid) do
-    new_fibers =
-      new_fibers
-      |> Enum.reject(fn {_id, fiber} -> fiber.status == :unmounting end)
-      |> Map.new(fn {id, fiber} -> {id, %{fiber | status: :stable}} end)
-
-    new_children = Map.filter(new_fibers, fn {_id, fiber} -> fiber.parent_id == parent_id end)
-
-    old_child_ids = descendant_ids(tree, parent_fiber)
-    new_child_ids = Map.keys(new_children)
-
-    tree_after_unmount =
-      Enum.reduce(old_child_ids, tree, fn child_id, acc ->
-        if Map.has_key?(new_fibers, child_id) do
-          acc
-        else
-          unmount_fiber(acc, child_id, owner_pid)
-        end
-      end)
-
-    tree_after_unmount
-    |> Map.merge(new_fibers)
-    |> Map.update!(parent_id, &%{&1 | children: new_child_ids})
+  defp target_output(output, opts) do
+    case Keyword.get(opts, :target, Filament.VNode) do
+      Filament.Web -> Filament.Web.to_rendered(output)
+      _ -> output
+    end
   end
 
-  defp descendant_ids(tree, fiber) do
-    Enum.flat_map(fiber.children || [], fn id ->
-      case Map.get(tree, id) do
-        nil -> []
-        child -> [id | descendant_ids(tree, child)]
-      end
-    end)
-  end
-
-  defp unmount_fiber(tree, fiber_id, owner_pid) do
+  defp unmount_fiber(tree, fiber_id) do
     case Map.get(tree, fiber_id) do
       nil ->
         tree
 
       fiber ->
-        HookSlot.cleanup_all(fiber.hook_slots, owner_pid, fiber.id)
+        HookSlot.cleanup_all(fiber.hook_slots)
 
-        tree_without_descendants =
-          Enum.reduce(fiber.children || [], tree, fn child_id, acc ->
-            unmount_fiber(acc, child_id, owner_pid)
-          end)
-
-        Map.delete(tree_without_descendants, fiber_id)
+        fiber.children |> Enum.reduce(tree, &unmount_fiber(&2, &1)) |> Map.delete(fiber_id)
     end
   end
 end

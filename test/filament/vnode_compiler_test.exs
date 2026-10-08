@@ -86,7 +86,7 @@ defmodule Filament.VNodeCompilerTest do
       refute h1_slot0 === h1_slot1, "distinct handlers must occupy distinct slots"
 
       # Advance count: use_state is hook slot 0 — change count 0 → 1
-      {:ok, updated, "root"} = Filament.LiveView.apply_set_state(tree1, "root", 0, 1)
+      {:rerender, updated} = Filament.StateHelper.apply_set_state(tree1, "root", 0, 1)
 
       {tree2, _, _} = Reconciler.update(updated, "root", %{}, owner_pid: self())
 
@@ -152,7 +152,7 @@ defmodule Filament.VNodeCompilerTest do
       handler1 = FiberTree.get_event_handler(tree1, "root", 0)
 
       # Advance count: slot 0 = {value, setter}, change value 0 → 1
-      {:ok, updated, "root"} = Filament.LiveView.apply_set_state(tree1, "root", 0, 1)
+      {:rerender, updated} = Filament.StateHelper.apply_set_state(tree1, "root", 0, 1)
 
       {tree2, _, _} = Reconciler.update(updated, "root", %{}, owner_pid: self())
       handler2 = FiberTree.get_event_handler(tree2, "root", 0)
@@ -271,8 +271,8 @@ defmodule Filament.VNodeCompilerTest do
 
       # Find child fiber IDs from first render
       root_fiber = tree1["root"]
-      item_child_id_a = Filament.Fiber.child_id(root_fiber, KeyedItemComp.Item, {:key, "a"})
-      item_child_id_b = Filament.Fiber.child_id(root_fiber, KeyedItemComp.Item, {:key, "b"})
+      item_child_id_a = Filament.Fiber.child_id(root_fiber.id, KeyedItemComp.Item, {:key, "a"})
+      item_child_id_b = Filament.Fiber.child_id(root_fiber.id, KeyedItemComp.Item, {:key, "b"})
 
       assert Map.has_key?(tree1, item_child_id_a), "fiber for key 'a' should exist"
       assert Map.has_key?(tree1, item_child_id_b), "fiber for key 'b' should exist"
@@ -288,9 +288,6 @@ defmodule Filament.VNodeCompilerTest do
       # Same fiber IDs should be reused for the same keys
       assert Map.has_key?(tree2, item_child_id_a), "fiber for key 'a' should persist after reorder"
       assert Map.has_key?(tree2, item_child_id_b), "fiber for key 'b' should persist after reorder"
-
-      fiber_a_after = tree2[item_child_id_a]
-      assert fiber_a_after.status == :stable
     end
 
     test "standalone :key on a component compiles to a keyed vnode" do

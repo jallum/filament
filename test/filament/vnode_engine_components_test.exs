@@ -118,7 +118,7 @@ defmodule Filament.VNodeEngineComponentsTest do
       walked = Renderer.walk_vnode(vnode, ctx)
       final_ctx = Process.get(:filament_render_context)
       Process.delete(:filament_render_context)
-      child_id = Fiber.child_id(ctx.fiber_tree["root"], Item.Item, {:index, 0})
+      child_id = Fiber.child_id("root", Item.Item, {:index, 0})
       assert Map.has_key?(final_ctx.new_fibers, child_id)
       html = walked |> Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "<span>Alpha</span>"
@@ -132,9 +132,8 @@ defmodule Filament.VNodeEngineComponentsTest do
       _walked = Renderer.walk_vnode(vnode, ctx)
       final_ctx = Process.get(:filament_render_context)
       Process.delete(:filament_render_context)
-      child_id = Fiber.child_id(ctx.fiber_tree["root"], Item.Item, {:key, "abc"})
+      child_id = Fiber.child_id("root", Item.Item, {:key, "abc"})
       assert Map.has_key?(final_ctx.new_fibers, child_id)
-      assert final_ctx.new_fibers[child_id].key == "abc"
     end
   end
 end

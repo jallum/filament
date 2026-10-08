@@ -7,11 +7,45 @@ defmodule Filament.UseEffectTest do
   alias Filament.Reconciler
   alias Filament.RenderContext
 
+  defmodule OrderChild do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      def render(%{test: test}) do
+        use_effect(fn -> send(test, :child_a) end, [])
+        use_effect(fn -> send(test, :child_b) end, [])
+        ~F"<i />"
+      end
+    end
+  end
+
+  defmodule OrderRoot do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      def render(%{test: test}) do
+        use_effect(fn -> send(test, :root_a) end, [])
+        output = ~F"<Filament.UseEffectTest.OrderChild test={test} />"
+        use_effect(fn -> send(test, :root_b) end, [])
+        output
+      end
+    end
+  end
+
+  test "effects run in declaration order, a parent's before its children's" do
+    {tree, _, effects} = Reconciler.mount(OrderRoot, %{test: self()})
+    LiveView.apply_effects(effects, tree)
+
+    assert {:messages, [:root_a, :root_b, :child_a, :child_b]} = Process.info(self(), :messages)
+  end
+
   # --- Rung-1: unit tests (simulated render, no LiveView) ---
 
   test "1. effect runs on first render (deps = [])" do
     tracker = start_tracker()
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
     pending_effects =
       with_render_ctx("root", %{"root" => fiber}, nil, fn ->
@@ -43,7 +77,7 @@ defmodule Filament.UseEffectTest do
     tracker = start_tracker()
 
     # First render
-    fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+    fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
     effects1 =
       with_render_ctx("root", %{"root" => fiber1}, nil, fn ->
@@ -85,7 +119,7 @@ defmodule Filament.UseEffectTest do
     tracker = start_tracker()
 
     # First render
-    fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+    fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
     effects1 =
       with_render_ctx("root", %{"root" => fiber1}, nil, fn ->
@@ -130,7 +164,7 @@ defmodule Filament.UseEffectTest do
     # First render — store a real cleanup function
     cleanup_fn = fn -> append(tracker, :cleanup) end
 
-    fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+    fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
     effects1 =
       with_render_ctx("root", %{"root" => fiber1}, nil, fn ->
@@ -177,7 +211,7 @@ defmodule Filament.UseEffectTest do
   test "5. cleanup runs on unmount" do
     tracker = start_tracker()
 
-    fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+    fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
     effects =
       with_render_ctx("root", %{"root" => fiber1}, nil, fn ->
@@ -206,7 +240,7 @@ defmodule Filament.UseEffectTest do
     tracker = start_tracker()
 
     # First render
-    fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+    fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
     effects1 =
       with_render_ctx("root", %{"root" => fiber1}, nil, fn ->
@@ -246,7 +280,7 @@ defmodule Filament.UseEffectTest do
   end
 
   test "7. effect fn returns nil — no crash, no cleanup stored" do
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
     effects =
       with_render_ctx("root", %{"root" => fiber}, nil, fn ->
@@ -260,7 +294,7 @@ defmodule Filament.UseEffectTest do
   end
 
   test "8. stale fiber — apply_effects skips gracefully" do
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
     effects =
       with_render_ctx("root", %{"root" => fiber}, nil, fn ->

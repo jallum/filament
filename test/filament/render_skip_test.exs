@@ -209,6 +209,7 @@ defmodule Filament.RenderSkipTest do
 
   test "a LiveView ignores a state message that changes nothing" do
     socket = %Socket{
+      transport_pid: self(),
       assigns: %{__changed__: %{}, test: self()},
       private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}
     }
@@ -216,11 +217,43 @@ defmodule Filament.RenderSkipTest do
     {:ok, socket} = Host.mount(%{}, %{}, socket)
     renders()
 
-    assert {:noreply, ^socket} = Host.handle_info({:filament_set_state, "root", 0, 0}, socket)
+    assert {:noreply, ^socket} = Host.handle_info(set_state(socket, 0), socket)
     assert renders() == []
 
-    {:noreply, socket} = Host.handle_info({:filament_set_state, "root", 0, 1}, socket)
+    {:noreply, socket} = Host.handle_info(set_state(socket, 1), socket)
     assert Enum.sort(renders()) == Enum.sort([:root, {:leaf, "moving"}])
-    assert elem(socket.assigns._filament_tree["root"].hook_slots[0], 0) == 1
+    assert elem(socket.assigns._filament_tree["root"].hook_slots[0], 1) == 1
+  end
+
+  defp set_state(socket, value), do: Filament.StateHelper.set_state(socket.assigns._filament_tree, "root", 0, value)
+
+  defmodule Nothing do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      def render(_props) do
+        send(self(), {:rendered, :nothing})
+        nil
+      end
+    end
+  end
+
+  defmodule NothingHost do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      prop(:n, :integer, required: true)
+      def render(%{n: n}), do: ~F|<div>{n}<Filament.RenderSkipTest.Nothing /></div>|
+    end
+  end
+
+  test "a component that renders nothing is skipped while its inputs are unchanged" do
+    {tree, _, _} = Filament.Reconciler.mount(NothingHost, %{n: 0}, owner_pid: self())
+    assert renders() == [:nothing]
+
+    {_tree, _, _} = Filament.Reconciler.update(tree, "root", %{n: 1}, owner_pid: self())
+    assert renders() == []
   end
 end

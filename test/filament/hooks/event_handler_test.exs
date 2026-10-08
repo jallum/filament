@@ -16,7 +16,7 @@ defmodule Filament.Hooks.EventHandlerTest do
   # --- Tests ---
 
   test "1. register_event_handler returns stable ref" do
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
     {ref0, ref1} =
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->
@@ -30,7 +30,7 @@ defmodule Filament.Hooks.EventHandlerTest do
   end
 
   test "2. register_event_handler accumulates in context" do
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
     handlers =
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->
@@ -40,8 +40,10 @@ defmodule Filament.Hooks.EventHandlerTest do
       end)
 
     assert map_size(handlers) == 2
-    assert handlers[0].() == :a
-    assert handlers[1].() == :b
+    assert {a, :all} = handlers[0]
+    assert {b, :all} = handlers[1]
+    assert a.() == :a
+    assert b.() == :b
   end
 
   test "3. 0-arity handler dispatched via handle_event" do
@@ -52,8 +54,7 @@ defmodule Filament.Hooks.EventHandlerTest do
         id: "root",
         component: nil,
         hook_slots: %{},
-        event_handlers: %{0 => fn -> send(test_pid, :clicked) end},
-        status: :stable
+        event_handlers: %{0 => {fn -> send(test_pid, :clicked) end, :all}}
       )
 
     tree = %{"root" => fiber}
@@ -73,8 +74,7 @@ defmodule Filament.Hooks.EventHandlerTest do
         id: "root",
         component: nil,
         hook_slots: %{},
-        event_handlers: %{0 => fn params -> send(test_pid, {:params, params}) end},
-        status: :stable
+        event_handlers: %{0 => {fn params -> send(test_pid, {:params, params}) end, :all}}
       )
 
     tree = %{"root" => fiber}
@@ -103,7 +103,7 @@ defmodule Filament.Hooks.EventHandlerTest do
 
   test "6. reconciler applies new_event_handlers after render" do
     # Simulate a render pass that registers handlers
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
     ctx = %RenderContext{
       fiber_id: "root",
@@ -123,8 +123,8 @@ defmodule Filament.Hooks.EventHandlerTest do
     updated_fiber = %{fiber | event_handlers: final_ctx.new_event_handlers}
 
     assert map_size(updated_fiber.event_handlers) == 2
-    assert updated_fiber.event_handlers[0].() == :click
-    assert updated_fiber.event_handlers[1].() == :submit
+    assert FiberTree.get_event_handler(%{"root" => updated_fiber}, "root", 0).() == :click
+    assert FiberTree.get_event_handler(%{"root" => updated_fiber}, "root", 1).() == :submit
   end
 
   test "7. FiberTree.get_event_handler lookups" do
@@ -134,8 +134,7 @@ defmodule Filament.Hooks.EventHandlerTest do
       Fiber.new(
         id: "root",
         component: nil,
-        event_handlers: %{0 => handler},
-        status: :stable
+        event_handlers: %{0 => {handler, :all}}
       )
 
     tree = %{"root" => fiber}
@@ -146,7 +145,7 @@ defmodule Filament.Hooks.EventHandlerTest do
   end
 
   test "use_event_ref/1 returns full filament wire ref with filament: prefix" do
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
     {ref0, ref1} =
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->
@@ -172,8 +171,7 @@ defmodule Filament.Hooks.EventHandlerTest do
         id: "root",
         component: nil,
         hook_slots: %{},
-        event_handlers: %{0 => handler},
-        status: :stable
+        event_handlers: %{0 => {handler, :all}}
       )
 
     tree = %{"root" => fiber}
@@ -202,8 +200,7 @@ defmodule Filament.Hooks.EventHandlerTest do
         id: "root.A[0]",
         component: nil,
         hook_slots: %{},
-        event_handlers: %{0 => make_handler.("a")},
-        status: :stable
+        event_handlers: %{0 => {make_handler.("a"), :all}}
       )
 
     fiber_b =
@@ -211,8 +208,7 @@ defmodule Filament.Hooks.EventHandlerTest do
         id: "root.B[0]",
         component: nil,
         hook_slots: %{},
-        event_handlers: %{0 => make_handler.("b")},
-        status: :stable
+        event_handlers: %{0 => {make_handler.("b"), :all}}
       )
 
     tree = %{"root.A[0]" => fiber_a, "root.B[0]" => fiber_b}
@@ -235,7 +231,7 @@ defmodule Filament.Hooks.EventHandlerTest do
     test_pid = self()
     handler = fn %{"x" => v} -> send(test_pid, {:called, v}) end
 
-    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+    fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
     ref =
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->

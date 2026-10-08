@@ -63,8 +63,9 @@ end)
 ```
 
 `use_source/1` binds a reactive source for the calling fiber and returns
-a stable `%Filament.Source{}` struct. Returns `nil` during disconnected
-(HTTP static) renders — no subscription is created until the WebSocket
+a stable `%Filament.Source{}` struct. HTTP renders read each source's
+current value without subscribing; with `static_subscribe: false` they
+don't read sources, and `use_source/1` returns `nil` until the WebSocket
 connects.
 
 `use_value/2` subscribes this fiber's hook slot to the source and
@@ -143,21 +144,20 @@ The server applies change-or-bust on the **raw state**: it sends an update only
 when `new_raw_state !== last_raw_state`. The projection is then applied
 client-side each render to derive the value the component actually uses.
 
-### handle_subscribe/2
+### handle_current/1 and handle_subscribe/2
 
-When writing an observable server you implement `handle_subscribe/2` to accept
-or reject subscriptions and supply the initial raw state for new subscribers:
+An observable server publishes its whole state by default. Implement
+`handle_current/1` to publish something else; the default
+`handle_subscribe/2`, `Cell.current/2` and refreshes all read it:
 
 ```elixir
 @impl Filament.Observable
-def handle_subscribe(_subscriber, state) do
-  {:ok, state, state}   # {:ok, initial_value_for_client, new_genserver_state}
-end
+def handle_current(state), do: {:ok, state.items, state}
 ```
 
-The return tuple is `{:ok, initial_value, new_state}`. Override the default
-when you need to reject a subscription or return a different initial value than
-the current server state.
+Implement `handle_subscribe/2` only to track subscribers or reject them with
+`{:error, reason, new_state}`; the default accepts with `handle_current/1`'s
+value.
 
 See the [Observables guide](observables.html) for the change-or-bust mechanism
 and projection patterns.
@@ -329,14 +329,17 @@ end
 
 The hold release on disconnect is handled entirely in the server's
 `handle_unsubscribe/2` callback, which `Observable.GenServer` calls when a
-subscriber's LiveView process terminates. This means the hook itself does not
+subscriber's component unmounts or its LiveView process terminates. This means the hook itself does not
 need to set up an `on_unmount` callback or `use_effect` for cleanup — the
 server owns that contract:
 
 ```elixir
 @impl Filament.Observable
 def handle_unsubscribe(subscriber, state) do
-  case Map.pop(state.holds, subscriber.pid) do
+  # subscriber is {owner_pid, fiber_id, slot_index, generation}
+  {pid, fiber_id, _slot, _generation} = subscriber
+
+  case Map.pop(state.holds, {pid, fiber_id}) do
     {nil, _} ->
       {:ok, state}
 

@@ -10,7 +10,7 @@ defmodule Filament.VNodeEngine do
 
   ## Output shape
 
-  At runtime, the AST returned from `handle_body/2` evaluates to one of:
+  At runtime, the AST returned from `handle_body/1` evaluates to one of:
 
     * `{:text, "literal text"}` for a single text leaf
     * `expr_value` for a single interpolation
@@ -18,10 +18,8 @@ defmodule Filament.VNodeEngine do
     * `{:fragment, [child1, child2, ...]}` when the template has multiple
       top-level children (text + element, two siblings, etc.)
 
-  Phase 1.4.1 scope: text nodes, expression interpolation, plain HTML
-  elements with literal/expression/boolean attrs, void/self-closing tags,
-  arbitrary nesting. Components, comprehensions, conditionals, and slots
-  are added in 1.4.2/1.4.3/1.4.4.
+  A `<% expr %>` emits nothing; variables it binds are visible to the
+  siblings after it.
   """
 
   @doc false
@@ -35,14 +33,28 @@ defmodule Filament.VNodeEngine do
   end
 
   @doc false
-  def handle_end(state), do: handle_body(state, [])
+  def handle_end(state), do: handle_body(state)
 
   @doc false
-  def handle_body(state, _opts) do
+  def handle_body(state) do
     case Enum.reverse(state.root) do
-      [] -> quote(do: {:text, ""})
-      [single] -> single
-      multiple -> fragment_ast(multiple)
+      [] ->
+        quote(do: {:text, ""})
+
+      [{:__filament_side_effect__, expr}] ->
+        quote(
+          do:
+            (
+              unquote(expr)
+              {:text, ""}
+            )
+        )
+
+      [single] ->
+        single
+
+      multiple ->
+        fragment_ast(sequence(multiple))
     end
   end
 
@@ -61,16 +73,7 @@ defmodule Filament.VNodeEngine do
   end
 
   def handle_expr(state, "", expr) do
-    # `<% expr %>` (no `=` marker) — side-effect expression, no value emitted.
-    # Wrap in a fn-call so the side effect runs at render time but produces
-    # an empty text leaf; nothing actually appears in the rendered output.
-    side_effect_ast =
-      quote do
-        unquote(expr)
-        {:text, ""}
-      end
-
-    push_child(state, side_effect_ast)
+    push_child(state, {:__filament_side_effect__, expr})
   end
 
   def handle_expr(state, _marker, _expr), do: state
@@ -127,7 +130,26 @@ defmodule Filament.VNodeEngine do
   # expression ASTs (e.g., the user's `c` for `class={c}`). Both list forms
   # are valid Elixir AST as-is, so we splice them in.
   defp element_ast(name, attrs, children) do
-    {:{}, [], [:element, name, attrs_ast(attrs), children]}
+    {:{}, [], [:element, name, attrs_ast(attrs), sequence(children)]}
+  end
+
+  # Elixir doesn't carry a binding from one list element to the next, so a
+  # `<% expr %>` splits its children list: the siblings before it, then the
+  # expression followed by the siblings after it, which can see its bindings.
+  defp sequence(children) do
+    case Enum.split_while(children, &(not match?({:__filament_side_effect__, _}, &1))) do
+      {children, []} ->
+        children
+
+      {before, [{:__filament_side_effect__, expr} | rest]} ->
+        quote do
+          unquote(before) ++
+            (
+              unquote(expr)
+              unquote(sequence(rest))
+            )
+        end
+    end
   end
 
   defp attrs_ast(attrs) do

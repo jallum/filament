@@ -5,6 +5,7 @@ defmodule Filament.WebTest do
   alias Filament.RenderContext
   alias Filament.Renderer
   alias Filament.Web
+  alias Phoenix.HTML.Safe
 
   defmodule Hello do
     @moduledoc false
@@ -23,7 +24,7 @@ defmodule Filament.WebTest do
 
   describe "to_iodata/1" do
     test "text node" do
-      assert Web.to_iodata({:text, "hi"}) == "hi"
+      assert IO.iodata_to_binary(Web.to_iodata({:text, "hi"})) == "hi"
     end
 
     test "element with attrs and children" do
@@ -84,6 +85,56 @@ defmodule Filament.WebTest do
       assert_raise ArgumentError, ~r/invalid walked vnode/, fn ->
         Web.to_iodata({:bogus, 1})
       end
+    end
+  end
+
+  defmodule Literal do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      def render(_props), do: ~F|<p><a href="?a=1&amp;b=2" title="&copy; x">t</a><wbr/><track src="1"/></p>|
+    end
+  end
+
+  defp both_targets(component) do
+    for target <- [Filament.VNode, Web] do
+      {tree, output, _} = Filament.Reconciler.mount(component, %{}, target: target)
+      Filament.Reconciler.unmount(tree)
+      output |> Web.to_iodata() |> IO.iodata_to_binary()
+    end
+  end
+
+  describe "attribute encoding" do
+    test "escapes attribute names, event refs and nested data attributes like HEEx" do
+      node =
+        {:element, "div",
+         [
+           {~s(x"><b), "1"},
+           {"on_click", {:wire_ref, ~s(root.K[key="a"]:0)}},
+           {:data, [foo: "x"]},
+           {:aria, [label: "<"]}
+         ], []}
+
+      expected =
+        ~s(<div x&quot;&gt;&lt;b="1" phx-click="filament:root.K[key=&quot;a&quot;]:0" data-foo="x" aria-label="&lt;"></div>)
+
+      assert IO.iodata_to_binary(Web.to_iodata(node)) == expected
+      assert node |> Web.to_rendered() |> Safe.to_iodata() |> IO.iodata_to_binary() == expected
+    end
+
+    test "to_iodata and to_rendered encode values the same way" do
+      for value <- [{:safe, "<b>"}, ["a", "b"], 1.5, :atom, "a&b"] do
+        node = {:element, "i", [{"title", value}], []}
+
+        assert IO.iodata_to_binary(Web.to_iodata(node)) ==
+                 node |> Web.to_rendered() |> Safe.to_iodata() |> IO.iodata_to_binary()
+      end
+    end
+
+    test "literal attribute values and void elements render as written on every target" do
+      expected = ~s(<p><a href="?a=1&amp;b=2" title="&copy; x">t</a><wbr><track src="1"></p>)
+      assert both_targets(Literal) == [expected, expected]
     end
   end
 end

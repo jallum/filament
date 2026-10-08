@@ -243,7 +243,7 @@ defmodule Filament.Observable.CellImplTest do
     refute_receive {:cell_updates, _}
   end
 
-  test "callback-derived initial values and replacements receive unchanged raw state" do
+  test "callback-derived initial values and refreshes receive unchanged raw state" do
     server = start_supervised!(SeededCounter)
     source = SeededCounter.cell(server)
     subscriber = {self(), :seeded, 0, make_ref()}
@@ -253,13 +253,121 @@ defmodule Filament.Observable.CellImplTest do
     GenServer.call(server, {:set, 0})
     refute_receive {:cell_update, _, _}
 
-    assert {:ok, -1} = Cell.subscribe(source, subscriber, &Function.identity/1)
+    # A repeat subscribe is a refresh: handle_subscribe doesn't run again,
+    # and the reply is the current value.
+    assert {:ok, 0} = Cell.subscribe(source, subscriber, &Function.identity/1)
     GenServer.call(server, {:set, 0})
-    assert_receive {:cell_update, ^subscriber, 0}
+    refute_receive {:cell_update, _, _}
+    GenServer.call(server, {:set, 1})
+    assert_receive {:cell_update, ^subscriber, 1}
     Cell.unsubscribe(source, subscriber)
     assert {:ok, -1} = Cell.subscribe(source, subscriber, &Function.identity/1)
     GenServer.call(server, {:set, 0})
     assert_receive {:cell_update, ^subscriber, 0}
+  end
+
+  # Counts held resources: each subscription acquires one and releases it once.
+  defmodule Holder do
+    @moduledoc false
+    use Filament.Observable.GenServer
+
+    def start_link(test_pid), do: GenServer.start_link(__MODULE__, %{test: test_pid, held: 0, value: 0})
+    def init(state), do: {:ok, state}
+
+    def handle_subscribe(:reject, state), do: {:error, :nope, state}
+
+    def handle_subscribe(subscriber, state) do
+      send(state.test, {:acquire, subscriber})
+      {:ok, state.value, %{state | held: state.held + 1}}
+    end
+
+    def handle_unsubscribe(subscriber, state) do
+      send(state.test, {:release, subscriber})
+      {:ok, %{state | held: state.held - 1}}
+    end
+
+    def handle_current(state), do: {:ok, state.value, state}
+
+    def handle_call(:held, _from, state), do: {:reply, state.held, state}
+
+    def handle_call({:set, value}, _from, state) do
+      notify_observers(value)
+      {:reply, :ok, %{state | value: value}}
+    end
+
+    def handle_info({:DOWN, _ref, :process, _pid, _reason} = message, state) do
+      send(state.test, {:own_down, message})
+      {:noreply, state}
+    end
+
+    def handle_info(:block, state) do
+      receive do: (:unblock -> :ok)
+      {:noreply, state}
+    end
+  end
+
+  describe "subscriber contract" do
+    setup do
+      server = start_supervised!({Holder, self()})
+      %{server: server, cell: Filament.Source.new(Filament.Observable.GenServer, server)}
+    end
+
+    test "a repeated subscribe refreshes without acquiring or releasing", %{server: server, cell: cell} do
+      sub = {self(), "root", 0, make_ref()}
+      assert {:ok, 0} = Cell.subscribe(cell, sub, &Function.identity/1)
+      assert_receive {:acquire, ^sub}
+      assert {:ok, 0} = Cell.subscribe(cell, sub, &Function.identity/1)
+      refute_receive {:release, _}
+      refute_received {:acquire, _}
+      assert GenServer.call(server, :held) == 1
+
+      Cell.unsubscribe(cell, sub)
+      assert_receive {:release, ^sub}
+      assert GenServer.call(server, :held) == 0
+    end
+
+    test "a rejected subscribe reads as disconnected and keeps the server", %{server: server, cell: cell} do
+      assert Cell.subscribe(cell, :reject, &Function.identity/1) == :disconnected
+      assert Process.alive?(server)
+    end
+
+    test "an opaque subscriber identity receives updates at the caller", %{server: server, cell: cell} do
+      assert {:ok, 0} = Cell.subscribe(cell, :opaque, &Function.identity/1)
+      GenServer.call(server, {:set, 1})
+      assert_receive {:cell_update, :opaque, 1}
+    end
+
+    test "the server's own handle_info still sees its messages", %{server: server, cell: cell} do
+      sub = {self(), "root", 0, make_ref()}
+      {:ok, 0} = Cell.subscribe(cell, sub, &Function.identity/1)
+      ref = Process.monitor(self())
+      send(server, {:DOWN, ref, :process, self(), :normal})
+      assert_receive {:own_down, {:DOWN, ^ref, _, _, _}}
+      assert GenServer.call(server, :held) == 1
+    end
+
+    test "a stray message to a server without handle_info is logged, not fatal" do
+      {:ok, server} = Counter.start_link()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          send(server, :stray)
+          assert GenServer.call(server, :increment) == 1
+        end)
+
+      assert log =~ "unexpected message"
+    end
+
+    test "a subscribe that times out does not stay subscribed", %{server: server, cell: cell} do
+      sub = {self(), "root", 0, make_ref()}
+      send(server, :block)
+      task = Task.async(fn -> Cell.subscribe(cell, sub, &Function.identity/1) end)
+      assert Task.await(task, 10_000) == :disconnected
+      send(server, :unblock)
+      assert_receive {:acquire, ^sub}
+      assert_receive {:release, ^sub}
+      assert GenServer.call(server, :held) == 0
+    end
   end
 
   # Keeps a timeout once armed: zero, so it fires as soon as a handler

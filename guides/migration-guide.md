@@ -77,9 +77,6 @@ defmodule MyApp.CartServer do
   @impl GenServer
   def init(state), do: {:ok, state}
 
-  @impl Filament.Observable
-  def handle_subscribe(_subscriber, state), do: {:ok, state, state}
-
   @impl GenServer
   def handle_call({:add_item, item}, _from, state) do
     items = state.items ++ [item]
@@ -199,8 +196,8 @@ update messages must be forwarded from the parent's `handle_info/2`:
 
 ```elixir
 # In MyApp.CartLive:
-def handle_info({type, _, _} = msg, socket)
-    when type in [:filament_set_state, :cell_update, :cell_resubscribe] do
+def handle_info(msg, socket)
+    when elem(msg, 0) in [:filament_set_state, :cell_update, :cell_updates, :cell_resubscribe] do
   Phoenix.LiveView.send_update(Filament.LiveComponent, id: "cart", filament_msg: msg)
   {:noreply, socket}
 end
@@ -209,8 +206,8 @@ end
 This is a Phase 1 limitation described in `Filament.LiveComponent`. You only need
 this forwarding while the component is hosted inside a regular LiveView.
 
-For components that use only `use_state` (no `use_value`), no forwarding is
-needed because state updates are handled internally within the same process.
+`use_state` setters send to the same process, so components that use only
+`use_state` need this forwarding too.
 
 ## Phase 6: Full migration (optional)
 

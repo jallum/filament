@@ -25,7 +25,7 @@ defmodule Filament.LiveViewDispatchTest do
       Filament.Fiber.new(
         id: "root",
         component: __MODULE__,
-        capture_handlers: %{0 => parent_capture}
+        capture_handlers: %{0 => {parent_capture, :all}}
       )
 
     leaf =
@@ -33,7 +33,7 @@ defmodule Filament.LiveViewDispatchTest do
         id: "root.leaf",
         component: __MODULE__,
         parent_id: "root",
-        event_handlers: %{0 => target_handler}
+        event_handlers: %{0 => {target_handler, :all}}
       )
 
     tree = %{"root" => parent, "root.leaf" => leaf}

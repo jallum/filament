@@ -55,7 +55,7 @@ defmodule Filament.HelperEventRefsTest do
     assert view |> ComponentTest.render_text() |> String.starts_with?("row2")
     view = ComponentTest.click!(view, "button.last")
     assert view |> ComponentTest.render_text() |> String.starts_with?("last")
-    Filament.Reconciler.unmount(view.fiber_tree, owner_pid: self())
+    ComponentTest.unmount(view)
   end
 
   test "helper refs and closures remain independent before, within and across templates" do
@@ -70,7 +70,7 @@ defmodule Filament.HelperEventRefsTest do
 
       refs = ~r/phx-click="([^"]+)"/ |> Regex.scan(view.rendered_html, capture: :all_but_first) |> List.flatten()
       assert length(Enum.uniq(refs)) == length(selectors)
-      Filament.Reconciler.unmount(view.fiber_tree, owner_pid: self())
+      ComponentTest.unmount(view)
     end
   end
 
@@ -92,6 +92,30 @@ defmodule Filament.HelperEventRefsTest do
     assert view |> ComponentTest.render_text() |> String.starts_with?("main")
     view = ComponentTest.click!(view, "button.last")
     assert view |> ComponentTest.render_text() |> String.starts_with?("last")
-    Filament.Reconciler.unmount(view.fiber_tree, owner_pid: self())
+    ComponentTest.unmount(view)
+  end
+
+  defmodule OptionalHandlers do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      def render(%{handler: handler}) do
+        ~F"""
+        <button on_click={handler}>click</button><input on_key={handler && fn _key, _mods -> nil end} />
+        """
+      end
+    end
+  end
+
+  test "a nil or false event handler omits the attribute" do
+    for handler <- [nil, false] do
+      view = ComponentTest.mount!(OptionalHandlers, %{handler: handler})
+      assert view.rendered_html =~ "<button>click</button><input>"
+    end
+
+    view = ComponentTest.mount!(OptionalHandlers, %{handler: fn -> nil end})
+    assert view.rendered_html =~ ~s(<button phx-click="filament:root:0">)
+    assert view.rendered_html =~ ~s(phx-hook="FilamentKey")
   end
 end

@@ -28,6 +28,12 @@ defmodule Filament.InterpolationTest do
       ~F"<div>{children}</div>"
     end
 
+    def render(%{mode: :bind, value: value}) do
+      ~F"""
+      <div><i>{value}</i><% upper = String.upcase(value) %><b>{upper}</b><%= for x <- [1, 2] do %><% y = x * 10 %><u>{y}</u><% end %></div>
+      """
+    end
+
     def render(%{mode: :scalar, value: value}), do: ~F"{value}"
     def render(%{mode: :iodata}), do: ~F|<div>{["<", [38, "hello"], 62]}</div>|
   end
@@ -54,7 +60,7 @@ defmodule Filament.InterpolationTest do
     tree = assert_paths(props, "<div><b>one</b><b>two</b></div>")
     assert map_size(tree) == 3
     [child | _] = tree["root"].children
-    {:ok, tree, _} = Filament.LiveView.apply_set_state(tree, child, 0, "changed")
+    {:rerender, tree} = Filament.StateHelper.apply_set_state(tree, child, 0, "changed")
     {_, walked, _} = Filament.Reconciler.update(tree, "root", props, owner_pid: self())
     assert walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<b>changed</b>"
   end
@@ -64,5 +70,14 @@ defmodule Filament.InterpolationTest do
     assert_paths(%{mode: :scalar, value: 123}, "123")
     assert_paths(%{mode: :scalar, value: nil}, "")
     assert_paths(%{mode: :iodata}, "<div>&lt;&amp;hello&gt;</div>")
+  end
+
+  test "variables bound by <% %> are visible to later siblings on every target" do
+    expected = "<div><i>a</i><b>A</b><u>10</u><u>20</u></div>"
+    assert_paths(%{mode: :bind, value: "a"}, expected)
+
+    {tree, output, _} = Filament.Reconciler.mount(Template, %{mode: :bind, value: "a"}, target: Filament.Web)
+    assert output |> Filament.Web.to_iodata() |> IO.iodata_to_binary() == expected
+    Filament.Reconciler.unmount(tree)
   end
 end

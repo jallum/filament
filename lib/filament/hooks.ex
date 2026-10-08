@@ -103,31 +103,33 @@ defmodule Filament.Hooks do
   """
   @spec use_state(initial :: term()) :: {value :: term(), setter :: (term() -> :ok)}
   def use_state(initial) do
-    {index, previous, ctx} = use_slot({initial, :__no_setter__})
+    {index, previous, ctx} = use_slot(:uninitialized)
 
-    {value, setter} =
+    slot =
       case previous do
-        {val, s} when is_function(s, 1) ->
-          # Reuse stable setter from previous render
-          {val, s}
+        {:state, _value, _setter, _token} = slot ->
+          slot
 
         _ ->
-          # First render or no setter stored — build a new one
-          {initial, build_setter(ctx.fiber_id, index, ctx.owner_pid)}
+          # The token tells this mount's setter from one left by an earlier
+          # mount at the same fiber id.
+          token = make_ref()
+          {:state, initial, build_setter(ctx.fiber_id, index, token, ctx.owner_pid), token}
       end
 
-    commit_slot(index, {value, setter})
+    commit_slot(index, slot)
+    {:state, value, setter, _token} = slot
     {value, setter}
   end
 
-  defp build_setter(fiber_id, slot_index, owner_pid) when is_pid(owner_pid) do
+  defp build_setter(fiber_id, slot_index, token, owner_pid) when is_pid(owner_pid) do
     fn new_value ->
-      send(owner_pid, {:filament_set_state, fiber_id, slot_index, new_value})
+      send(owner_pid, {:filament_set_state, fiber_id, slot_index, token, new_value})
       :ok
     end
   end
 
-  defp build_setter(_fiber_id, _slot_index, nil) do
+  defp build_setter(_fiber_id, _slot_index, _token, nil) do
     fn _new_value ->
       raise ArgumentError,
             "use_state setter called but the render had no :owner_pid. " <>
@@ -174,10 +176,8 @@ defmodule Filament.Hooks do
     ctx = Process.get(:filament_render_context)
     effect_entry = {index, ctx.fiber_id, effect_fn, deps, old_cleanup}
 
-    Process.put(
-      :filament_render_context,
-      %{ctx | pending_effects: [effect_entry | ctx.pending_effects]}
-    )
+    # Declaration order; a child's effects sit where the child rendered.
+    Process.put(:filament_render_context, %{ctx | pending_effects: [effect_entry | ctx.pending_effects]})
   end
 
   defp extract_fn_cleanup({_prev_deps, cleanup}) when is_function(cleanup, 0), do: cleanup
@@ -206,7 +206,8 @@ defmodule Filament.Hooks do
         state         -> state.count
       end)
 
-  Returns `nil` during disconnected (static HTTP) renders. On subsequent
+  Returns `nil` when sources are disconnected (static HTTP renders with
+  `static_subscribe: false`). On subsequent
   renders, reuses the cached handle if its underlying transport is still
   reachable; calls the factory again otherwise (e.g. the GenServer behind
   the source crashed).
@@ -225,13 +226,13 @@ defmodule Filament.Hooks do
   def use_source(source_or_fn) when is_function(source_or_fn, 0) or is_struct(source_or_fn, Filament.Source) do
     {slot_index, previous, ctx} = use_slot(:uninitialized)
 
-    if ctx.subscribe_enabled do
+    if ctx.sources == :disconnected do
+      commit_slot(slot_index, :uninitialized)
+      nil
+    else
       source = resolve_source_factory(source_or_fn, previous)
       commit_slot(slot_index, {:cell_resolved, source})
       source
-    else
-      commit_slot(slot_index, :uninitialized)
-      nil
     end
   end
 
@@ -258,8 +259,9 @@ defmodule Filament.Hooks do
   and applies the user-supplied `projection` at render time. A projection that
   closes over local component state always sees the current value.
 
-  Returns `projection.(:disconnected)` during static (HTTP) renders and when
-  the source can't reach its underlying state.
+  A static HTTP render reads the source's current value without subscribing.
+  Returns `projection.(:disconnected)` when the source is `nil`, sources are
+  disconnected, or the source can't reach its underlying state.
 
   ## Example
 
@@ -286,19 +288,12 @@ defmodule Filament.Hooks do
   def use_value(cell, projection) when is_function(projection, 1) do
     {slot_index, previous, ctx} = use_slot(:uninitialized)
 
-    cond do
-      not ctx.subscribe_enabled ->
-        maybe_unsubscribe_observable(ctx, previous, slot_index)
-        commit_slot(slot_index, :uninitialized)
-        projection.(:disconnected)
-
-      is_nil(cell) ->
-        maybe_unsubscribe_observable(ctx, previous, slot_index)
-        commit_slot(slot_index, :uninitialized)
-        projection.(:disconnected)
-
-      true ->
-        observable_subscribed(cell, projection, slot_index, previous, ctx)
+    if is_nil(cell) or ctx.sources != :subscribe do
+      Filament.HookSlot.cleanup(previous)
+      commit_slot(slot_index, :uninitialized)
+      projection.(if cell && ctx.sources == :current, do: Filament.Cell.current(cell, & &1), else: :disconnected)
+    else
+      observable_subscribed(cell, projection, slot_index, previous, ctx)
     end
   end
 
@@ -310,8 +305,12 @@ defmodule Filament.Hooks do
         {:cell_subscribed, ^cell, raw, subscriber, _projection, _value} ->
           {:ok, raw, subscriber}
 
+        # A refresh keeps the subscription, and whatever the source holds for it.
+        {:cell_resubscribe, ^cell, subscriber} ->
+          observable_subscribe(cell, subscriber)
+
         _ ->
-          maybe_unsubscribe_observable(ctx, previous, slot_index)
+          Filament.HookSlot.cleanup(previous)
           observable_subscribe_fresh(cell, slot_index, ctx)
       end
 
@@ -327,43 +326,15 @@ defmodule Filament.Hooks do
     end
   end
 
-  defp maybe_unsubscribe_observable(ctx, previous, slot_index) do
-    Filament.HookSlot.cleanup(previous, %{
-      owner_pid: ctx.owner_pid,
-      fiber_id: ctx.fiber_id,
-      slot_index: slot_index
-    })
+  defp observable_subscribe_fresh(cell, slot_index, ctx) do
+    observable_subscribe(cell, {ctx.owner_pid, ctx.fiber_id, slot_index, make_ref()})
   end
 
-  defp observable_subscribe_fresh(cell, slot_index, ctx) do
-    subscriber = {ctx.owner_pid, ctx.fiber_id, slot_index, make_ref()}
-
+  defp observable_subscribe(cell, subscriber) do
     case Filament.Cell.subscribe(cell, subscriber, &Function.identity/1) do
       {:ok, raw} -> {:ok, raw, subscriber}
       :disconnected -> :disconnected
     end
-  end
-
-  @doc false
-  @spec event_at(non_neg_integer(), function()) :: String.t()
-  @spec event_at(non_neg_integer(), function(), :bubble | :capture) :: String.t()
-  def event_at(slot, handler, phase \\ :bubble) when is_function(handler) and phase in [:bubble, :capture] do
-    ctx =
-      Process.get(:filament_render_context) ||
-        raise ArgumentError, "hook called outside a render pass — hooks may only be called from render/1"
-
-    fiber_id_str = to_string(ctx.fiber_id)
-    new_ctx = put_handler(ctx, phase, slot, handler)
-    Process.put(:filament_render_context, new_ctx)
-    "#{fiber_id_str}:#{slot}"
-  end
-
-  defp put_handler(ctx, :bubble, slot, handler) do
-    %{ctx | new_event_handlers: Map.put(ctx.new_event_handlers, slot, handler)}
-  end
-
-  defp put_handler(ctx, :capture, slot, handler) do
-    %{ctx | new_capture_handlers: Map.put(ctx.new_capture_handlers, slot, handler)}
   end
 
   @doc """
@@ -395,8 +366,7 @@ defmodule Filament.Hooks do
     new_ctx = %{
       ctx
       | event_handler_index: idx + 1,
-        new_event_handlers: Map.put(ctx.new_event_handlers, idx, handler),
-        new_event_handler_kinds: Map.put(ctx.new_event_handler_kinds, idx, kinds)
+        new_event_handlers: Map.put(ctx.new_event_handlers, idx, {handler, kinds})
     }
 
     {idx, new_ctx}
@@ -408,8 +378,7 @@ defmodule Filament.Hooks do
     new_ctx = %{
       ctx
       | capture_handler_index: idx + 1,
-        new_capture_handlers: Map.put(ctx.new_capture_handlers, idx, handler),
-        new_capture_handler_kinds: Map.put(ctx.new_capture_handler_kinds, idx, kinds)
+        new_capture_handlers: Map.put(ctx.new_capture_handlers, idx, {handler, kinds})
     }
 
     {idx, new_ctx}

@@ -17,18 +17,15 @@ defmodule Filament.LiveView do
 
   ## Options
 
-  `static_subscribe: boolean` (default `true`) — when `true`, observable
-  subscriptions are made during the static (HTTP) render pass, not just after
-  the WebSocket connects. This produces fully-rendered initial HTML with real
-  data, which is beneficial for SEO and perceived performance.
+  `static_subscribe: boolean` (default `true`) — when `true`, the static (HTTP)
+  render reads each source's current value, so the initial HTML has real data,
+  which is beneficial for SEO and perceived performance. The static render
+  doesn't subscribe: it calls `handle_current/1`, not `handle_subscribe/2`, and
+  leaves no subscription behind on the HTTP connection's process. The
+  connected process subscribes on mount.
 
   When `false`, all `use_value` calls return their `:disconnected`
   value during the static render; real data appears after the WebSocket connects.
-
-  Note: Phoenix LiveView uses separate OS processes for the static render and
-  the connected session. With `static_subscribe: true` the static process
-  subscribes, renders, then terminates — subscriptions are cleaned up
-  automatically. The connected process re-subscribes normally on mount.
 
       defmodule MyApp.MyLiveView do
         use Filament.LiveView, static_subscribe: true
@@ -40,6 +37,10 @@ defmodule Filament.LiveView do
   import Phoenix.Component, only: [sigil_H: 2]
 
   alias Filament.Reconciler
+
+  require Logger
+
+  @host_messages [:filament_set_state, :cell_update, :cell_updates, :cell_resubscribe]
 
   @callback root_component() :: module()
 
@@ -141,16 +142,7 @@ defmodule Filament.LiveView do
   defmacro __using__(opts) do
     static_subscribe = Keyword.get(opts, :static_subscribe, true)
 
-    # When static_subscribe is true the connected? check is irrelevant —
-    # subscribe during HTTP render too. Emit just `true` so dialyzer doesn't
-    # see `true or connected?(socket)` and flag the unreachable `false`
-    # branch in `:erlang.or/2`.
-    subscribe_enabled_ast =
-      if static_subscribe do
-        true
-      else
-        quote do: Phoenix.LiveView.connected?(socket)
-      end
+    static_sources = if static_subscribe, do: :current, else: :disconnected
 
     quote do
       @behaviour Filament.LiveView
@@ -163,27 +155,18 @@ defmodule Filament.LiveView do
       def mount(_params, _session, socket) do
         component = root_component()
         props = build_props(socket)
-        subscribe_enabled = unquote(subscribe_enabled_ast)
 
         {tree, rendered, pending_effects} =
           Reconciler.mount(component, props,
             owner_pid: self(),
-            connected: subscribe_enabled
+            target: Filament.Web,
+            sources: if(Phoenix.LiveView.connected?(socket), do: :subscribe, else: unquote(static_sources))
           )
 
         socket =
           socket
-          |> Phoenix.Component.assign(:_filament_tree, tree)
-          |> Phoenix.Component.assign(:_filament_rendered, Filament.Web.to_rendered(rendered))
-          |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)
-
-        socket =
-          Phoenix.LiveView.attach_hook(
-            socket,
-            :filament_effects,
-            :after_render,
-            &Filament.LiveView.run_pending_effects/1
-          )
+          |> Filament.LiveView.assign_render(tree, rendered, pending_effects)
+          |> Phoenix.LiveView.attach_hook(:filament_effects, :after_render, &Filament.LiveView.run_pending_effects/1)
 
         {:ok, socket}
       end
@@ -205,7 +188,7 @@ defmodule Filament.LiveView do
       Phoenix LiveView event handler.
 
       Routes `filament:` wire events to registered fiber handlers (event closures
-      registered by `event_at/2`). All other events are forwarded to the root
+      registered by `Filament.Hooks.register_event_handler/3`). All other events are forwarded to the root
       component if it defines `handle_event/3`.
 
       The component-level `handle_event/3` callback receives
@@ -221,61 +204,41 @@ defmodule Filament.LiveView do
       end
 
       def handle_event(event, params, socket) do
-        Filament.LiveView.dispatch_component_event(event, params, socket, &rerender_from_root/2)
+        Filament.LiveView.dispatch_component_event(event, params, socket)
       end
 
       @doc """
-      Phoenix LiveView info handler for Filament state changes.
+      Phoenix LiveView info handler.
+
+      Applies Filament's own messages — `use_state` setters and cell transport
+      updates — and re-renders from the root when they change the tree. Other
+      messages are logged and ignored, as Phoenix does for a view without
+      `handle_info/2`. A view that handles its own messages ends with
+      `def handle_info(msg, socket), do: super(msg, socket)`.
       """
-      def handle_info({:filament_set_state, fiber_id, slot_index, new_value}, socket) do
-        tree = socket.assigns._filament_tree
-        Filament.LiveView.handle_set_state(tree, fiber_id, slot_index, new_value, socket, &rerender_from_root/2)
+      def handle_info(message, socket) when elem(message, 0) in unquote(@host_messages) do
+        {:noreply, Filament.LiveView.apply_to_socket(socket, message)}
       end
 
-      @doc """
-      Phoenix LiveView info handler for `Filament.Cell` updates.
-      The subscriber tuple is `{owner_pid, fiber_id, slot_index, generation}` (see
-      `Filament.Hooks.cell_subscribe_fresh/3`); the value is whatever the cell
-      transport sent — for the GenServer transport this is the raw observable
-      state (identity-projected), so the user projection runs at render time.
-      """
-      def handle_info({:cell_update, subscriber, value}, socket) do
-        tree = socket.assigns._filament_tree
-        Filament.LiveView.handle_cell_update(tree, subscriber, value, socket, &rerender_from_root/2)
-      end
-
-      def handle_info({:cell_updates, updates}, socket) do
-        tree = socket.assigns._filament_tree
-        Filament.LiveView.handle_cell_updates(tree, updates, socket, &rerender_from_root/2)
-      end
-
-      @doc """
-      Phoenix LiveView info handler for `Filament.Cell` resubscribe signals.
-      Sent by a cell transport when it can't deliver an update — typically because
-      the subscriber's mailbox is saturated, or because the cell source restarted.
-      Marks the slot for resubscription while retaining its subscription identity; the next render fetches a fresh value.
-      """
-      def handle_info({:cell_resubscribe, subscriber}, socket) do
-        tree = socket.assigns._filament_tree
-        Filament.LiveView.handle_cell_resubscribe(tree, subscriber, socket, &rerender_from_root/2)
-      end
-
-      # Re-render from the root fiber so _filament_rendered always contains the full
-      # page output regardless of which child fiber triggered the update.
-      defp rerender_from_root(socket, tree) do
-        root_fiber = tree["root"]
-
-        {new_tree, rendered, pending_effects} =
-          Reconciler.update(tree, "root", root_fiber.props, owner_pid: self())
-
-        socket
-        |> Phoenix.Component.assign(:_filament_tree, new_tree)
-        |> Phoenix.Component.assign(:_filament_rendered, Filament.Web.to_rendered(rendered))
-        |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)
+      def handle_info(message, socket) do
+        Filament.LiveView.unhandled_info(__MODULE__, message)
+        {:noreply, socket}
       end
 
       # Ensure render/1 is defined
-      defoverridable mount: 3, render: 1, handle_event: 3, handle_info: 2
+      @doc """
+      Phoenix LiveView terminate callback. Unmounts the Filament tree, running
+      effect cleanups and ending subscriptions. Phoenix calls it when the
+      client disconnects or the view shuts down, but after a crash only if the
+      view traps exits; cell transports drop a dead owner's subscriptions
+      either way.
+      """
+      def terminate(_reason, socket) do
+        if tree = socket.assigns[:_filament_tree], do: Reconciler.unmount(tree)
+        :ok
+      end
+
+      defoverridable mount: 3, render: 1, handle_event: 3, handle_info: 2, terminate: 2
     end
   end
 
@@ -357,153 +320,109 @@ defmodule Filament.LiveView do
   end
 
   @doc false
-  def dispatch_component_event(event, params, socket, _rerender_fn) do
+  def dispatch_component_event(event, params, socket) do
     tree = socket.assigns._filament_tree
     root_fiber = tree["root"]
 
     if function_exported?(root_fiber.component, :handle_event, 3) do
-      new_props = root_fiber.component.handle_event(event, params, root_fiber.props)
-
-      {new_tree, rendered, pending_effects} =
-        Reconciler.update(tree, "root", new_props, owner_pid: self())
-
-      {:noreply,
-       socket
-       |> Phoenix.Component.assign(:_filament_tree, new_tree)
-       |> Phoenix.Component.assign(:_filament_rendered, Filament.Web.to_rendered(rendered))
-       |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
+      {:noreply, render_root(socket, tree, root_fiber.component.handle_event(event, params, root_fiber.props))}
     else
       {:noreply, socket}
     end
   end
 
-  # ── Pure tree mutations (shared between LiveView and LiveComponent) ──────
+  # ── Host messages (shared by LiveView, LiveComponent and Filament.Test) ──
 
   @doc """
-  Apply a `:filament_set_state` message to the fiber tree without rendering.
+  Apply a Filament host message to the fiber tree without rendering.
 
-  Returns `{:ok, new_tree, fiber_id}` with the fiber marked dirty, or
-  `:ignore` if the target fiber no longer exists or the slot already holds
-  the value (`===`). Caller decides which fiber to re-render from.
+  A host process receives `{:filament_set_state, fiber_id, slot_index, token,
+  value}` from `use_state` setters, and `{:cell_update, subscriber, value}`,
+  `{:cell_updates, [{subscriber, value}]}` and `{:cell_resubscribe, subscriber}`
+  from cell transports.
+
+  Returns `{:rerender, tree}` when the message marked a fiber dirty, so the
+  host should re-render from the root. Returns `{:ok, tree}` when no render is
+  needed: the message is stale (its fiber is gone or remounted, or its
+  subscription was replaced), the value is unchanged, only a cell's cached raw
+  value changed, or the message isn't Filament's.
   """
-  @spec apply_set_state(map(), String.t(), non_neg_integer(), term()) ::
-          {:ok, map(), String.t()} | :ignore
-  def apply_set_state(tree, fiber_id, slot_index, new_value) do
-    case Map.get(tree, fiber_id) do
-      nil ->
-        :ignore
-
-      fiber ->
-        case Map.get(fiber.hook_slots, slot_index, {nil, nil}) do
-          {old_value, setter} when is_function(setter, 1) and old_value === new_value ->
-            :ignore
-
-          existing ->
-            new_slots = Map.put(fiber.hook_slots, slot_index, Filament.HookSlot.put_state_value(existing, new_value))
-            tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-            {:ok, Reconciler.mark_dirty(tree, fiber_id), fiber_id}
-        end
+  @spec apply_message(map(), term()) :: {:rerender | :ok, map()}
+  def apply_message(tree, {:filament_set_state, fiber_id, slot_index, token, new_value}) do
+    with %{hook_slots: slots} = fiber <- Map.get(tree, fiber_id),
+         {:state, old_value, setter, ^token} when old_value !== new_value <- Map.get(slots, slot_index) do
+      tree = put_slot(tree, fiber, slot_index, {:state, new_value, setter, token})
+      {:rerender, Reconciler.mark_dirty(tree, fiber_id)}
+    else
+      _ -> {:ok, tree}
     end
   end
 
-  @doc """
-  Apply a `:cell_update` message to the fiber tree without rendering.
-
-  Returns `{:ok, new_tree, fiber_id}` when the projected value changed,
-  `{:cached, new_tree}` when only the stored raw value changed (no render
-  needed), or `:ignore` if the subscriber tuple is malformed or the target
-  fiber no longer exists.
-  """
-  @spec apply_cell_update(map(), term(), term()) ::
-          {:ok, map(), String.t()} | {:cached, map()} | :ignore
-  def apply_cell_update(tree, subscriber, value) do
+  def apply_message(tree, {:cell_update, subscriber, value}) do
     update_cell_slot(tree, subscriber, &Filament.HookSlot.put_cell_value(&1, value))
   end
 
-  @doc """
-  Apply a `:cell_resubscribe` message to the fiber tree without rendering.
+  def apply_message(tree, {:cell_updates, updates}) when is_list(updates) do
+    for {subscriber, value} <- updates, reduce: {:ok, tree} do
+      {status, tree} ->
+        case apply_message(tree, {:cell_update, subscriber, value}) do
+          {:rerender, tree} -> {:rerender, tree}
+          {:ok, tree} -> {status, tree}
+        end
+    end
+  end
 
-  Marks the slot for resubscription while retaining its subscription identity so the next render fetches a fresh
-  value. Returns `{:ok, new_tree, fiber_id}` on success or `:ignore` if
-  the subscriber tuple is malformed or the target fiber no longer exists.
-  """
-  @spec apply_cell_resubscribe(map(), term()) ::
-          {:ok, map(), String.t()} | :ignore
-  def apply_cell_resubscribe(tree, subscriber) do
+  def apply_message(tree, {:cell_resubscribe, subscriber}) do
     update_cell_slot(tree, subscriber, &{Filament.HookSlot.resubscribe(&1, subscriber), true})
   end
 
-  defp update_cell_slot(tree, subscriber, update) when is_tuple(subscriber) and tuple_size(subscriber) in [3, 4] do
-    fiber_id = elem(subscriber, 1)
-    slot_index = elem(subscriber, 2)
+  def apply_message(tree, _message), do: {:ok, tree}
 
-    with {:ok, fiber} <- Map.fetch(tree, fiber_id),
-         {:ok, slot} <- Map.fetch(fiber.hook_slots, slot_index),
+  defp update_cell_slot(tree, {_owner, fiber_id, slot_index, _generation} = subscriber, update) do
+    with %{hook_slots: %{^slot_index => slot}} = fiber <- Map.get(tree, fiber_id),
          true <- Filament.HookSlot.matches_subscriber?(slot, subscriber) do
       {new_slot, changed?} = update.(slot)
-      new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: Map.put(fiber.hook_slots, slot_index, new_slot)})
-      if changed?, do: {:ok, Reconciler.mark_dirty(new_tree, fiber_id), fiber_id}, else: {:cached, new_tree}
+      tree = put_slot(tree, fiber, slot_index, new_slot)
+      if changed?, do: {:rerender, Reconciler.mark_dirty(tree, fiber_id)}, else: {:ok, tree}
     else
-      _ -> :ignore
+      _ -> {:ok, tree}
     end
   end
 
-  defp update_cell_slot(_tree, _subscriber, _update), do: :ignore
+  defp update_cell_slot(tree, _subscriber, _update), do: {:ok, tree}
 
-  # ── LiveView-shaped wrappers ─────────────────────────────────────────────
+  defp put_slot(tree, fiber, slot_index, slot) do
+    Map.put(tree, fiber.id, %{fiber | hook_slots: Map.put(fiber.hook_slots, slot_index, slot)})
+  end
+
+  # ── Socket helpers (shared by LiveView and LiveComponent) ────────────────
 
   @doc false
-  def handle_set_state(tree, fiber_id, slot_index, new_value, socket, rerender_fn) do
-    case apply_set_state(tree, fiber_id, slot_index, new_value) do
-      {:ok, new_tree, _fid} -> {:noreply, rerender_fn.(socket, new_tree)}
-      :ignore -> {:noreply, socket}
+  def apply_to_socket(socket, message) do
+    case apply_message(socket.assigns._filament_tree, message) do
+      {:rerender, tree} -> render_root(socket, tree, tree["root"].props)
+      {:ok, tree} -> Phoenix.Component.assign(socket, :_filament_tree, tree)
     end
   end
 
-  @doc false
-  def handle_cell_update(tree, subscriber, value, socket, rerender_fn) do
-    tree |> apply_cell_update(subscriber, value) |> reply_after_cell_update(socket, rerender_fn)
+  # The output always covers the whole tree, whichever fiber changed.
+  defp render_root(socket, tree, props) do
+    {tree, rendered, pending_effects} =
+      Reconciler.update(tree, "root", props, owner_pid: self(), target: Filament.Web)
+
+    assign_render(socket, tree, rendered, pending_effects)
   end
 
   @doc false
-  def handle_cell_updates(tree, updates, socket, rerender_fn) do
-    tree |> apply_cell_updates(updates) |> reply_after_cell_update(socket, rerender_fn)
+  def assign_render(socket, tree, rendered, pending_effects) do
+    socket
+    |> Phoenix.Component.assign(:_filament_tree, tree)
+    |> Phoenix.Component.assign(:_filament_rendered, rendered)
+    |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)
   end
 
-  defp reply_after_cell_update({:ok, new_tree, _fiber_id}, socket, rerender_fn),
-    do: {:noreply, rerender_fn.(socket, new_tree)}
-
-  defp reply_after_cell_update({:cached, new_tree}, socket, _rerender_fn),
-    do: {:noreply, Phoenix.Component.assign(socket, :_filament_tree, new_tree)}
-
-  defp reply_after_cell_update(:ignore, socket, _rerender_fn), do: {:noreply, socket}
-
   @doc false
-  def apply_cell_updates(tree, updates) when is_list(updates) do
-    Enum.reduce(updates, :ignore, fn
-      {subscriber, value}, result ->
-        case {result, apply_cell_update(result_tree(result, tree), subscriber, value)} do
-          {_, :ignore} -> result
-          {{:ok, _, fiber_id}, {:cached, updated}} -> {:ok, updated, fiber_id}
-          {_, updated} -> updated
-        end
-
-      _, result ->
-        result
-    end)
-  end
-
-  def apply_cell_updates(_tree, _updates), do: :ignore
-
-  defp result_tree({:ok, tree, _fiber_id}, _tree), do: tree
-  defp result_tree({:cached, tree}, _tree), do: tree
-  defp result_tree(:ignore, tree), do: tree
-
-  @doc false
-  def handle_cell_resubscribe(tree, subscriber, socket, rerender_fn) do
-    case apply_cell_resubscribe(tree, subscriber) do
-      {:ok, new_tree, _fid} -> {:noreply, rerender_fn.(socket, new_tree)}
-      :ignore -> {:noreply, socket}
-    end
+  def unhandled_info(module, message) do
+    Logger.warning("undefined handle_info in #{inspect(module)}. Unhandled message: #{inspect(message)}")
   end
 end

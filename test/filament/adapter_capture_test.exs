@@ -59,10 +59,10 @@ defmodule Filament.AdapterCaptureTest do
 
         if stop do
           refute_receive :target
-          refute_receive {:filament_set_state, _, _, _}
+          refute_receive {:filament_set_state, _, _, _, _}
         else
           assert_receive :target
-          assert_receive {:filament_set_state, ^child, 0, 1}
+          assert_receive {:filament_set_state, ^child, 0, _token, 1}
         end
       end
     end

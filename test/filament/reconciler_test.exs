@@ -62,8 +62,7 @@ defmodule Filament.ReconcilerTest do
     def handle_call(:calls, _from, calls), do: {:reply, calls, calls}
 
     @impl GenServer
-    def handle_cast({:unsubscribed, {owner_pid, fiber_id, slot_index}}, calls),
-      do: {:noreply, [{owner_pid, fiber_id, slot_index} | calls]}
+    def handle_cast({:unsubscribed, subscriber}, calls), do: {:noreply, [subscriber | calls]}
   end
 
   describe "mount/2" do
@@ -74,7 +73,6 @@ defmodule Filament.ReconcilerTest do
       assert Map.has_key?(tree, "root")
       assert tree["root"].component == CounterComponent
       assert tree["root"].props == %{count: 0}
-      assert tree["root"].status == :stable
       assert tree["root"].id == "root"
 
       assert is_tuple(rendered)
@@ -118,7 +116,6 @@ defmodule Filament.ReconcilerTest do
 
       # Check fiber was updated
       assert new_tree["root"].props == %{count: 1}
-      assert new_tree["root"].status == :stable
 
       # Check rendered output
       iodata = Filament.Web.to_iodata(new_rendered)
@@ -141,10 +138,10 @@ defmodule Filament.ReconcilerTest do
       assert new_tree["root"].props == %{count: 5}
     end
 
-    test "raises when updating non-existent fiber" do
+    test "raises when the tree has no root" do
       tree = %{}
 
-      assert_raise ReconcilerError, ~r/fiber "root" not found/, fn ->
+      assert_raise ReconcilerError, ~r/no root fiber/, fn ->
         Reconciler.update(tree, "root", %{count: 1})
       end
     end
@@ -191,7 +188,6 @@ defmodule Filament.ReconcilerTest do
           id: "root.child",
           component: CounterComponent,
           props: %{count: 1},
-          status: :stable,
           parent_id: "root",
           hook_slots: %{0 => {[], cleanup_fn}}
         )
@@ -222,7 +218,6 @@ defmodule Filament.ReconcilerTest do
           id: "root.child.grandchild",
           component: CounterComponent,
           props: %{count: 2},
-          status: :stable,
           parent_id: "root.child",
           hook_slots: %{0 => {[], grandchild_cleanup}}
         )
@@ -234,7 +229,6 @@ defmodule Filament.ReconcilerTest do
           id: "root.child",
           component: CounterComponent,
           props: %{count: 1},
-          status: :stable,
           parent_id: "root",
           children: ["root.child.grandchild"],
           hook_slots: %{0 => {[], child_cleanup}}
@@ -259,6 +253,7 @@ defmodule Filament.ReconcilerTest do
       server = start_supervised!(%{id: StubCellTransport, start: {StubCellTransport, :start_link, []}})
       owner = self()
       cell = Filament.Source.new(StubCellTransport, server)
+      subscriber = {owner, "root.child", 0, make_ref()}
 
       {tree, _, _} = Reconciler.mount(CounterComponent, %{count: 0})
 
@@ -267,9 +262,8 @@ defmodule Filament.ReconcilerTest do
           id: "root.child",
           component: CounterComponent,
           props: %{count: 1},
-          status: :stable,
           parent_id: "root",
-          hook_slots: %{0 => {:cell_subscribed, cell, 42}}
+          hook_slots: %{0 => {:cell_subscribed, cell, 42, subscriber, &Function.identity/1, 42}}
         )
 
       tree =
@@ -282,7 +276,7 @@ defmodule Filament.ReconcilerTest do
       refute Map.has_key?(new_tree, "root.child")
       # Allow the cast to be processed
       :timer.sleep(10)
-      assert StubCellTransport.unsubscribe_calls(server) == [{owner, "root.child", 0}]
+      assert StubCellTransport.unsubscribe_calls(server) == [subscriber]
     end
 
     test "parent fiber children list is updated to match new render" do
@@ -293,7 +287,6 @@ defmodule Filament.ReconcilerTest do
           id: "root.child",
           component: CounterComponent,
           props: %{count: 1},
-          status: :stable,
           parent_id: "root",
           hook_slots: %{}
         )
@@ -442,22 +435,25 @@ defmodule Filament.ReconcilerTest do
     [list] = tree[branch].children
     [a, b] = Enum.sort(tree[list].children)
     assert length(tree[list].children) == 2
-    {:ok, tree, _} = Filament.LiveView.apply_set_state(tree, a, 1, 7)
-    {:ok, tree, _} = Filament.LiveView.apply_set_state(tree, b, 1, 9)
+    {:rerender, tree} = Filament.StateHelper.apply_set_state(tree, a, 1, 7)
+    {:rerender, tree} = Filament.StateHelper.apply_set_state(tree, b, 1, 9)
+    {:filament_set_state, ^b, 1, stale_token, 5} = Filament.StateHelper.set_state(tree, b, 1, 5)
 
     {tree, _, _} = Reconciler.update(tree, "root", %{props | items: [:a]}, owner_pid: self())
     refute Map.has_key?(tree, b)
-    assert {7, _} = tree[a].hook_slots[1]
+    assert {:state, 7, _, _} = tree[a].hook_slots[1]
     assert KeyedTrackingObservable.subscriber_count(server) == 1
     assert_receive :leaf_cleanup
     refute_receive :leaf_cleanup
 
     {tree, _, effects} = Reconciler.update(tree, "root", props, owner_pid: self())
     {tree, _} = Filament.LiveView.apply_effects(effects, tree)
-    assert {0, _} = tree[b].hook_slots[1]
+    assert {:state, 0, _, _} = tree[b].hook_slots[1]
+    # A setter kept from the removed instance doesn't write into the new one.
+    assert Filament.LiveView.apply_message(tree, {:filament_set_state, b, 1, stale_token, 5}) == {:ok, tree}
     assert KeyedTrackingObservable.subscriber_count(server) == 2
 
-    {tree, _, _} = Reconciler.update(tree, branch, %{props | items: []}, owner_pid: self())
+    {tree, _, _} = Reconciler.update(tree, "root", %{props | items: []}, owner_pid: self())
     assert Map.has_key?(tree, "root")
     assert Map.has_key?(tree, branch)
     assert tree[list].children == []

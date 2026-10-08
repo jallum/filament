@@ -12,6 +12,7 @@ defmodule Filament.VNodeCompiler do
       tag_handler: Filament.HTMLEngine
     )
     |> rewrite_at_assigns()
+    |> Filament.TemplateCompiler.compile()
   end
 
   # `Phoenix.LiveView.Engine` intercepts `@foo` in `~H` templates and rewrites

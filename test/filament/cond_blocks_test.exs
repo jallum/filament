@@ -30,7 +30,7 @@ defmodule Filament.CondBlocksTest do
     assert ComponentTest.render_text(view) == "finish"
     view = ComponentTest.click!(view, "button")
     assert ComponentTest.render_text(view) == "start"
-    Filament.Reconciler.unmount(view.fiber_tree, owner_pid: self())
+    ComponentTest.unmount(view)
   end
 
   test "inline clauses match the issue reproduction and preserve native cond order" do

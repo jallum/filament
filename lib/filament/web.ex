@@ -41,69 +41,44 @@ defmodule Filament.Web do
   per fiber+slot and live in static for fingerprint efficiency.
   """
   @spec to_rendered(term()) :: Rendered.t()
+  def to_rendered(%Filament.Template{} = template), do: Filament.Web.Template.to_rendered(template)
+
   def to_rendered(%Rendered{} = rendered), do: rendered
 
   def to_rendered(walked) do
-    state = {[""], [], 0}
-    {static, dynamic, fingerprint} = walk_child_rendered(walked, state)
+    {static, dynamic} = walk_child_rendered(walked, {[""], []})
     static = Enum.reverse(static)
     dynamic = Enum.reverse(dynamic)
 
     %Rendered{
       static: static,
       dynamic: fn _track -> dynamic end,
-      fingerprint: fingerprint,
+      fingerprint: fingerprint(static),
       root: false,
       caller: :not_available
     }
   end
 
+  # LiveView treats equal fingerprints as the same template, so hash the whole
+  # static list rather than a narrow digest of it.
+  @doc false
+  def fingerprint(static), do: :erlang.md5(:erlang.term_to_binary(static))
+
   defp append_static(state, ""), do: state
+  defp append_static({[head | rest], dynamic}, text), do: {[IO.iodata_to_binary([head, text]) | rest], dynamic}
 
-  defp append_static({[head | rest], dynamic, fp}, text) do
-    {[head <> text | rest], dynamic, fp}
-  end
+  defp push_dynamic({static, dynamic}, value), do: {["" | static], [value | dynamic]}
 
-  defp push_dynamic({static, dynamic, fp}, value) do
-    {["" | static], [value | dynamic], fp}
-  end
-
-  defp fp_mix({static, dynamic, fp}, term) do
-    {static, dynamic, :erlang.phash2({fp, term})}
-  end
-
-  defp walk_rendered({:text, content}, state) when is_binary(content) do
-    state |> append_static(content) |> fp_mix({:text, content})
-  end
+  defp walk_rendered({:text, content}, state) when is_binary(content), do: append_static(state, content)
 
   defp walk_rendered({:element, tag, attrs, children}, state) do
-    tag_str = to_string(tag)
-
-    state =
-      state
-      |> append_static("<" <> tag_str)
-      |> fp_mix({:elem_open, tag_str})
-
-    state = Enum.reduce(attrs, state, &walk_attr/2)
-    state = append_static(state, ">")
-
-    state =
-      Enum.reduce(children, state, fn child, st ->
-        walk_child_rendered(child, st)
-      end)
-
-    if void_element?(tag_str) do
-      state
-    else
-      state |> append_static("</" <> tag_str <> ">") |> fp_mix({:elem_close, tag_str})
-    end
+    tag = to_string(tag)
+    state = Enum.reduce(attrs, append_static(state, "<" <> tag), &walk_attr/2)
+    state = Enum.reduce(children, append_static(state, ">"), &walk_child_rendered/2)
+    if void_element?(tag), do: state, else: append_static(state, "</" <> tag <> ">")
   end
 
-  defp walk_rendered({:fragment, children}, state) do
-    state = fp_mix(state, :fragment_open)
-    state = Enum.reduce(children, state, fn child, st -> walk_child_rendered(child, st) end)
-    fp_mix(state, :fragment_close)
-  end
+  defp walk_rendered({:fragment, children}, state), do: Enum.reduce(children, state, &walk_child_rendered/2)
 
   # Component embedding: child render is itself a `%Rendered{}` (when the
   # child component used `~F`) or a walked vnode tree (manual). Either way,
@@ -111,82 +86,85 @@ defmodule Filament.Web do
   # Rendered structs, and walked subtrees fall back to opaque iodata via
   # `Phoenix.HTML.Safe`.
   defp walk_rendered({:component, _mod, _props, _key, child_render}, state) do
-    state |> push_dynamic(component_dynamic(child_render)) |> fp_mix(:component)
+    push_dynamic(state, component_dynamic(child_render))
   end
 
+  defp walk_rendered(invalid, _state), do: raise(ArgumentError, "invalid walked vnode: #{inspect(invalid)}")
+
+  defp component_dynamic(%Filament.Template{} = template), do: to_rendered(template)
   defp component_dynamic(%Rendered{} = r), do: r
   defp component_dynamic(other) when is_tuple(other) or is_list(other), do: to_rendered(other)
   defp component_dynamic(other), do: Safe.to_iodata(other)
 
+  defp walk_child_rendered(%Filament.Template{} = template, state), do: push_dynamic(state, to_rendered(template))
+
   defp walk_child_rendered(children, state) when is_list(children) do
     Enum.reduce(children, state, fn
-      codepoint, acc when is_integer(codepoint) ->
-        acc |> push_dynamic(Safe.to_iodata([codepoint])) |> fp_mix(:dynamic_child)
-
-      child, acc ->
-        walk_child_rendered(child, acc)
+      codepoint, acc when is_integer(codepoint) -> push_dynamic(acc, Safe.to_iodata([codepoint]))
+      child, acc -> walk_child_rendered(child, acc)
     end)
   end
 
-  defp walk_child_rendered({:safe, iodata}, state), do: state |> push_dynamic(iodata) |> fp_mix(:dynamic_child)
+  defp walk_child_rendered({:safe, iodata}, state), do: push_dynamic(state, iodata)
   defp walk_child_rendered(child, state) when is_tuple(child), do: walk_rendered(child, state)
   defp walk_child_rendered(nil, state), do: state
   defp walk_child_rendered(false, state), do: state
 
   defp walk_child_rendered(other, state) do
-    # Scalar interpolation children get html-escaped via Safe.to_iodata to
-    # match the iodata path's behaviour. Pre-escape eagerly so the dynamic
-    # slot holds finished iodata that Phoenix can splice without re-walking.
-    state |> push_dynamic(Safe.to_iodata(other)) |> fp_mix(:dynamic_child)
+    # Scalar interpolation children get html-escaped via Safe.to_iodata.
+    # Pre-escape eagerly so the dynamic slot holds finished iodata that
+    # Phoenix can splice without re-walking.
+    push_dynamic(state, Safe.to_iodata(other))
   end
 
-  defp walk_attr({_name, value}, state) when value in [nil, false], do: state
-
-  defp walk_attr({name, true}, state) do
-    state |> append_static(" " <> to_string(name)) |> fp_mix({:attr_bool, name})
-  end
-
-  defp walk_attr({name, {:wire_ref, ref}}, state) do
-    name_str = to_string(name)
-    attr_key = "phx-" <> String.slice(name_str, 3..-1//1)
-
-    state
-    |> append_static(" " <> attr_key <> ~s(="filament:) <> ref <> ~s("))
-    |> fp_mix({:attr_wire_ref, attr_key, ref})
-  end
-
-  defp walk_attr({name, value}, state) when is_binary(value) do
-    name_str = to_string(name)
-
-    state
-    |> append_static(" " <> name_str <> ~s(="))
-    |> push_dynamic(Plug.HTML.html_escape_to_iodata(value))
-    |> append_static(~s("))
-    |> fp_mix({:attr_dynamic, name_str})
-  end
-
-  defp walk_attr({name, value}, state) when name in ["class", :class] do
-    state
-    |> append_static(" class=\"")
-    |> push_dynamic(Filament.HTMLEngine.class_attribute_encode(value))
-    |> append_static("\"")
-    |> fp_mix({:attr_dynamic, "class"})
-  end
-
-  defp walk_attr({name, value}, state) when is_list(value) do
-    joined = value |> Enum.filter(& &1) |> Enum.join(" ")
-    walk_attr({name, joined}, state)
-  end
-
+  # Attributes whose output is fixed by name and shape stay static; a value
+  # becomes a dynamic slot between ` name="` and `"`.
   defp walk_attr({name, value}, state) do
-    name_str = to_string(name)
+    cond do
+      value in [nil, false, true] or match?({:wire_ref, _}, value) ->
+        append_static(state, attribute(name, value))
 
-    state
-    |> append_static(" " <> name_str <> ~s(="))
-    |> push_dynamic(Safe.to_iodata(value))
-    |> append_static(~s("))
-    |> fp_mix({:attr_dynamic, name_str})
+      nested_attribute?(name, value) ->
+        push_dynamic(state, attribute(name, value))
+
+      true ->
+        state
+        |> append_static([" ", attribute_name(name), ~s(=")])
+        |> push_dynamic(attribute_value(name, value))
+        |> append_static(~s("))
+    end
   end
+
+  @doc false
+  # The one attribute encoder for every Web path. Matches HEEx: names and
+  # values are escaped, nil and false omit the attribute, true renders it bare,
+  # and `data`, `aria` and `phx` keyword lists expand to nested attributes.
+  def attribute(_name, value) when value in [nil, false], do: []
+  def attribute(name, true), do: [" ", attribute_name(name)]
+
+  def attribute(name, {:wire_ref, ref}) do
+    event = name |> to_string() |> String.slice(3..-1//1)
+    [" phx-", attribute_name(event), ~s(="filament:), Plug.HTML.html_escape_to_iodata(ref), ~s(")]
+  end
+
+  def attribute(name, value) do
+    if nested_attribute?(name, value) do
+      {:safe, iodata} = Phoenix.HTML.attributes_escape([{to_string(name), value}])
+      iodata
+    else
+      [" ", attribute_name(name), ~s(="), attribute_value(name, value), ~s(")]
+    end
+  end
+
+  @doc false
+  def attribute_value(_name, value) when is_binary(value), do: Plug.HTML.html_escape_to_iodata(value)
+  def attribute_value(name, value) when name in ["class", :class], do: Filament.HTMLEngine.class_attribute_encode(value)
+  def attribute_value(_name, value), do: Filament.HTMLEngine.empty_attribute_encode(value)
+
+  @doc false
+  def nested_attribute?(name, value), do: name in ["data", "aria", "phx", :data, :aria, :phx] and is_list(value)
+
+  defp attribute_name(name), do: name |> to_string() |> Plug.HTML.html_escape()
 
   @doc """
   Converts a walked vnode tree into HTML iodata.
@@ -200,109 +178,12 @@ defmodule Filament.Web do
       struct or another walked vnode tree)
     * `{:fragment, walked_children}` — flat list of children
 
+  The HTML is exactly what `to_rendered/1` sends to a LiveView client.
   """
   @spec to_iodata(term()) :: iodata()
-  def to_iodata(%Rendered{} = r), do: Safe.to_iodata(r)
+  def to_iodata(walked), do: walked |> to_rendered() |> Safe.to_iodata()
 
-  def to_iodata({:text, content}), do: content
-
-  def to_iodata({:element, tag, attrs, walked_children}) do
-    tag_str = to_string(tag)
-    rendered_children = Enum.map(walked_children, &child_to_iodata/1)
-
-    if void_element?(tag_str) do
-      ["<", tag_str, render_attrs(attrs), ">"]
-    else
-      ["<", tag_str, render_attrs(attrs), ">", rendered_children, "</", tag_str, ">"]
-    end
-  end
-
-  def to_iodata({:component, _mod, _props, _key, child_render}) do
-    embed_child(child_render)
-  end
-
-  def to_iodata({:fragment, walked_children}) do
-    Enum.map(walked_children, &child_to_iodata/1)
-  end
-
-  # Idempotent: an already-converted `{:safe, iodata}` value passes through.
-  def to_iodata({:safe, iodata}), do: iodata
-
-  def to_iodata(children) when is_list(children) do
-    Enum.map(children, fn
-      codepoint when is_integer(codepoint) -> Safe.to_iodata([codepoint])
-      child -> child_to_iodata(child)
-    end)
-  end
-
-  def to_iodata(nil), do: []
-  def to_iodata(false), do: []
-
-  def to_iodata(invalid) when is_tuple(invalid) do
-    raise ArgumentError, "invalid walked vnode: #{inspect(invalid)}"
-  end
-
-  def to_iodata(scalar), do: Safe.to_iodata(scalar)
-
-  # Scalar child of an element/fragment — string from `{name}` interpolation,
-  # integer, atom, etc. HTML-escape and emit as iodata. Nil/false render as
-  # empty (matches HEEx semantics for `nil` interpolations).
-  defp child_to_iodata(child) when is_tuple(child) or is_list(child), do: to_iodata(child)
-  defp child_to_iodata(nil), do: []
-  defp child_to_iodata(false), do: []
-  defp child_to_iodata(child), do: Safe.to_iodata(child)
-
-  defp embed_child(%Rendered{} = r), do: Safe.to_iodata(r)
-  defp embed_child({tag, _} = walked_vnode) when is_atom(tag), do: to_iodata(walked_vnode)
-
-  defp embed_child({tag, _, _, _} = walked_vnode) when is_atom(tag), do: to_iodata(walked_vnode)
-
-  defp embed_child({tag, _, _, _, _} = walked_vnode) when is_atom(tag), do: to_iodata(walked_vnode)
-
-  defp embed_child(other), do: child_to_iodata(other)
-
-  defp void_element?("br"), do: true
-  defp void_element?("hr"), do: true
-  defp void_element?("input"), do: true
-  defp void_element?("img"), do: true
-  defp void_element?("meta"), do: true
-  defp void_element?("link"), do: true
-  defp void_element?("area"), do: true
-  defp void_element?("base"), do: true
-  defp void_element?("col"), do: true
-  defp void_element?("embed"), do: true
-  defp void_element?("param"), do: true
-  defp void_element?("source"), do: true
-  defp void_element?("track"), do: true
-  defp void_element?("wbr"), do: true
-  defp void_element?(_), do: false
-
-  defp render_attrs([]), do: ""
-
-  defp render_attrs(attrs) do
-    Enum.map(attrs, fn {key, value} ->
-      key_str = to_string(key)
-
-      case value do
-        {:wire_ref, ref} ->
-          attr_key = "phx-" <> String.slice(key_str, 3..-1//1)
-          [" ", attr_key, "=\"filament:", ref, "\""]
-
-        _ ->
-          render_attr_value(key_str, value)
-      end
-    end)
-  end
-
-  defp render_attr_value(_key_str, value) when value in [nil, false], do: []
-  defp render_attr_value(key_str, true), do: [" ", key_str]
-
-  defp render_attr_value("class", value) do
-    [" class=\"", Filament.HTMLEngine.class_attribute_encode(value), "\""]
-  end
-
-  defp render_attr_value(key_str, value) do
-    escaped_value = Plug.HTML.html_escape_to_iodata(to_string(value))
-    [" ", key_str, "=\"", escaped_value, "\""]
-  end
+  @doc false
+  # HTML void elements: emitted without a closing tag.
+  def void_element?(tag), do: tag in ~w(area base br col embed hr img input link meta param source track wbr)
 end

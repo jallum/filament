@@ -7,6 +7,7 @@ defmodule Filament.LiveComponentTest do
 
   defp test_socket(assigns \\ %{}) do
     %Socket{
+      transport_pid: self(),
       assigns: Map.merge(%{__changed__: %{}}, assigns),
       private: %{
         live_temp: %{},
@@ -131,7 +132,7 @@ defmodule Filament.LiveComponentTest do
       assigns = %{id: "t", component: LabelComp, label: "X"}
       {:ok, socket} = Filament.LiveComponent.update(assigns, socket)
 
-      msg = {:filament_set_state, "nonexistent_fiber", 0, 42}
+      msg = {:filament_set_state, "nonexistent_fiber", 0, make_ref(), 42}
       {:ok, socket2} = Filament.LiveComponent.update(%{filament_msg: msg}, socket)
 
       # Socket unchanged
@@ -240,7 +241,13 @@ defmodule Filament.LiveComponentTest do
              "<section>wrapper<span>10/0</span><span>10/0</span></section>"
 
     [child | _] = socket.assigns._filament_tree["root"].children
-    {:ok, socket} = Filament.LiveComponent.update(%{filament_msg: {:filament_set_state, child, 1, 7}}, socket)
+
+    {:ok, socket} =
+      Filament.LiveComponent.update(
+        %{filament_msg: Filament.StateHelper.set_state(socket.assigns._filament_tree, child, 1, 7)},
+        socket
+      )
+
     refute_receive :root_rendered
     html = socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
     assert html =~ "<section>wrapper"

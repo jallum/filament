@@ -66,8 +66,7 @@ defmodule Todo.Store do
     {:reply, state.todos, state}
   end
 
-  @impl true
-  def handle_subscribe(_subscriber, state) do
-    {:ok, state.todos, state}
-  end
+  # Subscribers see the todo list.
+  @impl Filament.Observable
+  def handle_current(state), do: {:ok, state.todos, state}
 end

@@ -29,8 +29,7 @@ defmodule Filament.Test do
     :fiber_tree,
     :rendered,
     :rendered_html,
-    :owner_pid,
-    :stubs
+    :owner_pid
   ]
 
   @type t :: %__MODULE__{
@@ -39,8 +38,7 @@ defmodule Filament.Test do
           fiber_tree: map(),
           rendered: Rendered.t(),
           rendered_html: String.t(),
-          owner_pid: pid(),
-          stubs: %{term() => pid()}
+          owner_pid: pid()
         }
 
   # ── Floki availability check ──────────────────────────────────────────────
@@ -57,16 +55,13 @@ defmodule Filament.Test do
   # ── Public API ────────────────────────────────────────────────────────────
 
   @doc """
-  Mount `component` with `props`. Returns `{:ok, view}` or `{:error, reason}`.
+  Mount `component` with `props`. Returns `{:ok, view}`.
 
-  Options:
-    * `:stub` — list of `{server_identity, stub_fn}` pairs (see `Filament.Test.Stub`).
-      Example: `stub: [{CartServer, fn _req -> %{items: []} end}]`
+  A view belongs to the process that mounts it: state and cell updates
+  arrive in that process's mailbox, so mount one view per process.
   """
-  @spec mount(component :: module(), props :: map(), opts :: keyword()) ::
-          {:ok, t()} | {:error, term()}
-  def mount(component, props, opts \\ []) do
-    _opts = opts
+  @spec mount(component :: module(), props :: map()) :: {:ok, t()}
+  def mount(component, props) do
     owner_pid = self()
 
     {tree, rendered, pending_effects} =
@@ -82,8 +77,7 @@ defmodule Filament.Test do
       fiber_tree: tree,
       rendered: rendered,
       rendered_html: html,
-      owner_pid: owner_pid,
-      stubs: %{}
+      owner_pid: owner_pid
     }
 
     {:ok, view}
@@ -237,11 +231,18 @@ defmodule Filament.Test do
   # ── Bang variants ─────────────────────────────────────────────────────────
 
   @doc "Like `mount/3` but returns the view directly."
-  @spec mount!(module(), map(), keyword()) :: t()
-  def mount!(component, props, opts \\ []) do
-    {:ok, view} = mount(component, props, opts)
+  @spec mount!(module(), map()) :: t()
+  def mount!(component, props) do
+    {:ok, view} = mount(component, props)
     view
   end
+
+  @doc """
+  Unmount the view's components: run their effect cleanups and end their
+  subscriptions.
+  """
+  @spec unmount(t()) :: :ok
+  def unmount(%__MODULE__{fiber_tree: tree}), do: Filament.Reconciler.unmount(tree)
 
   @doc "Like `click/2` but returns the view directly, raising on error."
   @spec click!(t(), String.t()) :: t()
@@ -431,33 +432,13 @@ defmodule Filament.Test do
 
   defp flush_messages(view) do
     receive do
-      {:filament_set_state, fiber_id, slot_index, new_value} ->
-        view
-        |> apply_tree_result(Filament.LiveView.apply_set_state(view.fiber_tree, fiber_id, slot_index, new_value))
-        |> flush_messages()
-
-      {:cell_update, subscriber, value} ->
-        view
-        |> apply_tree_result(Filament.LiveView.apply_cell_update(view.fiber_tree, subscriber, value))
-        |> flush_messages()
-
-      {:cell_updates, updates} ->
-        view
-        |> apply_tree_result(Filament.LiveView.apply_cell_updates(view.fiber_tree, updates))
-        |> flush_messages()
-
-      {:cell_resubscribe, subscriber} ->
-        view
-        |> apply_tree_result(Filament.LiveView.apply_cell_resubscribe(view.fiber_tree, subscriber))
-        |> flush_messages()
+      message when elem(message, 0) in [:filament_set_state, :cell_update, :cell_updates, :cell_resubscribe] ->
+        {_status, tree} = Filament.LiveView.apply_message(view.fiber_tree, message)
+        flush_messages(%{view | fiber_tree: tree})
     after
       0 -> rerender(view)
     end
   end
-
-  defp apply_tree_result(view, {:ok, tree, _fiber_id}), do: %{view | fiber_tree: tree}
-  defp apply_tree_result(view, {:cached, tree}), do: %{view | fiber_tree: tree}
-  defp apply_tree_result(view, :ignore), do: view
 
   defp rerender(view) do
     {new_tree, new_rendered, pending_effects} =

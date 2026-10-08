@@ -27,24 +27,22 @@ should intercept events without each child opting in:
 - A focus manager re-routing arrow keys.
 - An analytics layer logging clicks.
 
-Today the registration API is `Filament.Hooks.event_at(slot, handler,
-:capture)` directly — there's no `on_click_capture=` template syntax yet
-(that's a follow-up). Capture handlers receive the event params and may
-call `Filament.Core.stop_propagation/1` to halt the walk:
+Register one with `Filament.Hooks.register_event_handler(handler,
+:capture)` during render — there's no `on_click_capture=` template syntax
+yet. Capture handlers receive the event params (string keys, as LiveView
+sends them) and may call `Filament.Core.stop_propagation/1` to halt the
+walk:
 
 ```elixir
-def render(_assigns) do
-  on_capture = fn params ->
-    if params.key == "Escape", do: Filament.Core.stop_propagation(:trapped)
-  end
+def render(%{children: children}) do
+  Filament.Hooks.register_event_handler(
+    fn params ->
+      if params["key"] == "Escape", do: Filament.Core.stop_propagation(:trapped)
+    end,
+    :capture
+  )
 
-  Filament.Hooks.event_at(0, on_capture, :capture)
-
-  ~F"""
-  <div>
-    {render_children()}
-  </div>
-  """
+  ~F"<div>{children}</div>"
 end
 ```
 
@@ -137,6 +135,6 @@ based on event flow, not on a routed identity.
 ## See also
 
 - **`Filament.Core`** — `dispatch_event/4`, `stop_propagation/1`.
-- **`Filament.Hooks`** — `event_at/3`, `register_event_handler/2`.
+- **`Filament.Hooks`** — `register_event_handler/3`.
 - **[Hooks guide](hooks.html)** — the broader hook system that
-  `event_at/3` is part of.
+  `register_event_handler/3` is part of.

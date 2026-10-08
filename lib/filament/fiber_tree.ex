@@ -12,14 +12,14 @@ defmodule Filament.FiberTree do
   @spec get_event_handler(t(), String.t(), non_neg_integer(), :bubble | :capture) ::
           function() | nil
   def get_event_handler(tree, fiber_id, handler_index, phase \\ :bubble) when phase in [:bubble, :capture] do
-    case Map.get(tree, fiber_id) do
-      nil -> nil
-      fiber -> Map.get(handler_map_for(fiber, phase), handler_index)
+    with %{} = fiber <- Map.get(tree, fiber_id),
+         {handler, _kinds} <- Map.get(handler_map_for(fiber, phase), handler_index) do
+      handler
     end
   end
 
   defp handler_map_for(fiber, :bubble), do: fiber.event_handlers
-  defp handler_map_for(fiber, :capture), do: fiber.capture_handlers || %{}
+  defp handler_map_for(fiber, :capture), do: fiber.capture_handlers
 
   @doc """
   Returns all fiber IDs present in the tree.

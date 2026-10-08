@@ -139,7 +139,7 @@ defmodule Filament.SigilFPhase1Test do
       handler = FiberTree.get_event_handler(tree, "root", 0)
       handler.(%{"key" => "s", "ctrl" => true, "shift" => false, "alt" => false, "meta" => false})
 
-      assert_received {:filament_set_state, _, _, {"s", %Filament.KeyModifiers{ctrl: true, shift: false}}}
+      assert_received {:filament_set_state, _, _, _, {"s", %Filament.KeyModifiers{ctrl: true, shift: false}}}
     end
 
     test "on_keydown wires to phx-keydown" do

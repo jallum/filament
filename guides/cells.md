@@ -221,6 +221,11 @@ defmodule MyApp.AgentCell do
 end
 ```
 
+This sketch leaks subscriptions whose owner exits without unmounting:
+Filament does not unsubscribe on process exit, so a real transport monitors
+`elem(subscriber, 0)` and drops that owner's entries on `:DOWN`, as
+`Filament.Observable.GenServer` does.
+
 Then in a component:
 
 ```elixir

@@ -28,7 +28,7 @@ defmodule Filament.Core.DispatchEventTest do
 
       tree =
         tree([
-          fiber(id: "root", component: __MODULE__, event_handlers: %{0 => handler})
+          fiber(id: "root", component: __MODULE__, event_handlers: %{0 => {handler, :all}})
         ])
 
       assert {:ok, _} = Core.dispatch_event(tree, "root", 0, %{key: :enter})
@@ -58,18 +58,18 @@ defmodule Filament.Core.DispatchEventTest do
 
       tree =
         tree([
-          fiber(id: "root", component: __MODULE__, capture_handlers: %{0 => capture_root}),
+          fiber(id: "root", component: __MODULE__, capture_handlers: %{0 => {capture_root, :all}}),
           fiber(
             id: "root.mid",
             component: __MODULE__,
             parent_id: "root",
-            capture_handlers: %{0 => capture_mid}
+            capture_handlers: %{0 => {capture_mid, :all}}
           ),
           fiber(
             id: "root.mid.leaf",
             component: __MODULE__,
             parent_id: "root.mid",
-            event_handlers: %{0 => target_handler}
+            event_handlers: %{0 => {target_handler, :all}}
           )
         ])
 
@@ -91,7 +91,7 @@ defmodule Filament.Core.DispatchEventTest do
             id: "root.leaf",
             component: __MODULE__,
             parent_id: "root",
-            event_handlers: %{0 => target}
+            event_handlers: %{0 => {target, :all}}
           )
         ])
 
@@ -110,13 +110,13 @@ defmodule Filament.Core.DispatchEventTest do
             id: "root.sibling",
             component: __MODULE__,
             parent_id: "root",
-            capture_handlers: %{0 => sibling_capture}
+            capture_handlers: %{0 => {sibling_capture, :all}}
           ),
           fiber(
             id: "root.target",
             component: __MODULE__,
             parent_id: "root",
-            event_handlers: %{0 => target_handler}
+            event_handlers: %{0 => {target_handler, :all}}
           )
         ])
 
@@ -139,18 +139,18 @@ defmodule Filament.Core.DispatchEventTest do
 
       tree =
         tree([
-          fiber(id: "root", component: __MODULE__, capture_handlers: %{0 => capture_root}),
+          fiber(id: "root", component: __MODULE__, capture_handlers: %{0 => {capture_root, :all}}),
           fiber(
             id: "root.mid",
             component: __MODULE__,
             parent_id: "root",
-            capture_handlers: %{0 => capture_mid}
+            capture_handlers: %{0 => {capture_mid, :all}}
           ),
           fiber(
             id: "root.mid.leaf",
             component: __MODULE__,
             parent_id: "root.mid",
-            event_handlers: %{0 => target}
+            event_handlers: %{0 => {target, :all}}
           )
         ])
 
@@ -166,7 +166,7 @@ defmodule Filament.Core.DispatchEventTest do
 
       tree =
         tree([
-          fiber(id: "root", component: __MODULE__, event_handlers: %{0 => target})
+          fiber(id: "root", component: __MODULE__, event_handlers: %{0 => {target, :all}})
         ])
 
       assert {:ok, {:stopped, :done_early}} = Core.dispatch_event(tree, "root", 0)
@@ -179,7 +179,7 @@ defmodule Filament.Core.DispatchEventTest do
 
       tree =
         tree([
-          fiber(id: "root", component: __MODULE__, event_handlers: %{0 => handler})
+          fiber(id: "root", component: __MODULE__, event_handlers: %{0 => {handler, :all}})
         ])
 
       assert {:ok, _} = Core.dispatch_event(tree, "root", 0)
@@ -191,7 +191,7 @@ defmodule Filament.Core.DispatchEventTest do
 
       tree =
         tree([
-          fiber(id: "root", component: __MODULE__, event_handlers: %{0 => handler})
+          fiber(id: "root", component: __MODULE__, event_handlers: %{0 => {handler, :all}})
         ])
 
       Core.dispatch_event(tree, "root", 0, %{key: "Esc"})

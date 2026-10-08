@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A target-independent vnode renderer and `Filament.Core` event dispatcher,
+  with capture/bubble phases and `stop_propagation/1`. Phoenix LiveView and
+  LiveComponent convert resolved vnodes through `Filament.Web`.
+- `%Filament.Source{}` and the `Filament.Cell` transport behaviour for reactive
+  values beyond GenServers.
+- `use_source/1` to bind a source and `use_value/2` to subscribe and project
+  its value.
+- `Filament.LiveView` unmounts its tree in `terminate/2`, running effect
+  cleanups when the client disconnects. `Filament.Test.unmount/1` does the
+  same for a test view.
+
 ### Changed
 
 - **Breaking:** `use_observable` now goes through `Filament.Cell`. The hook
@@ -42,7 +55,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   function reading such data) and relied on an unrelated render to refresh
   must take that data as a prop, state or `use_value` instead. This replaces
   0.5.x's compiler-generated `memo_at` child memoization.
+- **Breaking:** `use_state` setters send
+  `{:filament_set_state, fiber_id, slot_index, token, value}`. The token
+  identifies the component instance, so a setter kept from an unmounted
+  component no longer writes into one remounted at the same position. Hosts
+  forwarding messages to `Filament.LiveComponent` should match on the first
+  element rather than the tuple size:
 
+  ```elixir
+  def handle_info(msg, socket)
+      when elem(msg, 0) in [:filament_set_state, :cell_update, :cell_updates, :cell_resubscribe] do
+    Phoenix.LiveView.send_update(Filament.LiveComponent, id: "cart", filament_msg: msg)
+    {:noreply, socket}
+  end
+  ```
+- **Breaking:** components rendered by the same parent component with the
+  same module and `:key` raise `ArgumentError`
+  instead of sharing one fiber and its state.
+- A repeat subscribe under the same identity, as after a saturation notice, is
+  a refresh: it calls neither `handle_subscribe/2` nor `handle_unsubscribe/2`,
+  so held resources survive, and it replies with `handle_current/1`. The
+  default `handle_subscribe/2` accepts with `handle_current/1`'s value, so a
+  server publishing something other than its whole state overrides
+  `handle_current/1` alone.
+- `Filament.Observable.GenServer` wraps the module's own `handle_info/2`
+  instead of adding clauses in front of it: the module still receives its own
+  `:DOWN` messages, and a module without `handle_info/2` logs unexpected
+  messages as `GenServer` does.
+- Effects run in declaration order, a parent's before its children's.
+- `Filament.Observable.GenServer` receives unsubscribes as a cast, so
+  unmounting doesn't wait on a busy server. A later call from the same owner
+  still sees the unsubscribe applied.
+- The static HTTP render reads each source's current value
+  (`handle_current/1`) instead of subscribing. Under HTTP keep-alive the static
+  render runs in the connection's process, so its subscriptions outlived the
+  request; presence servers also counted the static render as a viewer.
+  `static_subscribe: false` still skips reading sources during that render.
+
+### Fixed
+
+- `handle_subscribe/2` returning `{:error, reason, state}` reads as
+  `:disconnected`, as documented, instead of crashing the server.
+- Subscribers with identities other than the hook tuple receive updates at
+  the subscribing process.
+- A subscribe that times out removes the subscription the server may still
+  make.
+- `on_click={nil}` and other `on_*` attributes given `nil` or `false` omit the
+  attribute, as HEEx omits `phx-click={nil}`, instead of raising.
+- `:if` beside `:for` on components and slot entries compiles and filters
+  each iteration.
+- Attribute names, event references, and `data`/`aria`/`phx` keyword values
+  are escaped as HEEx escapes them, and literal attribute values render as
+  written.
+- Send saturation recovery notices once per episode, resuming delivery from fresh state after resubscription.
+- Removed descendants run cleanup exactly once; keyed descendants retain
+  state, and stale messages from replaced subscriptions are ignored.
+- LiveComponent handles batched Cell updates while preserving its root output.
+- A cell server no longer crashes notifying a subscriber on another node.
+- A `Filament.LiveView` receiving a message it doesn't handle logs it and
+  continues, as Phoenix does, instead of crashing. A view with its own
+  `handle_info/2` ends with `def handle_info(msg, socket), do: super(msg, socket)`.
+- `Filament.LiveComponent` remounts when its `component` assign changes,
+  instead of rendering the new component with the old one's tree.
+- HTML loop `:key` expressions are evaluated in generator scope, avoiding
+  unused-variable warnings for bindings used only by the key.
 - The 0.5.6 observable fixes apply on the cell transport: the injected
   cell subscribe, current-value, unsubscribe and `:DOWN` handlers keep
   the server's `timeout/1`; a cell subscriber that has exited is skipped
@@ -52,17 +128,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- `Filament.Observable.Subscriber` struct and the entire parallel
-  Subscriber-keyed subscription path. `Filament.Observable.subscribe/2`
-  and `remove_projection/4` are gone; subscribe via `Filament.Cell` or
-  through the `use_observable` hook.
-- `:filament_observable_updates` and `:filament_observable_resubscribe`
-  messages are no longer sent or handled. The cell transport sends
-  `:cell_update` and `:cell_resubscribe` instead, with matching
-  `handle_info` clauses injected by `use Filament.LiveView`.
-- `Filament.RenderContext` no longer carries `observable_stubs` or
-  `session_token` fields. Tests should construct cells against stub pids
-  directly rather than relying on identifier-to-pid swap.
+- `Filament.Observable.Subscriber`, `Filament.Observable.subscribe/2`,
+  `remove_projection/4`, and the parallel Subscriber-keyed subscription path.
+- Legacy `:filament_observable_updates` / `:filament_observable_resubscribe`
+  messages. Transports use `:cell_update`, `:cell_updates`, and
+  `:cell_resubscribe`; host LiveViews forwarding to LiveComponent must include
+  all three forms.
+- `Filament.RenderContext.observable_stubs` and `session_token`. Tests pass
+  sources built against stub pids directly.
+- Compiler-generated `memo_at/3` calls. The vnode compiler no longer depends
+  on Phoenix's lazy comprehension functions or their hoisting passes.
+- `Filament.ObservableError`, which nothing raised.
+- `Reconciler.unmount/2` ignores its options; cleanup no longer needs the owner.
+- `Filament.Test.mount/3`'s `:stub` option, which no longer did anything.
+  Pass a source built on a `Filament.Test.Stub` pid as a prop instead.
 
 ## [0.5.6] - 2026-10-08
 

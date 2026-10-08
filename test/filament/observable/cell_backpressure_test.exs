@@ -243,7 +243,7 @@ defmodule Filament.Observable.CellBackpressureTest do
 
     logs =
       capture_log(fn ->
-        updated = Filament.Observable.GenServer.notify_cell_each(subs, 2, 100)
+        updated = Filament.Observable.GenServer.notify_cells(subs, 2, 100)
         assert updated[dead_sub] === dead
         assert updated[healthy_sub].last === 2
         Logger.flush()

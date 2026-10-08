@@ -42,8 +42,14 @@ defmodule Filament.Cell do
 
   `subscriber` is opaque to `Filament.Cell` — typically the tuple
   `{owner_pid, fiber_id, slot_index, generation}` Filament's hooks layer uses, but a
-  transport may accept any term. Two subscribes with the same identity
-  replace the previous projection.
+  transport may accept any term. Subscribing again with the same identity
+  refreshes the subscription: it takes the new projection and replies with
+  the current value, while the transport keeps the subscription itself.
+
+  Filament unsubscribes when a component unmounts, but not when its owner
+  process exits. A transport that keeps per-subscriber state must monitor
+  the owner (the first element of the hooks layer's tuple) and drop its
+  subscriptions on exit, as `Filament.Observable.GenServer` does.
   """
 
   @type transport :: module()
@@ -70,6 +76,11 @@ defmodule Filament.Cell do
   Read the current projected value without subscribing.
   """
   @callback current(transport_data(), projection()) :: projected() | :disconnected
+
+  @doc "Whether the transport can still be reached. Defaults to `true` when not defined."
+  @callback reachable?(transport_data()) :: boolean()
+
+  @optional_callbacks reachable?: 1
 
   @doc """
   Subscribe `subscriber` to `source` with a projection. See the callback

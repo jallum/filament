@@ -227,6 +227,10 @@ For lists, put `:for` and `:key` directly on the component tag:
 - `:for` + `:key` on a component tag identifies each child fiber by its key
   rather than by position, so reordering or removing an item only re-renders
   the items that actually changed and preserves hook state on the rest.
+  A key must be unique among the children of one module that a component
+  renders, across all its lists and helper functions; a duplicate raises
+  `ArgumentError`. Two lists of the same module in one component therefore
+  need distinct keys, such as `{:done, todo.id}` and `{:open, todo.id}`.
 - A plain `{for ... do} ... {end}` block around component tags also works, but
   matches children by index — fine for small static lists, not for anything
   that can reorder or have items removed from the middle.

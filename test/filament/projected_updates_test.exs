@@ -63,6 +63,7 @@ defmodule Filament.ProjectedUpdatesTest do
     cell = Filament.Source.new(Filament.Observable.GenServer, server)
 
     %Socket{
+      transport_pid: self(),
       assigns: %{__changed__: %{}, cell: cell},
       private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}
     }
@@ -81,7 +82,9 @@ defmodule Filament.ProjectedUpdatesTest do
     {:noreply, socket} = Host.handle_info({:cell_update, sub, %{a: 1, b: 11}}, socket)
     refute_receive {:rendered, _}
 
-    {:noreply, socket} = Host.handle_info({:filament_set_state, "root", 0, :b}, socket)
+    {:noreply, socket} =
+      Host.handle_info(Filament.StateHelper.set_state(socket.assigns._filament_tree, "root", 0, :b), socket)
+
     assert_receive {:rendered, 11}
 
     {:noreply, socket} = Host.handle_info({:cell_update, sub, %{a: 2, b: 11}}, socket)
@@ -135,7 +138,13 @@ defmodule Filament.ProjectedUpdatesTest do
 
     {:ok, socket} = Filament.LiveComponent.update(%{filament_msg: {:cell_update, sub, %{a: 1, b: 11}}}, socket)
     refute_receive {:rendered, _}
-    {:ok, _socket} = Filament.LiveComponent.update(%{filament_msg: {:filament_set_state, "root", 0, :b}}, socket)
+
+    {:ok, _socket} =
+      Filament.LiveComponent.update(
+        %{filament_msg: Filament.StateHelper.set_state(socket.assigns._filament_tree, "root", 0, :b)},
+        socket
+      )
+
     assert_receive {:rendered, 11}
   end
 end

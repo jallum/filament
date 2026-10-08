@@ -78,40 +78,39 @@ defmodule Filament.SubscriptionGenerationTest do
     assert GenServer.call(ctx.a, :subscribers) == []
     assert GenServer.call(ctx.b, :subscribers) == [current]
     assert_receive {:cell_update, ^old, 11}
-    assert :ignore = LiveView.apply_cell_update(tree, old, 11)
-    assert :ignore = LiveView.apply_cell_resubscribe(tree, old)
-    assert :ignore = LiveView.apply_cell_update(tree, {self(), "root", 0}, 99)
-    assert :ignore = LiveView.apply_cell_resubscribe(tree, {self(), "root", 0})
+    assert {:ok, ^tree} = LiveView.apply_message(tree, {:cell_update, old, 11})
+    assert {:ok, ^tree} = LiveView.apply_message(tree, {:cell_resubscribe, old})
+    assert {:ok, ^tree} = LiveView.apply_message(tree, {:cell_update, {self(), "root", 0}, 99})
+    assert {:ok, ^tree} = LiveView.apply_message(tree, {:cell_resubscribe, {self(), "root", 0}})
 
     {stable, _, _} = Reconciler.update(tree, "root", %{source: ctx.source_b}, owner_pid: self())
     assert subscriber(stable) == current
     GenServer.call(ctx.b, {:set, 21})
     assert_receive {:cell_update, ^current, 21}
-    {:ok, tree, _} = LiveView.apply_cell_updates(stable, [{old, 11}, {current, 21}, {old, 12}])
+    {:rerender, tree} = LiveView.apply_message(stable, {:cell_updates, [{old, 11}, {current, 21}, {old, 12}]})
     {tree, walked, _} = Reconciler.update(tree, "root", %{source: ctx.source_b}, owner_pid: self())
     assert html(walked) == "<p>21</p>"
     Reconciler.unmount(tree, owner_pid: self())
     assert GenServer.call(ctx.b, :subscribers) == []
   end
 
-  test "refresh and remount change generations and clean up the exact old identity", ctx do
+  test "refresh keeps the identity; remount changes the generation and cleans up the exact old identity", ctx do
     props = %{source: ctx.source_a}
     {tree, _, _} = Reconciler.mount(Value, props, owner_pid: self())
     old = subscriber(tree)
-    {:ok, tree, _} = LiveView.apply_cell_resubscribe(tree, old)
-    assert :ignore = LiveView.apply_cell_update(tree, old, 100)
+    {:rerender, tree} = LiveView.apply_message(tree, {:cell_resubscribe, old})
+    assert {:ok, ^tree} = LiveView.apply_message(tree, {:cell_update, old, 100})
     {tree, _, _} = Reconciler.update(tree, "root", props, owner_pid: self())
     refreshed = subscriber(tree)
-    refute old == refreshed
+    assert refreshed == old
     assert GenServer.call(ctx.a, :subscribers) == [refreshed]
-    assert :ignore = LiveView.apply_cell_resubscribe(tree, old)
     Reconciler.unmount(tree, owner_pid: self())
     {tree, _, _} = Reconciler.mount(Value, props, owner_pid: self())
     remounted = subscriber(tree)
     refute remounted == refreshed
-    assert :ignore = LiveView.apply_cell_update(tree, refreshed, 100)
+    assert {:ok, ^tree} = LiveView.apply_message(tree, {:cell_update, refreshed, 100})
     assert GenServer.call(ctx.a, :subscribers) == [remounted]
-    {:ok, tree, _} = LiveView.apply_cell_resubscribe(tree, remounted)
+    {:rerender, tree} = LiveView.apply_message(tree, {:cell_resubscribe, remounted})
     Reconciler.unmount(tree, owner_pid: self())
     assert GenServer.call(ctx.a, :subscribers) == []
   end
@@ -131,7 +130,12 @@ defmodule Filament.SubscriptionGenerationTest do
   end
 
   test "LiveComponent ignores old generations without rerendering", ctx do
-    socket = %Socket{assigns: %{__changed__: %{}}, private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}}
+    socket = %Socket{
+      transport_pid: self(),
+      assigns: %{__changed__: %{}},
+      private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}
+    }
+
     {:ok, socket} = Filament.LiveComponent.mount(socket)
     {:ok, socket} = Filament.LiveComponent.update(%{component: Value, source: ctx.source_a}, socket)
     old = subscriber(socket.assigns._filament_tree)
@@ -146,7 +150,7 @@ defmodule Filament.SubscriptionGenerationTest do
     {tree, _, _} = Reconciler.mount(Value, %{source: source}, owner_pid: self())
     identity = subscriber(tree)
     assert_receive {:subscribed, ^identity}
-    {:ok, tree, _} = LiveView.apply_cell_update(tree, identity, 7)
+    {:rerender, tree} = LiveView.apply_message(tree, {:cell_update, identity, 7})
     {tree, walked, _} = Reconciler.update(tree, "root", %{source: source}, owner_pid: self())
     assert html(walked) == "<p>7</p>"
     refute_receive {:subscribed, _}

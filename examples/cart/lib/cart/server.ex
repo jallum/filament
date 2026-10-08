@@ -39,13 +39,6 @@ defmodule Cart.Server do
     {:ok, initial_state}
   end
 
-  # Observable callback — called when a new subscriber joins.
-  # Returns {:ok, initial_projected_value, new_server_state}.
-  @impl Filament.Observable
-  def handle_subscribe(_subscriber, state) do
-    {:ok, state, state}
-  end
-
   @impl GenServer
   def handle_call({:add_item, item}, _from, state) do
     new_state = Cart.State.add_item(state, item)

@@ -147,8 +147,8 @@ defmodule Filament.VNodeEngineForTest do
       _walked = Renderer.walk_vnode(vnode, ctx)
       final_ctx = Process.get(:filament_render_context)
       Process.delete(:filament_render_context)
-      child_a = Fiber.child_id(root_fiber, Item.Item, {:key, "a"})
-      child_b = Fiber.child_id(root_fiber, Item.Item, {:key, "b"})
+      child_a = Fiber.child_id(root_fiber.id, Item.Item, {:key, "a"})
+      child_b = Fiber.child_id(root_fiber.id, Item.Item, {:key, "b"})
       assert Map.has_key?(final_ctx.new_fibers, child_a)
       assert Map.has_key?(final_ctx.new_fibers, child_b)
     end

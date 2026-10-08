@@ -27,11 +27,9 @@ defmodule Filament.Core do
   `{:error, :no_target}` if the target fiber doesn't exist.
 
   The optional `kind` arg lets the dispatcher filter handlers by the
-  kinds-set they registered with. A handler at slot `i` runs only if
-  `fiber.event_handler_kinds[i]` is `:all` (or missing) or contains
-  `kind`. Capture handlers are filtered symmetrically via
-  `capture_handler_kinds`. Defaults to `:all` — backwards compatible:
-  every handler fires.
+  kinds-set they registered with: a handler runs only if its kinds are
+  `:all` or contain `kind`, for capture and bubble handlers alike.
+  Defaults to `:all`, which fires every handler.
 
   Handler arity:
 
@@ -84,24 +82,15 @@ defmodule Filament.Core do
   end
 
   defp run_capture_handlers(fiber, params, kind) do
-    handlers = fiber.capture_handlers || %{}
-    kinds_map = Map.get(fiber, :capture_handler_kinds, %{}) || %{}
-
-    Enum.each(handlers, fn {slot, handler} ->
-      slot_kinds = Map.get(kinds_map, slot, :all)
-      if kind_matches?(slot_kinds, kind), do: invoke(handler, params)
+    Enum.each(fiber.capture_handlers, fn {_slot, {handler, kinds}} ->
+      if kind_matches?(kinds, kind), do: invoke(handler, params)
     end)
   end
 
   defp run_target_handler(target, target_slot, params, kind) do
-    case Map.get(target.event_handlers || %{}, target_slot) do
-      nil ->
-        :ok
-
-      handler ->
-        kinds_map = Map.get(target, :event_handler_kinds, %{}) || %{}
-        slot_kinds = Map.get(kinds_map, target_slot, :all)
-        if kind_matches?(slot_kinds, kind), do: invoke(handler, params), else: :ok
+    case Map.get(target.event_handlers, target_slot) do
+      {handler, kinds} -> if kind_matches?(kinds, kind), do: invoke(handler, params), else: :ok
+      nil -> :ok
     end
   end
 

@@ -19,9 +19,9 @@ Target-agnostic. Zero `Phoenix.LiveView.*` imports.
   `stop_propagation/1`).
 - `Filament.Fiber` / `Filament.FiberTree` — fiber state and lookups.
 - `Filament.Hooks` — `use_state`, `use_source`, `use_value`, `use_effect`,
-  `event_at`, `register_event_handler`.
+  `register_event_handler`.
 - `Filament.HookSlot` — operations on a single hook slot value;
-  consolidates pattern-matching on slot shapes (`{value, setter}`,
+  consolidates pattern-matching on slot shapes (`{:state, value, setter, token}`,
   `{:cell_subscribed, …}`, etc.) so consumer sites stay thin.
 - `Filament.KeyModifiers` — keyboard modifier struct used by `on_key`
   handlers.

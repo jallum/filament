@@ -33,13 +33,6 @@ defmodule Cart.Server do
     GenServer.start_link(__MODULE__, %Cart.State{}, name: name)
   end
 
-  # Called when a new component subscribes.
-  # Return {:ok, initial_value, new_state} to accept.
-  @impl Filament.Observable
-  def handle_subscribe(_subscriber, state) do
-    {:ok, state, state}
-  end
-
   @impl GenServer
   def handle_call({:add_item, item}, _from, state) do
     new_state = Cart.State.add_item(state, item)
@@ -61,23 +54,25 @@ What the macro injects:
 - `Filament.Cell` callbacks (`subscribe/3`, `unsubscribe/2`, `current/2`,
   optional `reachable?/1`) at the module level — the GenServer becomes a
   usable transport.
-- `handle_call({:filament_cell_subscribe, …})` and
+- `handle_call({:filament_cell_subscribe, …})`,
+  `handle_call({:filament_cell_current, …})` and
   `handle_cast({:filament_cell_unsubscribe, …})` — registers/removes
   subscribers and monitors their pids. Subscribe calls your
   `handle_subscribe/2` callback.
 - `handle_info({:DOWN, …})` — automatically drops subscribers whose
   LiveView process terminates and runs your `handle_unsubscribe/2`.
 - `cell/1` — default constructor returning
-  `%Filament.Source{transport: __MODULE__, data: server_ref}`. Override
+  `%Filament.Source{transport: Filament.Observable.GenServer, data: server_ref}`. Override
   for session-keyed lookups.
 - `notify_observers/1` — call this after every mutation. For each
   subscriber, applies the subscriber's projection and delivers a
   `{:cell_update, subscriber, projected_value}` message *only* when the
   projected value differs from the previously delivered one.
 
-The default `handle_subscribe/2` returns `{:ok, state, state}` (the current state
-as the initial value). Override it to reject subscriptions or return a different
-initial value.
+The default `handle_subscribe/2`, `Filament.Cell.current/2` and refreshes
+all read `handle_current/1`, which defaults to `{:ok, state, state}`. Override
+it to publish a different value, and `handle_subscribe/2` only to track or
+reject subscribers.
 
 ## Subscribing from a component: use_value/2
 
@@ -167,19 +162,9 @@ todos = use_value(source, fn
 end)
 ```
 
-The server starts when the component first mounts in a connected
-render and can stop itself in `handle_unsubscribe/2` when the last
-subscriber leaves:
-
-```elixir
-@impl Filament.Observable
-def handle_unsubscribe(_subscriber, state) do
-  # Stop when the last subscriber (component) unmounts:
-  {:stop, :normal, state}
-  # Or keep running:
-  # {:ok, state}
-end
-```
+The server starts on the first render that reads sources (including HTTP
+rendering by default). Resource teardown is a separate lifecycle choice; unsubscribing a
+reader does not automatically stop the server.
 
 This eliminates the need to start the server in `mount/3` and thread it as a prop —
 the LiveView reduces to:
@@ -191,9 +176,10 @@ defmodule TodoWeb.TodoLive do
 end
 ```
 
-On the **first render** (HTTP pre-connect), `use_source/1` returns `nil` because
-subscribing during an HTTP render would create zombie subscribers. `use_value/2`
-calls the projection function with `:disconnected` instead.
+By default the HTTP render reads each source's current value without
+subscribing, and the WebSocket process subscribes on mount. With
+`static_subscribe: false`, `use_source/1` returns `nil` during HTTP rendering
+and `use_value/2` calls the projection with `:disconnected`.
 
 ## Projections and change-or-bust
 
@@ -258,43 +244,33 @@ end
 - `{:ok, initial_value, new_state}` — accept the subscription; `initial_value` is
   the raw state the client receives immediately (used as the seed for change-or-bust
   tracking and passed through the projection fn for the first render).
-- `{:error, reason, new_state}` — reject the subscription; raises
-  `Filament.ObservableError` in the component.
+- `{:error, reason, new_state}` — reject the subscription; the component's
+  `use_value` reads `:disconnected`.
 
-## Presence tracking and static_subscribe
+`handle_subscribe/2` runs once per subscriber identity, and `handle_unsubscribe/2`
+once when that subscription ends — on unsubscribe or when the owner exits. When an
+owner's mailbox fills, the server stops sending it updates until it resubscribes;
+that resubscribe is a refresh under the same identity, so it calls neither callback
+and the resources a subscription holds survive it. The refresh reads the value from
+`handle_current/1`, so a server that overrides `handle_subscribe/2`'s value must
+override `handle_current/1` to match.
 
-`use Filament.LiveView` defaults to `static_subscribe: true`, which subscribes during
-the initial HTTP render so the page arrives at the browser with real data already
-populated. This is good for most read-only projections (item counts, document content,
-etc.) because users see meaningful content before the WebSocket connects.
+## Static rendering and static_subscribe
 
-**For presence tracking it is the wrong default.** Here is why:
+Phoenix LiveView renders each page twice: once over HTTP, then again in the
+WebSocket process. `use Filament.LiveView` defaults to `static_subscribe: true`,
+under which the HTTP render reads each source's current value — the server's
+`handle_current/1` — so the page arrives with real data. It doesn't subscribe:
+`handle_subscribe/2` isn't called and nothing outlives the request. Under HTTP
+keep-alive the static render runs in the connection's process, which may live
+on serving other requests, so a subscription there would linger. A presence
+server therefore counts only WebSocket viewers.
 
-Phoenix LiveView uses two separate OS processes per tab: a short-lived HTTP process for
-the static render, and a long-lived WebSocket process for the connected session.
-Filament's session-handoff mechanism ensures these two processes share one subscriber
-slot, so presence normally stays correct. However, on a page *reload* there is a
-window where the **departing** WS connection and the **arriving** static render
-overlap — both are alive simultaneously, so presence briefly spikes by one before the
-old WS tears down.
-
-The fix is simple:
-
-```elixir
-use Filament.LiveView, static_subscribe: false
-```
-
-With this setting, `use_value/2` returns the `:disconnected` value on the HTTP
-render (so you might show "Connecting…" or `0` initially), then re-renders with live
-data the moment the WebSocket connects. Because no subscription is made during the
-static render, presence only ever counts real WebSocket connections — the spike
-disappears entirely.
-
-**Rule of thumb:** use `static_subscribe: true` (the default) when the projected value
-is useful in the initial HTML (cart totals, document content). Use
-`static_subscribe: false` when the projection represents *who is connected* rather than
-*what the data is* — presence counts, online indicators, and live cursors all fall into
-this category.
+With `static_subscribe: false`, the HTTP render doesn't read sources at all:
+`use_source/1` returns `nil` and `use_value/2` returns its `:disconnected`
+value (so you might show "Connecting…"), then the view re-renders with live data
+when the WebSocket connects. Use it when reading during the HTTP render is
+unwanted, for example a factory that starts a server per visitor.
 
 ## Mutations from event closures
 

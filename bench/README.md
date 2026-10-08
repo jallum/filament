@@ -38,7 +38,7 @@ setup, correctness checks, and cleanup.
 | render/mount | Mount N keyed stateful rows and produce the initial diff |
 | render/unchanged | Rerender with identical props and produce the next diff |
 | render/leaf_state | Invoke one leaf's setter, receive/apply its message, rerender the root, and produce the diff |
-| keyed/* | Append, prepend, reverse, remove half, or clear an existing keyed list |
+| keyed/* | Append, prepend, reverse, move the last row to the front after editing its state, remove half, or clear a keyed list |
 | reactivity/changed | Synchronously write new observable state, consume all delivered updates, rerender once, and produce the diff |
 | reactivity/unchanged | Write identical state; verify zero delivery and produce an empty diff without rerendering |
 
@@ -96,3 +96,15 @@ main already produces LiveView output. Inputs, completed work and correctness
 checks remain identical. Reports distinguish `cell-web-direct` from `cell-vnode`.
 Applying this adapter update changes the harness hash: older archived reports
 must be recaptured with the updated harness before automated comparison.
+
+The Web host selects compiled `~F` template plans when available. Portable targets
+continue to receive vnode tuples. The compiled path hoists static HTML and uses
+keyed LiveView comprehensions for homogeneous keyed component loops. Components
+render only when their props, state or `use_value` values change. Dynamic attributes that require different
+HTML shapes, heterogeneous loops, and manual vnode output use the existing
+converter. `keyed/move` checks that the moved row retains its edited local state.
+
+Timing reports record `json_library: "Jason"`. These measurements retain Jason
+for continuity with archived baselines; the example applications already configure
+Phoenix with Elixir `JSON`. Compare encoder changes separately using the same diff.
+

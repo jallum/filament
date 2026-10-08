@@ -25,8 +25,7 @@ defmodule Filament.Core.DispatchEventKindsTest do
           fiber(
             id: "root",
             component: __MODULE__,
-            event_handlers: %{0 => handler},
-            event_handler_kinds: %{0 => :all}
+            event_handlers: %{0 => {handler, :all}}
           )
         ])
 
@@ -45,8 +44,7 @@ defmodule Filament.Core.DispatchEventKindsTest do
           fiber(
             id: "root",
             component: __MODULE__,
-            event_handlers: %{0 => handler},
-            event_handler_kinds: %{0 => MapSet.new([:press, :repeat])}
+            event_handlers: %{0 => {handler, MapSet.new([:press, :repeat])}}
           )
         ])
 
@@ -58,23 +56,6 @@ defmodule Filament.Core.DispatchEventKindsTest do
 
       assert {:ok, _} = Core.dispatch_event(t, "root", 0, %{}, :release)
       refute_received :fired
-    end
-
-    test "missing kinds-entry defaults to :all (back-compat with fibers built outside this API)" do
-      handler = fn _ -> send(self(), :fired) end
-
-      t =
-        tree([
-          fiber(
-            id: "root",
-            component: __MODULE__,
-            event_handlers: %{0 => handler}
-            # no event_handler_kinds at all
-          )
-        ])
-
-      assert {:ok, _} = Core.dispatch_event(t, "root", 0, %{}, :release)
-      assert_received :fired
     end
   end
 
@@ -88,14 +69,13 @@ defmodule Filament.Core.DispatchEventKindsTest do
           fiber(
             id: "root",
             component: __MODULE__,
-            capture_handlers: %{0 => ancestor_capture},
-            capture_handler_kinds: %{0 => MapSet.new([:release])}
+            capture_handlers: %{0 => {ancestor_capture, MapSet.new([:release])}}
           ),
           fiber(
             id: "child",
             component: __MODULE__,
             parent_id: "root",
-            event_handlers: %{0 => target_handler}
+            event_handlers: %{0 => {target_handler, :all}}
           )
         ])
 
@@ -118,8 +98,7 @@ defmodule Filament.Core.DispatchEventKindsTest do
           fiber(
             id: "root",
             component: __MODULE__,
-            event_handlers: %{0 => handler},
-            event_handler_kinds: %{0 => MapSet.new([:press])}
+            event_handlers: %{0 => {handler, MapSet.new([:press])}}
           )
         ])
 

@@ -71,29 +71,6 @@ defmodule Filament.TagEngine do
   """
   @callback void?(name :: binary()) :: boolean()
 
-  @doc """
-  Implements processing of attributes.
-
-  It returns a quoted expression or attributes. If attributes are returned,
-  the second element is a list where each element in the list represents
-  one attribute. If the list element is a two-element tuple, it is assumed
-  the key is the name to be statically written in the template. The second
-  element is the value which is also statically written to the template whenever
-  possible (such as binaries or binaries inside a list).
-  """
-  @callback handle_attributes(ast :: Macro.t(), meta :: keyword) ::
-              {:attributes, [{binary(), Macro.t()} | Macro.t()]} | {:quoted, Macro.t()}
-
-  @doc """
-  Callback invoked to add annotations around the whole body of a template.
-  """
-  @callback annotate_body(caller :: Macro.Env.t()) :: {String.t(), String.t()} | nil
-
-  @doc """
-  Callback invoked to add caller annotations before a function component is invoked.
-  """
-  @callback annotate_caller(file :: String.t(), line :: integer()) :: String.t() | nil
-
   @impl true
   def init(opts) do
     tag_handler = Keyword.fetch!(opts, :tag_handler)
@@ -120,27 +97,16 @@ defmodule Filament.TagEngine do
 
   @impl true
   def handle_body(state) do
-    %{tokens: tokens, file: file, cont: cont, source: source, caller: caller} = state
+    %{tokens: tokens, file: file, cont: cont, source: source} = state
     tokens = Tokenizer.finalize(tokens, file, cont, source)
 
     token_state =
       state
-      |> token_state(nil)
+      |> token_state()
       |> continue(tokens)
       |> validate_unclosed_tags!("template")
 
-    opts = [root: token_state.root || false]
-
-    opts =
-      case caller && has_tags?(tokens) && state.tag_handler.annotate_body(caller) do
-        annotation when annotation not in [false, nil] ->
-          [meta: [template_annotation: annotation]] ++ opts
-
-        _ ->
-          opts
-      end
-
-    ast = invoke_subengine(token_state, :handle_body, [opts])
+    ast = invoke_subengine(token_state, :handle_body, [])
 
     quote do
       require Filament.TagEngine
@@ -148,19 +114,6 @@ defmodule Filament.TagEngine do
       unquote(ast)
     end
   end
-
-  defp has_tags?([{:text, _, _} | tokens]), do: has_tags?(tokens)
-  defp has_tags?([{:expr, _, _} | tokens]), do: has_tags?(tokens)
-  defp has_tags?([{:body_expr, _, _} | tokens]), do: has_tags?(tokens)
-
-  # If we find a slot, discard everything in the slot and continue looking
-  defp has_tags?([{:slot, _, _, _} | tokens]),
-    do: tokens |> Enum.drop_while(&(not match?({:close, :slot, _, _}, &1))) |> Enum.drop(1) |> has_tags?()
-
-  # If we find a closing tag, we missed the opening one, so we are at the end
-  defp has_tags?([{:close, _, _, _} | _]), do: false
-  defp has_tags?([_ | _]), do: true
-  defp has_tags?([]), do: false
 
   defp validate_unclosed_tags!(%{tags: [tag | _]} = state, context) do
     {_type, _name, _attrs, meta} = tag
@@ -185,24 +138,21 @@ defmodule Filament.TagEngine do
   @impl true
   def handle_end(state) do
     state
-    |> token_state(false)
+    |> token_state()
     |> continue(Enum.reverse(state.tokens))
     |> validate_unclosed_tags!("do-block")
     |> invoke_subengine(:handle_end, [])
   end
 
-  defp token_state(
-         %{
-           subengine: subengine,
-           substate: substate,
-           file: file,
-           caller: caller,
-           source: source,
-           indentation: indentation,
-           tag_handler: tag_handler
-         },
-         root
-       ) do
+  defp token_state(%{
+         subengine: subengine,
+         substate: substate,
+         file: file,
+         caller: caller,
+         source: source,
+         indentation: indentation,
+         tag_handler: tag_handler
+       }) do
     %{
       subengine: subengine,
       substate: substate,
@@ -212,7 +162,6 @@ defmodule Filament.TagEngine do
       tags: [],
       slots: [],
       caller: caller,
-      root: root,
       indentation: indentation,
       tag_handler: tag_handler
     }
@@ -397,7 +346,6 @@ defmodule Filament.TagEngine do
     |> pop_stack_item()
     |> pop_stack_item()
     |> pop_substate_from_stack()
-    |> set_root_on_not_tag()
     |> update_subengine(:handle_expr, ["=", ast])
     |> continue(tokens)
   end
@@ -418,7 +366,6 @@ defmodule Filament.TagEngine do
     |> pop_stack_item()
     |> pop_stack_item()
     |> pop_substate_from_stack()
-    |> set_root_on_not_tag()
     |> update_subengine(:handle_expr, ["=", ast])
     |> continue(tokens)
   end
@@ -434,7 +381,6 @@ defmodule Filament.TagEngine do
     state
     |> pop_stack_item()
     |> pop_substate_from_stack()
-    |> set_root_on_not_tag()
     |> update_subengine(:handle_expr, ["=", ast])
     |> continue(tokens)
   end
@@ -451,7 +397,6 @@ defmodule Filament.TagEngine do
     state
     |> pop_stack_item()
     |> pop_substate_from_stack()
-    |> set_root_on_not_tag()
     |> update_subengine(:handle_expr, ["=", ast])
     |> continue(tokens)
   end
@@ -516,7 +461,6 @@ defmodule Filament.TagEngine do
 
   defp handle_token([{:expr, marker, expr} | tokens], state) do
     state
-    |> set_root_on_not_tag()
     |> update_subengine(:handle_expr, [marker, expr])
     |> continue(tokens)
   end
@@ -566,7 +510,6 @@ defmodule Filament.TagEngine do
         quoted = Code.string_to_quoted!(value, opts)
 
         state
-        |> set_root_on_not_tag()
         |> update_subengine(:handle_expr, ["=", quoted])
         |> continue(tokens)
     end
@@ -584,7 +527,6 @@ defmodule Filament.TagEngine do
 
       true ->
         state
-        |> set_root_on_not_tag()
         |> update_subengine(:handle_text, [[line: line, column: column], text])
         |> continue(tokens)
     end
@@ -594,39 +536,27 @@ defmodule Filament.TagEngine do
 
   defp handle_token([{:remote_component, name, attrs, %{closing: :self} = tag_meta} | tokens], state) do
     attrs = postprocess_attrs(attrs, state)
-    {mod_ast, mod_size, fun} = decompose_remote_component_tag!(name, tag_meta, state)
-    %{line: line, column: column} = tag_meta
+    {mod_ast, _mod_size, fun} = decompose_remote_component_tag!(name, tag_meta, state)
+    line = tag_meta.line
 
     {assigns, attr_info} =
       build_self_close_component_assigns({"remote component", name}, attrs, tag_meta.line, state)
 
     mod = expand_with_line(mod_ast, line, state.caller)
     store_component_call({mod, fun}, attr_info, [], line, state)
-    meta = [line: line, column: column + mod_size]
 
-    case pop_special_attrs!(attrs, tag_meta, state) do
-      {false, _tag_meta, _attrs} ->
-        ast = build_filament_component_ast(state, mod_ast, fun, assigns, nil, tag_meta.line)
+    ast =
+      case pop_special_attrs!(attrs, tag_meta, state) do
+        {false, _tag_meta, _attrs} ->
+          build_filament_component_ast(state, mod_ast, fun, assigns, nil, line)
 
-        state
-        |> set_root_on_not_tag()
-        |> maybe_anno_caller(meta, state.file, line)
-        |> update_subengine(:handle_expr, ["=", ast])
-        |> continue(tokens)
+        {true, new_meta, _new_attrs} ->
+          build_self_close_component_with_special(state, new_meta, tag_meta, fn key_ast ->
+            build_filament_component_ast(state, mod_ast, fun, assigns, key_ast, line)
+          end)
+      end
 
-      {true, new_meta, _new_attrs} ->
-        ast =
-          build_self_close_component_with_special(
-            state,
-            new_meta,
-            tag_meta,
-            fn key_ast ->
-              build_filament_component_ast(state, mod_ast, fun, assigns, key_ast, tag_meta.line)
-            end
-          )
-
-        emit_self_close_component(state, ast, new_meta, meta, line, tokens)
-    end
+    emit_self_close_component(state, ast, tokens)
   end
 
   # Remote function component (with inner content). Named slots are captured
@@ -642,7 +572,6 @@ defmodule Filament.TagEngine do
     {has_special?, special, _attrs} = pop_special_attrs!(attrs, tag_meta, state)
 
     state
-    |> set_root_on_not_tag()
     |> push_tag({:remote_component, name, {mod_ast, fun, regular_assigns, has_special?, special}, tag_meta})
     |> push_slots_frame()
     |> push_substate_to_stack()
@@ -663,7 +592,6 @@ defmodule Filament.TagEngine do
       end
 
     state
-    |> set_root_on_not_tag()
     |> update_subengine(:handle_expr, ["=", vnode_ast])
     |> continue(tokens)
   end
@@ -732,7 +660,6 @@ defmodule Filament.TagEngine do
       end
 
     state
-    |> set_root_on_not_tag()
     |> update_subengine(:handle_expr, ["=", vnode_ast])
     |> continue(tokens)
   end
@@ -757,29 +684,18 @@ defmodule Filament.TagEngine do
     mod_ast = mod
     call = {fun, meta, __MODULE__}
 
-    case pop_special_attrs!(attrs, tag_meta, state) do
-      {false, _tag_meta, _attrs} ->
-        ast = build_filament_local_component_ast(state, mod_ast, fun, call, assigns, nil, line)
+    ast =
+      case pop_special_attrs!(attrs, tag_meta, state) do
+        {false, _tag_meta, _attrs} ->
+          build_filament_local_component_ast(state, mod_ast, fun, call, assigns, nil, line)
 
-        state
-        |> set_root_on_not_tag()
-        |> maybe_anno_caller(meta, state.file, line)
-        |> update_subengine(:handle_expr, ["=", ast])
-        |> continue(tokens)
+        {true, new_meta, _new_attrs} ->
+          build_self_close_component_with_special(state, new_meta, tag_meta, fn key_ast ->
+            build_filament_local_component_ast(state, mod_ast, fun, call, assigns, key_ast, line)
+          end)
+      end
 
-      {true, new_meta, _new_attrs} ->
-        ast =
-          build_self_close_component_with_special(
-            state,
-            new_meta,
-            tag_meta,
-            fn key_ast ->
-              build_filament_local_component_ast(state, mod_ast, fun, call, assigns, key_ast, line)
-            end
-          )
-
-        emit_self_close_component(state, ast, new_meta, meta, line, tokens)
-    end
+    emit_self_close_component(state, ast, tokens)
   end
 
   # Local function component (with inner content)
@@ -804,7 +720,6 @@ defmodule Filament.TagEngine do
     case pop_special_attrs!(attrs, tag_meta, state) do
       {false, tag_meta, attrs} ->
         state
-        |> set_root_on_tag()
         |> handle_tag_and_attrs(name, attrs, suffix, to_location(tag_meta), true)
         |> continue(tokens)
 
@@ -812,7 +727,6 @@ defmodule Filament.TagEngine do
         state
         |> push_substate_to_stack()
         |> update_subengine(:handle_begin, [])
-        |> set_root_on_not_tag()
         |> handle_tag_and_attrs(name, new_attrs, suffix, to_location(new_meta), true)
         |> handle_special_expr(new_meta)
         |> continue(tokens)
@@ -835,7 +749,6 @@ defmodule Filament.TagEngine do
         case pop_special_attrs!(attrs, tag_meta, state) do
           {false, tag_meta, attrs} ->
             state
-            |> set_root_on_tag()
             |> push_tag(token)
             |> handle_tag_and_attrs(name, attrs, ">", to_location(tag_meta))
             |> continue(tokens)
@@ -844,7 +757,6 @@ defmodule Filament.TagEngine do
             state
             |> push_substate_to_stack()
             |> update_subengine(:handle_begin, [])
-            |> set_root_on_not_tag()
             |> push_tag({:tag, name, new_attrs, new_meta})
             |> handle_tag_and_attrs(name, new_attrs, ">", to_location(new_meta))
             |> continue(tokens)
@@ -1101,23 +1013,6 @@ defmodule Filament.TagEngine do
 
   defp raise_if_duplicated_special_attr!(nil, _state), do: nil
 
-  # Root tracking
-  defp set_root_on_not_tag(%{root: root, tags: tags} = state) do
-    if tags == [] and root != false do
-      %{state | root: false}
-    else
-      state
-    end
-  end
-
-  defp set_root_on_tag(state) do
-    case state do
-      %{root: nil, tags: []} -> %{state | root: true}
-      %{root: true, tags: []} -> %{state | root: false}
-      %{root: bool} when is_boolean(bool) -> state
-    end
-  end
-
   ## handle_tag_and_attrs
 
   # `terminal?` distinguishes "no separate close coming" (void `<br>`,
@@ -1155,34 +1050,29 @@ defmodule Filament.TagEngine do
 
     key_ast
     |> base_ast_fn.()
-    |> maybe_wrap_for(new_meta)
-    |> maybe_wrap_if(new_meta)
+    |> wrap_special(new_meta)
+    |> wrap_for_fragment(new_meta)
   end
 
-  defp maybe_wrap_for(ast, %{for: for_expr}), do: wrap_for_with_fragment(ast, for_expr)
-  defp maybe_wrap_for(ast, _meta), do: ast
+  # `:for` and `:if` around a component or slot entry. Beside `:for`, `:if`
+  # filters each iteration, as in HEEx, so it can read the loop variable.
+  defp wrap_special(ast, %{for: for_expr} = special),
+    do: {:for, [], [for_expr | List.wrap(special[:if])] ++ [[do: ast]]}
 
-  defp maybe_wrap_if(ast, %{if: if_expr}), do: quote(do: if(unquote(if_expr), do: unquote(ast)))
-  defp maybe_wrap_if(ast, _meta), do: ast
+  defp wrap_special(ast, %{if: if_expr}), do: quote(do: if(unquote(if_expr), do: unquote(ast)))
+  defp wrap_special(ast, _special), do: ast
 
-  defp emit_self_close_component(state, ast, _new_meta, meta, line, tokens) do
+  # A component loop becomes `{:fragment, list}` so the surrounding vnode
+  # tree treats the iteration output as a flat sequence of children. When
+  # `:key` is also present, the component AST already carries the key
+  # expression — the loop variable is captured by the closure.
+  defp wrap_for_fragment(for_ast, %{for: _}), do: {:fragment, for_ast}
+  defp wrap_for_fragment(ast, _special), do: ast
+
+  defp emit_self_close_component(state, ast, tokens) do
     state
-    |> set_root_on_not_tag()
-    |> maybe_anno_caller(meta, state.file, line)
     |> update_subengine(:handle_expr, ["=", ast])
     |> continue(tokens)
-  end
-
-  # Wrap a single component vnode AST in `for ..., do: vnode_ast` and then in
-  # `{:fragment, list}` so the surrounding vnode tree treats the iteration
-  # output as a flat sequence of children. When `:key` is also present, the
-  # component AST already carries the key expression — the loop variable is
-  # captured by the closure.
-  defp wrap_for_with_fragment(component_ast, for_expr) do
-    # for_expr is the parsed `:<-` AST; PLV's `for` form expects a list of
-    # generator/filter clauses, so wrap it as a single-element list.
-    for_ast = {:for, [], [for_expr, [do: component_ast]]}
-    {:fragment, for_ast}
   end
 
   defp collect_structured_attrs(attrs, state) do
@@ -1195,7 +1085,7 @@ defmodule Filament.TagEngine do
         [{name, parse_expr!(expr, state.file)}]
 
       {name, {:string, value, _meta}, _attr_meta} ->
-        [{name, value}]
+        [{name, literal_attribute(value)}]
 
       {name, nil, _attr_meta} ->
         [{name, true}]
@@ -1203,27 +1093,19 @@ defmodule Filament.TagEngine do
     |> Enum.flat_map(&transform_event_attr_for_vnode/1)
   end
 
+  # A literal attribute value is HTML source, as in HEEx: its entities are
+  # already encoded. Plain values stay portable strings; encoded ones are
+  # marked safe so the Web target emits them as written.
+  defp literal_attribute(value) do
+    if String.contains?(value, "&"), do: {:safe, String.replace(value, ~s("), "&quot;")}, else: value
+  end
+
   # Compile-time `on_*` → `phx-*` + `register_event_handler` rewrite for the
-  # vnode codegen path. Mirrors `Filament.HTMLEngine.transform_event_pair/1`'s
-  # logic so VNodeEngine-emitted attrs match the wire format the LiveView
-  # adapter dispatches through. Closure memoisation (Phase 1.4.5) then
-  # detects the `register_event_handler(fn)` call sites and wraps them with
-  # `memo_at` for stable closures across renders.
+  # vnode codegen path, so VNodeEngine-emitted attrs match the wire format
+  # the LiveView adapter dispatches through. Handlers register during the eager vnode
+  # render pass, while the component context is active.
+  # A `nil` or `false` handler omits the attribute, as HEEx omits `phx-*={nil}`.
   defp transform_event_attr_for_vnode({"on_key", v}) do
-    wrapped =
-      quote do
-        fn params ->
-          mods = %Filament.KeyModifiers{
-            ctrl: params["ctrl"] || false,
-            shift: params["shift"] || false,
-            alt: params["alt"] || false,
-            meta: params["meta"] || false
-          }
-
-          unquote(v).(params["key"], mods)
-        end
-      end
-
     # `on_key` expands into THREE attrs (`phx-hook`, `data-filament-wire`,
     # `id`) that all need to share the same wire-ref string. Each attr in the
     # vnode's attrs list compiles to an independent expression context, so a
@@ -1238,22 +1120,40 @@ defmodule Filament.TagEngine do
     # raw ref so the hook and element id stay aligned.
     group_ast =
       quote do
-        wire = Filament.Hooks.register_event_handler(unquote(wrapped))
+        case unquote(v) do
+          handler when handler in [nil, false] ->
+            []
 
-        [
-          {"phx-hook", "FilamentKey"},
-          {"data-filament-wire", wire},
-          {"id", wire}
-        ]
+          handler ->
+            wire =
+              Filament.Hooks.register_event_handler(fn params ->
+                mods = %Filament.KeyModifiers{
+                  ctrl: params["ctrl"] || false,
+                  shift: params["shift"] || false,
+                  alt: params["alt"] || false,
+                  meta: params["meta"] || false
+                }
+
+                handler.(params["key"], mods)
+              end)
+
+            [{"phx-hook", "FilamentKey"}, {"data-filament-wire", wire}, {"id", wire}]
+        end
       end
 
     [{:__attr_group__, group_ast}]
   end
 
   defp transform_event_attr_for_vnode({"on_" <> event, v}) do
-    [
-      {"phx-" <> event, quote(do: "filament:" <> Filament.Hooks.register_event_handler(unquote(v)))}
-    ]
+    value =
+      quote do
+        case unquote(v) do
+          handler when handler in [nil, false] -> nil
+          handler -> "filament:" <> Filament.Hooks.register_event_handler(handler)
+        end
+      end
+
+    [{"phx-" <> event, value}]
   end
 
   defp transform_event_attr_for_vnode(pair), do: [pair]
@@ -1347,20 +1247,8 @@ defmodule Filament.TagEngine do
         }
       end
 
-    if has_special? do
-      entry |> wrap_slot_for(special) |> maybe_wrap_if(special)
-    else
-      entry
-    end
+    if has_special?, do: wrap_special(entry, special), else: entry
   end
-
-  defp wrap_slot_for(entry, %{for: for_expr}) do
-    quote do
-      for unquote(for_expr), do: unquote(entry)
-    end
-  end
-
-  defp wrap_slot_for(entry, _special), do: entry
 
   defp parse_slot_attrs(attrs, state) do
     pairs =
@@ -1793,13 +1681,5 @@ defmodule Filament.TagEngine do
       column: meta.column,
       file: state.file,
       description: message <> ParseError.code_snippet(state.source, meta, state.indentation)
-  end
-
-  defp maybe_anno_caller(state, meta, file, line) do
-    if anno = state.tag_handler.annotate_caller(file, line) do
-      update_subengine(state, :handle_text, [meta, anno])
-    else
-      state
-    end
   end
 end
