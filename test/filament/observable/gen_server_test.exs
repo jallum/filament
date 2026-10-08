@@ -58,6 +58,27 @@ defmodule Filament.Observable.GenServerTest do
     end
   end
 
+  # Keeps a timeout once armed: zero, so it fires as soon as a handler
+  # returns it. Arming itself returns none, so only Filament's handlers can.
+  defmodule WithTimeout do
+    @moduledoc false
+    use Observable.GenServer
+
+    def start_link(test_pid), do: GenServer.start_link(__MODULE__, test_pid)
+    def init(test_pid), do: {:ok, %{test: test_pid, armed: false}}
+
+    def handle_call(:arm, _from, state), do: {:reply, :ok, %{state | armed: true}}
+
+    def handle_info(:timeout, state) do
+      send(state.test, :timed_out)
+      {:noreply, %{state | armed: false}}
+    end
+
+    @impl Observable
+    def timeout(%{armed: true}), do: 0
+    def timeout(_state), do: :infinity
+  end
+
   # --- Subscription ---
 
   test "1. subscribe returns raw initial state" do
@@ -217,5 +238,45 @@ defmodule Filament.Observable.GenServerTest do
   test "10. minimal module compiles without custom callbacks" do
     pid = start_supervised!(%{id: Minimal, start: {Minimal, :start_link, []}})
     assert Process.alive?(pid)
+  end
+
+  # --- The server's own timeout ---
+
+  test "11. a subscribe keeps the server's timeout" do
+    pid = start_supervised!({WithTimeout, self()})
+    :ok = GenServer.call(pid, :arm)
+    refute_received :timed_out
+
+    sub = %Subscriber{pid: self(), proj_keys: %{{"root", 0} => true}}
+    assert {:ok, _state} = Observable.subscribe(pid, sub)
+    assert_receive :timed_out
+  end
+
+  test "12. a projection's removal keeps the server's timeout" do
+    pid = start_supervised!({WithTimeout, self()})
+    sub = %Subscriber{pid: self(), proj_keys: %{{"root", 0} => true}}
+    {:ok, _state} = Observable.subscribe(pid, sub)
+    :ok = GenServer.call(pid, :arm)
+
+    :ok = Observable.remove_projection(pid, self(), "root", 0)
+    assert_receive :timed_out
+  end
+
+  test "13. a subscriber's exit keeps the server's timeout" do
+    pid = start_supervised!({WithTimeout, self()})
+    test = self()
+
+    subscriber =
+      spawn(fn ->
+        sub = %Subscriber{pid: self(), proj_keys: %{{"root", 0} => true}}
+        {:ok, _state} = Observable.subscribe(pid, sub)
+        send(test, :subscribed)
+        receive do: (:exit -> :ok)
+      end)
+
+    assert_receive :subscribed
+    :ok = GenServer.call(pid, :arm)
+    send(subscriber, :exit)
+    assert_receive :timed_out
   end
 end
