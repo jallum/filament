@@ -52,7 +52,7 @@ end
 What the macro injects:
 
 - `Filament.Cell` callbacks (`subscribe/3`, `unsubscribe/2`, `current/2`,
-  optional `reachable?/1`) at the module level — the GenServer becomes a
+  `whereis/1`) at the module level — the GenServer becomes a
   usable transport.
 - `handle_call({:filament_cell_subscribe, …})`,
   `handle_call({:filament_cell_current, …})` and

@@ -239,7 +239,7 @@ defmodule Filament.Hooks do
   defp resolve_source_factory(factory_fn, previous) when is_function(factory_fn, 0) do
     case previous do
       {:cell_resolved, %Filament.Source{} = cached} ->
-        if Filament.Cell.reachable?(cached), do: cached, else: factory_fn.()
+        if Filament.Cell.whereis(cached), do: cached, else: factory_fn.()
 
       _ ->
         factory_fn.()
@@ -261,7 +261,10 @@ defmodule Filament.Hooks do
 
   A static HTTP render reads the source's current value without subscribing.
   Returns `projection.(:disconnected)` when the source is `nil`, sources are
-  disconnected, or the source can't reach its underlying state.
+  disconnected, or the source can't reach its underlying state. An
+  unreachable source is retried with backoff, and when the process behind a
+  source exits (see `c:Filament.Cell.whereis/1`) the hook subscribes again,
+  reaching a server restarted under the same name.
 
   ## Example
 
@@ -311,7 +314,7 @@ defmodule Filament.Hooks do
 
         _ ->
           Filament.HookSlot.cleanup(previous)
-          observable_subscribe_fresh(cell, slot_index, ctx)
+          observable_subscribe(cell, {ctx.owner_pid, ctx.fiber_id, slot_index, monitor_source(cell)})
       end
 
     case subscription do
@@ -320,22 +323,48 @@ defmodule Filament.Hooks do
         commit_slot(slot_index, {:cell_subscribed, cell, raw, subscriber, projection, value})
         value
 
-      :disconnected ->
-        commit_slot(slot_index, :uninitialized)
+      {:disconnected, subscriber} ->
+        attempts =
+          case previous do
+            {:cell_retry, ^cell, _subscriber, n} -> n
+            _ -> 0
+          end
+
+        retry_subscribe(ctx.owner_pid, subscriber, attempts)
+        commit_slot(slot_index, {:cell_retry, cell, subscriber, attempts + 1})
         projection.(:disconnected)
     end
-  end
-
-  defp observable_subscribe_fresh(cell, slot_index, ctx) do
-    observable_subscribe(cell, {ctx.owner_pid, ctx.fiber_id, slot_index, make_ref()})
   end
 
   defp observable_subscribe(cell, subscriber) do
     case Filament.Cell.subscribe(cell, subscriber, &Function.identity/1) do
       {:ok, raw} -> {:ok, raw, subscriber}
-      :disconnected -> :disconnected
+      :disconnected -> {:disconnected, subscriber}
     end
   end
+
+  # The subscriber's ref monitors the source's process, so the owner hears
+  # `{:cell_resubscribe, ref, :process, pid, reason}` when it exits and
+  # subscribes again, reaching a restarted server.
+  defp monitor_source(cell) do
+    case Filament.Cell.whereis(cell) do
+      process when is_pid(process) or is_tuple(process) -> :erlang.monitor(:process, process, tag: :cell_resubscribe)
+      _ -> make_ref()
+    end
+  end
+
+  @retry_ms 100
+  @max_retry_ms 5_000
+
+  # Ask the owner to try again after a backoff, so a source that isn't
+  # running yet, or is restarting, connects once it's up. The message has the
+  # shape of the source's exit, so either finds the slot by its ref.
+  defp retry_subscribe(owner, {_owner, _fiber_id, _slot, ref}, attempts) when is_pid(owner) do
+    delay = min(@retry_ms * Integer.pow(2, min(attempts, 6)), @max_retry_ms)
+    Process.send_after(owner, {:cell_resubscribe, ref, :process, nil, :retry}, delay)
+  end
+
+  defp retry_subscribe(_owner, _subscriber, _attempts), do: :ok
 
   @doc """
   Register a bubble or capture-phase event handler at the next slot.

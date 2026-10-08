@@ -339,7 +339,9 @@ defmodule Filament.LiveView do
   A host process receives `{:filament_set_state, fiber_id, slot_index, token,
   value}` from `use_state` setters, and `{:cell_update, subscriber, value}`,
   `{:cell_updates, [{subscriber, value}]}` and `{:cell_resubscribe, subscriber}`
-  from cell transports.
+  from cell transports, and `{:cell_resubscribe, ref, :process, pid, reason}`
+  when a source's monitored process exits or `use_value` retries a source it
+  couldn't reach.
 
   Returns `{:rerender, tree}` when the message marked a fiber dirty, so the
   host should re-render from the root. Returns `{:ok, tree}` when no render is
@@ -376,7 +378,28 @@ defmodule Filament.LiveView do
     update_cell_slot(tree, subscriber, &{Filament.HookSlot.resubscribe(&1, subscriber), true})
   end
 
+  # A source's process exited, or a retry is due: the slot holding `ref`
+  # subscribes again on the next render.
+  def apply_message(tree, {:cell_resubscribe, ref, :process, _process, _reason}) do
+    case Enum.find_value(tree, &source_down(&1, ref)) do
+      {fiber_id, fiber, slot_index, new_slot} ->
+        {:rerender, tree |> put_slot(fiber, slot_index, new_slot) |> Reconciler.mark_dirty(fiber_id)}
+
+      nil ->
+        {:ok, tree}
+    end
+  end
+
   def apply_message(tree, _message), do: {:ok, tree}
+
+  defp source_down({fiber_id, fiber}, ref) do
+    Enum.find_value(fiber.hook_slots, fn {slot_index, slot} ->
+      case Filament.HookSlot.source_down(slot, ref) do
+        {:ok, new_slot} -> {fiber_id, fiber, slot_index, new_slot}
+        _ -> nil
+      end
+    end)
+  end
 
   defp update_cell_slot(tree, {_owner, fiber_id, slot_index, _generation} = subscriber, update) do
     with %{hook_slots: %{^slot_index => slot}} = fiber <- Map.get(tree, fiber_id),

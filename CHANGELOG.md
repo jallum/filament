@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Filament.LiveView` unmounts its tree in `terminate/2`, running effect
   cleanups when the client disconnects. `Filament.Test.unmount/1` does the
   same for a test view.
+- `use_value/2` reconnects. It monitors the process behind a source, through
+  the optional `Filament.Cell.whereis/1` callback, and subscribes again when
+  that process exits, so a server restarted under a name or via-tuple
+  reaches its readers without a reload. A subscribe that can't reach its
+  source retries with backoff (100 ms doubling to 5 s) until it connects or
+  the reader unmounts. Requires OTP 27 or later, for tagged monitors.
 
 ### Changed
 

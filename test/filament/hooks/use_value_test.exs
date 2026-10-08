@@ -356,6 +356,71 @@ defmodule Filament.Hooks.UseValueTest do
     end
   end
 
+  describe "use_value/2 when the server behind a source restarts" do
+    setup do
+      {:ok, name: :"counter_#{System.unique_integer([:positive])}"}
+    end
+
+    test "resubscribes to the restarted server", %{name: name} do
+      {:ok, _sup} = start_counter_supervisor(name, 5)
+      view = Filament.Test.mount!(CellComp.CellComp, %{cell: named_cell(name)})
+      assert Filament.Test.render_text(view) == "5"
+
+      old = GenServer.whereis(name)
+      Process.exit(old, :kill)
+      new = wait_for_restart(name, old)
+      Counter.increment(new)
+
+      assert_renders(view, "6")
+      assert map_size(cell_subscribers_in(new)) == 1
+    end
+
+    test "connects once a server that wasn't running starts", %{name: name} do
+      view = Filament.Test.mount!(CellComp.CellComp, %{cell: named_cell(name)})
+      assert Filament.Test.render_text(view) == "disconnected"
+
+      {:ok, _sup} = start_counter_supervisor(name, 3)
+      assert_renders(view, "3")
+    end
+
+    # A subscribe that timed out can still land on the server, which may
+    # broadcast before the transport's unsubscribe reaches it.
+    test "ignores an update for a subscribe that failed", %{name: name} do
+      view = Filament.Test.mount!(CellComp.CellComp, %{cell: named_cell(name)})
+      {:cell_retry, _cell, subscriber, _attempts} = view.fiber_tree["root"].hook_slots[0]
+
+      send(self(), {:cell_update, subscriber, 9})
+      assert view |> Filament.Test.update() |> Filament.Test.render_text() == "disconnected"
+    end
+
+    test "unmounting stops reconnecting", %{name: name} do
+      view = Filament.Test.mount!(CellComp.CellComp, %{cell: named_cell(name)})
+      :ok = Filament.Test.unmount(view)
+
+      {:ok, _sup} = start_counter_supervisor(name, 3)
+      Process.sleep(250)
+      assert cell_subscribers_in(GenServer.whereis(name)) == %{}
+    end
+  end
+
+  defp named_cell(name), do: Filament.Source.new(Filament.Observable.GenServer, name)
+
+  defp start_counter_supervisor(name, initial) do
+    child = %{id: Counter, start: {GenServer, :start_link, [Counter, initial, [name: name]]}}
+    Supervisor.start_link([child], strategy: :one_for_one)
+  end
+
+  defp wait_for_restart(name, old) do
+    case GenServer.whereis(name) do
+      pid when is_pid(pid) and pid != old -> pid
+      _ -> Process.sleep(5) && wait_for_restart(name, old)
+    end
+  end
+
+  defp assert_renders(view, text) do
+    Filament.Test.eventually(fn -> view |> Filament.Test.update() |> Filament.Test.render_text() == text end)
+  end
+
   defp cell_subscribers_in(server) do
     # Wait for casts already sent, such as an unsubscribe.
     :sys.get_state(server)

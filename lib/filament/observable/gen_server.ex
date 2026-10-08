@@ -79,14 +79,12 @@ defmodule Filament.Observable.GenServer do
   end
 
   @doc """
-  Optional `Filament.Cell` callback. Returns `true` if the underlying
-  GenServer is reachable — for raw pids, checks `Process.alive?/1`;
-  registered names and via-tuples are always treated as reachable
-  (their lookup happens at call time anyway).
+  `Filament.Cell` callback: the server's pid, or `nil` when it isn't running.
+  Names and via-tuples resolve to whichever process is registered now.
   """
   @impl Filament.Cell
-  def reachable?(server) when is_pid(server), do: Process.alive?(server)
-  def reachable?(server), do: not is_nil(GenServer.whereis(server))
+  def whereis(server) when is_pid(server), do: if(Process.alive?(server), do: server)
+  def whereis(server), do: GenServer.whereis(server)
 
   defmacro __using__(_opts) do
     quote do

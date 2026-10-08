@@ -77,10 +77,17 @@ defmodule Filament.Cell do
   """
   @callback current(transport_data(), projection()) :: projected() | :disconnected
 
-  @doc "Whether the transport can still be reached. Defaults to `true` when not defined."
-  @callback reachable?(transport_data()) :: boolean()
+  @doc """
+  The process holding the cell's state, or `nil` when it isn't running.
 
-  @optional_callbacks reachable?: 1
+  `use_value/2` monitors this process and subscribes again when it exits, so
+  a restarted server reaches its readers; `use_source/1` calls a factory again
+  when it returns `nil`. Without this callback a source is always reachable and
+  its readers learn of a restart only by rendering.
+  """
+  @callback whereis(transport_data()) :: pid() | {atom(), node()} | nil
+
+  @optional_callbacks whereis: 1
 
   @doc """
   Subscribe `subscriber` to `source` with a projection. See the callback
@@ -104,12 +111,12 @@ defmodule Filament.Cell do
   end
 
   @doc """
-  Optional reachability check used by `use_source/1` to decide whether a
-  cached source's underlying transport is still alive. Transports may
-  override `reachable?/1`; the default returns `true`.
+  The process holding `source`'s state, `nil` when it isn't running, or
+  `:unknown` when the transport doesn't implement `c:whereis/1`.
   """
-  @spec reachable?(t()) :: boolean()
-  def reachable?(%Filament.Source{transport: t, data: d}) do
-    if function_exported?(t, :reachable?, 1), do: t.reachable?(d), else: true
+  @spec whereis(t()) :: pid() | {atom(), node()} | nil | :unknown
+  def whereis(%Filament.Source{transport: t, data: d}) do
+    # function_exported?/3 is false until the module is loaded.
+    if Code.ensure_loaded?(t) and function_exported?(t, :whereis, 1), do: t.whereis(d), else: :unknown
   end
 end

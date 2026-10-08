@@ -235,11 +235,15 @@ source = Filament.Source.new(MyApp.AgentCell, agent)
 count = use_value(source, & &1)
 ```
 
-Transports may also implement the optional `reachable?/1` callback —
-called by `use_source/1` to decide whether a cached source's underlying
-state is still alive. The default returns `true` (assume always
-reachable); the GenServer transport overrides it to check `Process.alive?`
-on raw pids.
+Transports may also implement the optional `whereis/1` callback, returning
+the process that holds the cell's state, or `nil` when it isn't running.
+`use_value/2` monitors that process: when it exits, the reader subscribes
+again, so a server restarted under a name reaches its readers. A subscribe
+that can't reach the source retries with backoff (100 ms doubling to 5 s)
+until it connects or the reader unmounts. `use_source/1` calls a factory
+again when `whereis/1` returns `nil`. Without the callback, a source is
+always treated as reachable and its readers aren't told when it restarts.
+The GenServer transport resolves pids, names and via-tuples.
 
 ## Naming: `use_state` stays
 

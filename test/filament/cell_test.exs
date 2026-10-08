@@ -129,6 +129,26 @@ defmodule Filament.CellTest do
     end
   end
 
+  describe "Cell.whereis/1" do
+    test "is :unknown for a transport without the callback" do
+      {:ok, agent} = TestCell.start_link(%{})
+      assert Cell.whereis(Filament.Source.new(TestCell, agent)) == :unknown
+    end
+
+    @tag :tmp_dir
+    test "loads a transport module that isn't loaded yet", %{tmp_dir: dir} do
+      [{mod, beam}] = Code.compile_string("defmodule Filament.CellTest.Lazy, do: def(whereis(pid), do: pid)")
+      File.write!(Path.join(dir, "#{mod}.beam"), beam)
+      :code.purge(mod)
+      :code.delete(mod)
+      Code.prepend_path(dir)
+      on_exit(fn -> Code.delete_path(dir) end)
+
+      refute :code.is_loaded(mod)
+      assert Cell.whereis(Filament.Source.new(mod, self())) == self()
+    end
+  end
+
   describe "change-or-bust notification" do
     test "subscriber receives an update when the projection changes" do
       {:ok, agent} = TestCell.start_link(%{count: 0, name: "alice"})
