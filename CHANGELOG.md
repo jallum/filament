@@ -5,31 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.6] - 2026-10-08
 
 ### Added
 
 - An observable server can keep a GenServer timeout. `Filament.Observable`
-  has an optional `timeout/1` callback, `:infinity` by default. Filament's
-  own handlers (subscribe, projection removal, a subscriber's `:DOWN`)
-  return the timeout it gives. Before this, any of those messages
-  arriving while a server waited on `{:noreply, state, ms}` cancelled the
-  timeout.
+  has a new optional `timeout/1` callback, `:infinity` by default.
+  Filament's own handlers (subscribe, projection removal, a subscriber's
+  `:DOWN`) now return the timeout it gives. Before this, any of those
+  messages arriving while a server waited on `{:noreply, state, ms}`
+  cancelled the timeout, so a held change could wait indefinitely (#32).
 
-### Changed
+  ```elixir
+  defmodule Batcher do
+    use Filament.Observable.GenServer
 
-### Deprecated
+    @impl Filament.Observable
+    def timeout(%{pending: []}), do: :infinity
+    def timeout(_state), do: 50
+  end
+  ```
 
-### Removed
+- Inline markup inside a module component tag is passed to the component
+  as its `children` prop, rendered with `{children}` like any other prop.
+  Before this, the markup had to be passed through an assigns variable
+  (#35).
+
+  ```elixir
+  ~F"<Page><h1>{title}</h1></Page>"
+
+  # in Page:
+  def render(%{children: children}), do: ~F"<main>{children}</main>"
+  ```
 
 ### Fixed
 
-- Preserve conditional branches and bindings when preparing loop components and event handlers.
-- Pass inline markup to module components as their children prop, without requiring an assigns variable.
-- Skip observable rerenders when projected values are unchanged, retaining fresh raw state and current projection closures.
-- Skip dead observable subscribers quietly while their monitor cleanup is pending.
-
-### Security
+- A component using `use_observable/2` with a projection no longer
+  re-renders when every projected value is unchanged (`===`) after a
+  server update. The latest raw state is still retained, and the
+  projection closure is refreshed on every render, so a later local change
+  (such as a filter) projects against fresh data (#34).
+- An observable server no longer logs a "mailbox saturated (depth=dead)"
+  warning or attempts a resubscribe when notifying a subscriber that has
+  already exited; it is skipped quietly until its `:DOWN` cleanup removes
+  it (#33).
+- Components and event handlers inside `:for` / `{for}` loops now stay
+  behind their enclosing `{if}` / `{case}` branches. Before this, a
+  component under a false `{if}` in a loop could still render, and a
+  handler or component using a variable bound by a `{case}` pattern could
+  lose that binding (#36).
 
 ## [0.5.5] - 2026-10-07
 
