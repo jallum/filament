@@ -7,16 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- An observable server can keep a GenServer timeout. `Filament.Observable`
-  has an optional `timeout/1` callback, `:infinity` by default. Filament's
-  own handlers (cell subscribe, current-value reads, unsubscribe, a
-  subscriber's `:DOWN`)
-  return the timeout it gives. Before this, any of those messages
-  arriving while a server waited on `{:noreply, state, ms}` cancelled the
-  timeout.
-
 ### Changed
 
 - **Breaking:** `use_observable` now goes through `Filament.Cell`. The hook
@@ -42,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than the old `%Subscriber{}` struct. Servers that read
   `subscriber.pid` need to destructure the tuple instead.
 
+- The 0.5.6 observable fixes apply on the cell transport: the injected
+  cell subscribe, current-value, unsubscribe and `:DOWN` handlers keep
+  the server's `timeout/1`; a cell subscriber that has exited is skipped
+  quietly until its `:DOWN`; and `use_value` skips the render when every
+  projected value is unchanged (`===`), keeping the fresh raw value for
+  the next render.
+
 ### Removed
 
 - `Filament.Observable.Subscriber` struct and the entire parallel
@@ -56,19 +53,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `session_token` fields. Tests should construct cells against stub pids
   directly rather than relying on identifier-to-pid swap.
 
+## [0.5.6] - 2026-10-08
+
+### Added
+
+- An observable server can keep a GenServer timeout. `Filament.Observable`
+  has a new optional `timeout/1` callback, `:infinity` by default.
+  Filament's own handlers (subscribe, projection removal, a subscriber's
+  `:DOWN`) now return the timeout it gives. Before this, any of those
+  messages arriving while a server waited on `{:noreply, state, ms}`
+  cancelled the timeout, so a held change could wait indefinitely (#32).
+
+  ```elixir
+  defmodule Batcher do
+    use Filament.Observable.GenServer
+
+    @impl Filament.Observable
+    def timeout(%{pending: []}), do: :infinity
+    def timeout(_state), do: 50
+  end
+  ```
+
+- Inline markup inside a module component tag is passed to the component
+  as its `children` prop, rendered with `{children}` like any other prop.
+  Before this, the markup had to be passed through an assigns variable
+  (#35).
+
+  ```elixir
+  ~F"<Page><h1>{title}</h1></Page>"
+
+  # in Page:
+  def render(%{children: children}), do: ~F"<main>{children}</main>"
+  ```
+
 ### Fixed
 
-- Pass inline markup to module components as their `children` prop.
-  Before this, text or tags between a component's open and close tags
-  outside any `<:slot>` failed to compile.
-- Skip `use_value` rerenders when the projected value is unchanged. The
-  slot still keeps the fresh raw value, so the next render projects from
-  current state.
-- Skip dead cell subscribers quietly while their monitor cleanup is
-  pending, instead of logging them as saturated. The subscriber's
-  `:DOWN` removes the entry and runs `handle_unsubscribe/2`.
-
-### Security
+- A component using `use_observable/2` with a projection no longer
+  re-renders when every projected value is unchanged (`===`) after a
+  server update. The latest raw state is still retained, and the
+  projection closure is refreshed on every render, so a later local change
+  (such as a filter) projects against fresh data (#34).
+- An observable server no longer logs a "mailbox saturated (depth=dead)"
+  warning or attempts a resubscribe when notifying a subscriber that has
+  already exited; it is skipped quietly until its `:DOWN` cleanup removes
+  it (#33).
+- Components and event handlers inside `:for` / `{for}` loops now stay
+  behind their enclosing `{if}` / `{case}` branches. Before this, a
+  component under a false `{if}` in a loop could still render, and a
+  handler or component using a variable bound by a `{case}` pattern could
+  lose that binding (#36).
 
 ## [0.5.5] - 2026-10-07
 
