@@ -3,20 +3,20 @@ defmodule Collaboration.DocumentServer do
   Document Server implementing both Observable and hold management.
 
   DESIGN NOTE: This server combines Filament.Observable.GenServer with custom
-  hold management for document locks. The Observable macro handles subscriber
-  tracking and presence counting, while we manually manage the document lock
-  state. When subscribers holding the lock disconnect, the :DOWN handler releases
-  the lock automatically.
+  hold management for document locks. The Observable macro monitors reader
+  subscriptions; this module groups those readers by owner for presence and
+  releases a lock when its owner's last reader leaves.
   """
   use Filament.Observable.GenServer
 
-  defstruct [:doc_id, content: "", lock_holder: nil, presence: 0]
+  defstruct [:doc_id, content: "", lock_holder: nil, presence: 0, owners: %{}]
 
   @type t :: %__MODULE__{
           doc_id: String.t(),
           content: String.t(),
           lock_holder: pid() | nil,
-          presence: non_neg_integer()
+          presence: non_neg_integer(),
+          owners: %{optional(pid()) => pos_integer()}
         }
 
   def start_link(opts \\ []) do
@@ -42,12 +42,14 @@ defmodule Collaboration.DocumentServer do
     {:ok, %__MODULE__{doc_id: doc_id}}
   end
 
-  # Observable callback — called when a subscriber joins.
+  # Multiple read hooks from one LiveView still represent one viewer.
   @impl Filament.Observable
-  def handle_subscribe(_subscriber, state) do
-    new_state = %{state | presence: state.presence + 1}
+  def handle_subscribe(subscriber, state) do
+    pid = subscriber_owner(subscriber)
+    owners = Map.update(state.owners, pid, 1, &(&1 + 1))
+    new_state = %{state | owners: owners, presence: map_size(owners)}
     initial_view = observable_view(new_state)
-    notify_observers(initial_view)
+    if new_state.presence != state.presence, do: notify_observers(initial_view)
     {:ok, initial_view, new_state}
   end
 
@@ -55,18 +57,27 @@ defmodule Collaboration.DocumentServer do
   @impl Filament.Observable
   def handle_current(state), do: {:ok, observable_view(state), state}
 
-  # Release the lock when its holder's subscription ends. Cell subscribers
-  # are tuples led by the owner pid, which is the lock holder.
+  # Release a viewer's lock only when its last read hook leaves.
   @impl Filament.Observable
   def handle_unsubscribe(subscriber, state) do
-    pid = elem(subscriber, 0)
+    pid = subscriber_owner(subscriber)
 
     new_state =
-      state
-      |> maybe_release_lock(pid)
-      |> decrement_presence()
+      case Map.get(state.owners, pid) do
+        nil ->
+          state
 
-    notify_observers(observable_view(new_state))
+        1 ->
+          owners = Map.delete(state.owners, pid)
+          %{maybe_release_lock(state, pid) | owners: owners, presence: map_size(owners)}
+
+        count ->
+          %{state | owners: Map.put(state.owners, pid, count - 1)}
+      end
+
+    if observable_view(new_state) != observable_view(state),
+      do: notify_observers(observable_view(new_state))
+
     {:ok, new_state}
   end
 
@@ -112,9 +123,9 @@ defmodule Collaboration.DocumentServer do
     end
   end
 
-  defp decrement_presence(state) do
-    %{state | presence: max(0, state.presence - 1)}
-  end
+  defp subscriber_owner({pid, _, _, _}) when is_pid(pid), do: pid
+  defp subscriber_owner({pid, _, _}) when is_pid(pid), do: pid
+  defp subscriber_owner(_), do: self()
 
   def via_registry(doc_id) do
     {:via, Registry, {Collaboration.Registry, doc_id}}

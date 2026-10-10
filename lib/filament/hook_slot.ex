@@ -9,6 +9,7 @@ defmodule Filament.HookSlot do
       this mount, so a setter kept from an earlier one is ignored.
     * `{deps, cleanup}` — `use_effect`. `cleanup` is a 0-arity fn or `nil`.
     * `{:cell_resolved, cell}` — `use_source` (resolved cell handle).
+    * `{:cell_resolved, cell, key}` — keyed factory source.
     * `{:cell_subscribed, cell, raw, subscriber, projection, value}` — `use_value`;
       subscriber includes a generation token; `projection` and `value` are
       from the last render, so an update can tell whether the value changed.

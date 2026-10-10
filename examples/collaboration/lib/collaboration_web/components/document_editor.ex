@@ -2,22 +2,18 @@ defmodule CollaborationWeb.Components.DocumentEditor do
   @moduledoc false
   use Filament.Component
 
+  import CollaborationWeb.Hooks, only: [use_document: 1]
+
   alias Collaboration.DocumentServer
 
   defcomponent do
     prop(:doc_id, :string, required: true)
 
     def render(%{doc_id: doc_id}) do
-      source = use_source(DocumentServer.cell(doc_id))
+      {document, doc_view} = use_document(doc_id)
 
-      # A neutral struct for :disconnected keeps the full document structure
-      # in the HTML even when the server is unreachable.
-      doc_view =
-        use_value(source, fn
-          :disconnected -> %{presence: 0, locked: false, lock_holder: nil}
-          s -> s
-        end)
-
+      # use_document returns a neutral struct for :disconnected, so the HTML
+      # keeps the full document structure even when the server is unreachable.
       ~F"""
       <div class="doc-editor">
         <div class="doc-header">
@@ -34,7 +30,7 @@ defmodule CollaborationWeb.Components.DocumentEditor do
             {if doc_view.lock_holder == self() do}
               <span class="lock-badge locked">Editing</span>
               <span class="lock-holder">held by you</span>
-              <button class="btn btn-release" on_click={fn -> DocumentServer.release_lock(source.data, self()) end}>Release</button>
+              <button class="btn btn-release" on_click={fn -> DocumentServer.release_lock(document, self()) end}>Release</button>
             {else}
               <span class="lock-badge locked">Locked</span>
               <span class="lock-holder">held by {format_holder(doc_view.lock_holder)}</span>
@@ -42,7 +38,7 @@ defmodule CollaborationWeb.Components.DocumentEditor do
             {end}
           {else}
             <span class="lock-badge unlocked">Available</span>
-            <button class="btn btn-primary" on_click={fn -> DocumentServer.acquire_lock(source.data, self()) end}>Edit</button>
+            <button class="btn btn-primary" on_click={fn -> DocumentServer.acquire_lock(document, self()) end}>Edit</button>
           {end}
         </div>
       </div>

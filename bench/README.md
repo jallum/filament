@@ -108,3 +108,43 @@ Timing reports record `json_library: "Jason"`. These measurements retain Jason
 for continuity with archived baselines; the example applications already configure
 Phoenix with Elixir `JSON`. Compare encoder changes separately using the same diff.
 
+## Latest-value delivery proof
+
+`ERL_FLAGS='+S 4:4' mix run bench/latest_delivery.exs` compares the current transport
+with the isolated `support/latest_delivery.exs` experiment. An owner deliberately
+leaves update messages unread while the producer performs 1,000 synchronous
+writes. Setup, recovery, and final-value checks are outside the measured writes.
+The printed write times are diagnostic samples, not stable Benchee baselines.
+
+The experiment permits one batch in flight **per producer/owner pair**, regardless
+of cell count. Each cell stores its latest projected value and acknowledged value.
+While a batch is outstanding, writes overwrite the latest value without sending.
+Acknowledgment advances only the matching cell generations, then sends the newest
+values that differ from the acknowledged snapshot. A batch token prevents duplicate
+or delayed acknowledgments from clearing a newer batch. Strict equality preserves
+integer/float distinctions. Returning to the initial value still sends a correction
+if the consumer received an intervening value.
+
+Unsubscribe removes the cell, but keeps any outstanding batch until acknowledgment
+or owner death. This prevents repeated unsubscribe/resubscribe cycles from opening
+new delivery slots and accumulating stale messages. Replacement cells receive a
+fresh generation and synchronous initial snapshot; old batches cannot overwrite
+that snapshot. Each owner has one monitor, including owners whose last cell was
+removed while a batch was outstanding. Owner death removes its flight and cells.
+
+In the worked example, the current transport with #23's episode fix queues 101
+messages for one cell and 1,100 for 1,000 cells: 100 ordinary batches followed by
+one recovery notice per cell. The experiment queues one batch in either case,
+then automatically delivers the final value when acknowledged. Tests exercise
+final-value delivery, duplicate/foreign acknowledgments, projection replacement,
+unsubscribe/resubscribe, partial removal, strict/projected equality, healthy owners,
+and dead owners. This experiment does not change production delivery semantics.
+
+Production integration must acknowledge **after processing**, including the host's
+render and synchronous effects, rather than when receiving the message. LiveView
+and LiveComponent adapters need that boundary; messages discarded because their
+cell generations are stale must still release their batch. Hook projections should
+continue to run at their existing boundary. Intermediate observable values may be
+coalesced; applications needing every transition need an event-stream abstraction.
+Multiple independent producers can each have one batch outstanding to the same
+owner; a global owner-wide limit would require coordination between producers.
