@@ -2,7 +2,6 @@ defmodule Filament.InlineChildrenTest do
   use ExUnit.Case, async: true
 
   alias Filament.Reconciler
-  alias Phoenix.HTML.Safe
 
   defmodule Page do
     @moduledoc false
@@ -74,26 +73,7 @@ defmodule Filament.InlineChildrenTest do
     assert html(rendered) == "<main><h1>two</h1></main>"
   end
 
-  defmodule Card do
-    @moduledoc false
-    use Phoenix.Component
-
-    def card(assigns), do: ~H"<aside>{render_slot(@inner_block)}</aside>"
-  end
-
-  test "function components keep Phoenix inner-block slots" do
-    import Filament.SigilF
-
-    assigns = %{__changed__: nil, x: "hello"}
-
-    rendered = ~F"""
-    <Filament.InlineChildrenTest.Card.card><h1>{@x}</h1></Filament.InlineChildrenTest.Card.card>
-    """
-
-    assert String.trim(html(rendered)) == "<aside><h1>hello</h1></aside>"
-  end
-
   defp text(view, selector), do: view.rendered_html |> Floki.parse_fragment!() |> Floki.find(selector) |> Floki.text()
 
-  defp html(rendered), do: rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+  defp html(rendered), do: rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
 end

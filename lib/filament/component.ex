@@ -8,7 +8,15 @@ defmodule Filament.Component do
   """
 
   @type props() :: map()
-  @type rendered() :: Phoenix.LiveView.Rendered.t()
+
+  @typedoc """
+  What `render/1` is allowed to return. The `~F` sigil expands to a
+  `Filament.VNode.t()` tuple (the common case); a `~H`-rendered HEEx
+  template returns `Phoenix.LiveView.Rendered.t()`; bare interpolations
+  (e.g. `~F"{count}"`) evaluate to whatever scalar the expression
+  produces. The renderer accepts any of these.
+  """
+  @type rendered() :: Filament.VNode.t() | Phoenix.LiveView.Rendered.t() | term()
 
   @callback render(props()) :: rendered()
 

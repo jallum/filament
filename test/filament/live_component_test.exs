@@ -7,6 +7,7 @@ defmodule Filament.LiveComponentTest do
 
   defp test_socket(assigns \\ %{}) do
     %Socket{
+      transport_pid: self(),
       assigns: Map.merge(%{__changed__: %{}}, assigns),
       private: %{
         live_temp: %{},
@@ -88,8 +89,19 @@ defmodule Filament.LiveComponentTest do
       rendered = socket.assigns._filament_rendered
       assert %Phoenix.LiveView.Rendered{} = rendered
 
-      html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+      html = rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
       assert html =~ "World"
+    end
+
+    # Phoenix renders a LiveComponent only when its output has one static tag
+    # at the root.
+    test "marks a component rendering one element as rooted" do
+      {:ok, socket} = Filament.LiveComponent.mount(test_socket())
+
+      for component <- [LabelComp, CounterComp] do
+        {:ok, socket} = Filament.LiveComponent.update(%{id: "t", component: component}, socket)
+        assert socket.assigns._filament_rendered.root
+      end
     end
 
     test "props are passed to the component" do
@@ -131,7 +143,7 @@ defmodule Filament.LiveComponentTest do
       assigns = %{id: "t", component: LabelComp, label: "X"}
       {:ok, socket} = Filament.LiveComponent.update(assigns, socket)
 
-      msg = {:filament_set_state, "nonexistent_fiber", 0, 42}
+      msg = {:filament_set_state, "nonexistent_fiber", 0, make_ref(), 42}
       {:ok, socket2} = Filament.LiveComponent.update(%{filament_msg: msg}, socket)
 
       # Socket unchanged
@@ -171,5 +183,94 @@ defmodule Filament.LiveComponentTest do
       {:noreply, ^socket} =
         Filament.LiveComponent.handle_event("filament:no_colon", %{}, socket)
     end
+  end
+
+  defmodule Store do
+    @moduledoc false
+    use Filament.Observable.GenServer
+
+    def start_link(_), do: GenServer.start_link(__MODULE__, 0)
+    def init(value), do: {:ok, value}
+
+    def handle_call({:set, value}, _from, _) do
+      notify_observers(value)
+      {:reply, :ok, value}
+    end
+  end
+
+  defmodule ValueChild do
+    @moduledoc false
+    use Filament.Component
+
+    def render(%{source: source}) do
+      value = use_value(source, &Function.identity/1)
+      {local, _} = use_state(0)
+      {:element, "span", [], ["#{value}/#{local}"]}
+    end
+  end
+
+  defmodule ValueRoot do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      prop(:source, :any, required: true)
+      prop(:observer, :any, required: true)
+
+      def render(%{observer: observer} = props) do
+        send(observer, :root_rendered)
+
+        {:element, "section", [],
+         [
+           {:text, "wrapper"},
+           {:component, ValueChild, props, "a"},
+           {:component, ValueChild, props, "b"}
+         ]}
+      end
+    end
+  end
+
+  test "batched Cell and child state updates preserve the full embedded tree" do
+    server = start_supervised!(Store)
+    {:ok, socket} = Filament.LiveComponent.mount(test_socket())
+
+    {:ok, socket} =
+      Filament.LiveComponent.update(
+        %{component: ValueRoot, source: Store.cell(server), observer: self()},
+        socket
+      )
+
+    assert_receive :root_rendered
+    GenServer.call(server, {:set, 10})
+    assert_receive {:cell_updates, updates}
+    updates = updates ++ [{{self(), "missing", 0}, 99}]
+    {:ok, socket} = Filament.LiveComponent.update(%{filament_msg: {:cell_updates, updates}}, socket)
+    # Only the children read the value; the root's inputs are unchanged.
+    refute_receive :root_rendered
+
+    assert socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary() ==
+             "<section>wrapper<span>10/0</span><span>10/0</span></section>"
+
+    [child | _] = socket.assigns._filament_tree["root"].children
+
+    {:ok, socket} =
+      Filament.LiveComponent.update(
+        %{filament_msg: Filament.StateHelper.set_state(socket.assigns._filament_tree, child, 1, 7)},
+        socket
+      )
+
+    refute_receive :root_rendered
+    html = socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+    assert html =~ "<section>wrapper"
+    assert html =~ "<span>10/7</span>"
+    assert html =~ "<span>10/0</span>"
+
+    assert {:ok, ^socket} =
+             Filament.LiveComponent.update(
+               %{filament_msg: {:cell_updates, [{{self(), "missing", 0}, 99}]}},
+               socket
+             )
+
+    refute_receive :root_rendered
   end
 end

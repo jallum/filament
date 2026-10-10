@@ -1,16 +1,19 @@
 defmodule Filament.Bench.Compat do
   @moduledoc false
   @substrate Code.ensure_loaded?(Filament.Source)
+  @compiled_web Code.ensure_loaded?(Filament.Template)
   @direct_web Code.ensure_loaded?(Filament.Web) and function_exported?(Filament.Web, :render, 2)
 
-  @implementation if(@direct_web,
-                    do: "cell-web-direct",
-                    else: if(@substrate, do: "cell-vnode", else: "observable-rendered")
-                  )
+  @implementation (cond do
+                     @compiled_web -> "cell-web-compiled"
+                     @direct_web -> "cell-web-direct"
+                     @substrate -> "cell-vnode"
+                     true -> "observable-rendered"
+                   end)
   def implementation, do: @implementation
 
   def render_options do
-    if @direct_web, do: [owner_pid: self(), target: Filament.Web], else: [owner_pid: self()]
+    if @compiled_web or @direct_web, do: [owner_pid: self(), target: Filament.Web], else: [owner_pid: self()]
   end
 
   if @substrate do
@@ -19,17 +22,28 @@ defmodule Filament.Bench.Compat do
 
     def rendered(value), do: Filament.Web.to_rendered(value)
 
-    def apply_message(tree, {:cell_update, subscriber, value}) do
-      {:ok, updated, _} = Filament.LiveView.apply_cell_update(tree, subscriber, value)
-      {updated, 1}
-    end
+    if Code.ensure_loaded?(Filament.LiveView) and function_exported?(Filament.LiveView, :apply_message, 2) do
+      def apply_message(tree, {:cell_update, _, _} = message), do: {rerender(tree, message), 1}
+      def apply_message(tree, {:cell_updates, updates} = message), do: {rerender(tree, message), length(updates)}
+      def apply_message(_tree, message), do: raise("unexpected transport message: #{inspect(message)}")
 
-    def apply_message(tree, {:cell_updates, updates}) do
-      {:ok, updated, _} = Filament.LiveView.apply_cell_updates(tree, updates)
-      {updated, length(updates)}
-    end
+      defp rerender(tree, message) do
+        {:rerender, updated} = Filament.LiveView.apply_message(tree, message)
+        updated
+      end
+    else
+      def apply_message(tree, {:cell_update, subscriber, value}) do
+        {:ok, updated, _} = Filament.LiveView.apply_cell_update(tree, subscriber, value)
+        {updated, 1}
+      end
 
-    def apply_message(_tree, message), do: raise("unexpected transport message: #{inspect(message)}")
+      def apply_message(tree, {:cell_updates, updates}) do
+        {:ok, updated, _} = Filament.LiveView.apply_cell_updates(tree, updates)
+        {updated, length(updates)}
+      end
+
+      def apply_message(_tree, message), do: raise("unexpected transport message: #{inspect(message)}")
+    end
 
     def subscription_count do
       map_size(Process.get(:__filament_cell_subscribers__, %{}))
@@ -55,6 +69,28 @@ defmodule Filament.Bench.Compat do
       |> Process.get(%{})
       |> Enum.reduce(0, fn {_, subscriber}, count -> count + map_size(subscriber.proj_keys) end)
     end
+  end
+
+  # use_state slots are {:state, value, setter, token} since 0.6 and
+  # {value, setter} before; the setter message carries the value last.
+  def setter({:state, _value, setter, _token}), do: setter
+  def setter({_value, setter}), do: setter
+
+  # Writes a use_state slot as its setter's message would, marking the fiber
+  # dirty where components render only when their inputs change.
+  def put_state(tree, fiber_id, slot, value) do
+    tree
+    |> update_in([fiber_id, Access.key!(:hook_slots), slot], &put_slot_value(&1, value))
+    |> mark_dirty(fiber_id)
+  end
+
+  defp put_slot_value({:state, _, setter, token}, value), do: {:state, value, setter, token}
+  defp put_slot_value({_, setter}, value), do: {value, setter}
+
+  if Code.ensure_loaded?(Filament.Reconciler) and function_exported?(Filament.Reconciler, :mark_dirty, 2) do
+    defp mark_dirty(tree, fiber_id), do: Filament.Reconciler.mark_dirty(tree, fiber_id)
+  else
+    defp mark_dirty(tree, _fiber_id), do: tree
   end
 
   def drain(tree, messages \\ 0, updates \\ 0) do

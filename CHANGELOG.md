@@ -5,6 +5,150 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- A target-independent vnode renderer and `Filament.Core` event dispatcher,
+  with capture/bubble phases and `stop_propagation/1`. Phoenix LiveView and
+  LiveComponent convert resolved vnodes through `Filament.Web`.
+- `%Filament.Source{}` and the `Filament.Cell` transport behaviour for reactive
+  values beyond GenServers.
+- `use_source/1` to bind a source and `use_value/2` to subscribe and project
+  its value.
+- `Filament.LiveView` unmounts its tree in `terminate/2`, running effect
+  cleanups when the client disconnects. `Filament.Test.unmount/1` does the
+  same for a test view.
+- `use_value/2` reconnects. It monitors the process behind a source, through
+  the optional `Filament.Cell.whereis/1` callback, and subscribes again when
+  that process exits, so a server restarted under a name or via-tuple
+  reaches its readers without a reload. A subscribe that can't reach its
+  source retries with backoff (100 ms doubling to 5 s) until it connects or
+  the reader unmounts. Requires OTP 27 or later, for tagged monitors.
+
+### Changed
+
+- **Breaking:** `use_observable` now goes through `Filament.Cell`. The hook
+  takes a cell tuple `{transport, data}` (or a 0-arity factory returning
+  one) instead of a raw GenServer reference. For an observable GenServer
+  the migration is mechanical — wrap the server pid in a tuple:
+
+  ```elixir
+  # Before
+  count = use_observable(server, fn :disconnected -> 0; s -> s.count end)
+
+  # After
+  cell  = {Filament.Observable.GenServer, server}
+  count = use_observable(cell,   fn :disconnected -> 0; s -> s.count end)
+  ```
+
+  The factory form (`use_observable/1`) returns the cell, which can then
+  be passed as a prop to children that subscribe with their own
+  projections.
+
+- `Filament.Observable.GenServer.handle_unsubscribe/2` is now invoked
+  with the cell-subscriber tuple `{owner_pid, fiber_id, slot_index}`
+  rather than the old `%Subscriber{}` struct. Servers that read
+  `subscriber.pid` need to destructure the tuple instead.
+
+- **Breaking:** components render only when their inputs change. A parent's
+  render reuses each child whose props are unchanged (`===`), with its whole
+  subtree; a child's state or `use_value` update renders that child alone,
+  not its ancestors; and setting state to the value it holds renders
+  nothing. Closures in props compare equal when they come from the same
+  `fn` and capture equal values. A component that read anything else during
+  render (ETS, the process dictionary, a GenServer call, a render-prop
+  function reading such data) and relied on an unrelated render to refresh
+  must take that data as a prop, state or `use_value` instead. This replaces
+  0.5.x's compiler-generated `memo_at` child memoization.
+- **Breaking:** `use_state` setters send
+  `{:filament_set_state, fiber_id, slot_index, token, value}`. The token
+  identifies the component instance, so a setter kept from an unmounted
+  component no longer writes into one remounted at the same position. Hosts
+  forwarding messages to `Filament.LiveComponent` should match on the first
+  element rather than the tuple size:
+
+  ```elixir
+  def handle_info(msg, socket)
+      when elem(msg, 0) in [:filament_set_state, :cell_update, :cell_updates, :cell_resubscribe] do
+    Phoenix.LiveView.send_update(Filament.LiveComponent, id: "cart", filament_msg: msg)
+    {:noreply, socket}
+  end
+  ```
+- **Breaking:** components rendered by the same parent component with the
+  same module and `:key` raise `ArgumentError`
+  instead of sharing one fiber and its state.
+- A repeat subscribe under the same identity, as after a saturation notice, is
+  a refresh: it calls neither `handle_subscribe/2` nor `handle_unsubscribe/2`,
+  so held resources survive, and it replies with `handle_current/1`. The
+  default `handle_subscribe/2` accepts with `handle_current/1`'s value, so a
+  server publishing something other than its whole state overrides
+  `handle_current/1` alone.
+- `Filament.Observable.GenServer` wraps the module's own `handle_info/2`
+  instead of adding clauses in front of it: the module still receives its own
+  `:DOWN` messages, and a module without `handle_info/2` logs unexpected
+  messages as `GenServer` does.
+- Effects run in declaration order, a parent's before its children's.
+- `Filament.Observable.GenServer` receives unsubscribes as a cast, so
+  unmounting doesn't wait on a busy server. A later call from the same owner
+  still sees the unsubscribe applied.
+- The static HTTP render reads each source's current value
+  (`handle_current/1`) instead of subscribing. Under HTTP keep-alive the static
+  render runs in the connection's process, so its subscriptions outlived the
+  request; presence servers also counted the static render as a viewer.
+  `static_subscribe: false` still skips reading sources during that render.
+
+### Fixed
+
+- `handle_subscribe/2` returning `{:error, reason, state}` reads as
+  `:disconnected`, as documented, instead of crashing the server.
+- Subscribers with identities other than the hook tuple receive updates at
+  the subscribing process.
+- A subscribe that times out removes the subscription the server may still
+  make.
+- `on_click={nil}` and other `on_*` attributes given `nil` or `false` omit the
+  attribute, as HEEx omits `phx-click={nil}`, instead of raising.
+- `:if` beside `:for` on components and slot entries compiles and filters
+  each iteration.
+- Attribute names, event references, and `data`/`aria`/`phx` keyword values
+  are escaped as HEEx escapes them, and literal attribute values render as
+  written.
+- Send saturation recovery notices once per episode, resuming delivery from fresh state after resubscription.
+- Removed descendants run cleanup exactly once; keyed descendants retain
+  state, and stale messages from replaced subscriptions are ignored.
+- LiveComponent handles batched Cell updates while preserving its root output.
+- A cell server no longer crashes notifying a subscriber on another node.
+- A `Filament.LiveView` receiving a message it doesn't handle logs it and
+  continues, as Phoenix does, instead of crashing. A view with its own
+  `handle_info/2` ends with `def handle_info(msg, socket), do: super(msg, socket)`.
+- `Filament.LiveComponent` remounts when its `component` assign changes,
+  instead of rendering the new component with the old one's tree.
+- HTML loop `:key` expressions are evaluated in generator scope, avoiding
+  unused-variable warnings for bindings used only by the key.
+- The 0.5.6 observable fixes apply on the cell transport: the injected
+  cell subscribe, current-value, unsubscribe and `:DOWN` handlers keep
+  the server's `timeout/1`; a cell subscriber that has exited is skipped
+  quietly until its `:DOWN`; and `use_value` skips the render when every
+  projected value is unchanged (`===`), keeping the fresh raw value for
+  the next render.
+
+### Removed
+
+- `Filament.Observable.Subscriber`, `Filament.Observable.subscribe/2`,
+  `remove_projection/4`, and the parallel Subscriber-keyed subscription path.
+- Legacy `:filament_observable_updates` / `:filament_observable_resubscribe`
+  messages. Transports use `:cell_update`, `:cell_updates`, and
+  `:cell_resubscribe`; host LiveViews forwarding to LiveComponent must include
+  all three forms.
+- `Filament.RenderContext.observable_stubs` and `session_token`. Tests pass
+  sources built against stub pids directly.
+- Compiler-generated `memo_at/3` calls. The vnode compiler no longer depends
+  on Phoenix's lazy comprehension functions or their hoisting passes.
+- `Filament.ObservableError`, which nothing raised.
+- `Reconciler.unmount/2` ignores its options; cleanup no longer needs the owner.
+- `Filament.Test.mount/3`'s `:stub` option, which no longer did anything.
+  Pass a source built on a `Filament.Test.Stub` pid as a prop instead.
+
 ## [0.5.6] - 2026-10-08
 
 ### Added

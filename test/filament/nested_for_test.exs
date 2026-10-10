@@ -3,7 +3,6 @@ defmodule Filament.NestedForTest do
 
   alias Filament.FiberTree
   alias Filament.Reconciler
-  alias Phoenix.HTML.Safe
 
   test "nested {for} binds the inner item in markup and event closures" do
     defmodule NestedSets do
@@ -34,7 +33,7 @@ defmodule Filament.NestedForTest do
     ]
 
     {tree, rendered, _} = Reconciler.mount(NestedSets.List, %{groups: groups}, owner_pid: self())
-    html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+    html = rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
 
     assert html =~ "First"
     assert html =~ "Second"
@@ -74,7 +73,7 @@ defmodule Filament.NestedForTest do
 
     groups = [%{sets: [{:one, "One"}]}]
     {tree, rendered, _} = Reconciler.mount(NestedTuples.List, %{groups: groups}, owner_pid: self())
-    html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+    html = rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
     assert html =~ "One"
 
     FiberTree.get_event_handler(tree, "root", 0).()
@@ -107,7 +106,7 @@ defmodule Filament.NestedForTest do
 
     groups = [%{items: [%{label: "One"}, %{label: "Two"}]}]
     {_tree, rendered, _} = Reconciler.mount(NestedChildren.List, %{groups: groups}, owner_pid: self())
-    html = rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+    html = rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
     assert html =~ "<strong>One</strong>"
     assert html =~ "<strong>Two</strong>"
   end
@@ -135,11 +134,11 @@ defmodule Filament.NestedForTest do
 
     groups = [%{sets: [%{tag: :item, label: "Item"}]}]
     {tree, first, _} = Reconciler.mount(ShadowedName.List, %{groups: groups, set: "old"}, owner_pid: self())
-    assert first |> Safe.to_iodata() |> IO.iodata_to_binary() =~ "<span>old</span>"
+    assert first |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<span>old</span>"
 
     {_tree, second, _} =
       Reconciler.update(tree, "root", %{groups: groups, set: "new"}, owner_pid: self())
 
-    assert second |> Safe.to_iodata() |> IO.iodata_to_binary() =~ "<span>new</span>"
+    assert second |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<span>new</span>"
   end
 end

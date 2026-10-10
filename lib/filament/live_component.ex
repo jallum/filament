@@ -19,19 +19,13 @@ defmodule Filament.LiveComponent do
   ## Observable updates
 
   Because `Filament.LiveComponent` runs inside the parent LiveView process,
-  observable update messages (`:filament_set_state`, `:filament_observable_updates`,
-  `:filament_observable_resubscribe`) arrive at the **parent** LiveView's
-  `handle_info/2`. The parent must forward them to the component:
+  observable update messages (`:filament_set_state`, `:cell_update`, `:cell_updates`,
+  `:cell_resubscribe`) arrive at the **parent**
+  LiveView's `handle_info/2`. The parent must forward them to the component:
 
-      def handle_info({:filament_set_state, _fid, _slot, _val} = msg, socket) do
-        Phoenix.LiveView.send_update(Filament.LiveComponent,
-          id: "my-id", filament_msg: msg)
-        {:noreply, socket}
-      end
-
-      def handle_info({:filament_observable_updates, _updates} = msg, socket) do
-        Phoenix.LiveView.send_update(Filament.LiveComponent,
-          id: "my-id", filament_msg: msg)
+      def handle_info(msg, socket)
+          when elem(msg, 0) in [:filament_set_state, :cell_update, :cell_updates, :cell_resubscribe] do
+        Phoenix.LiveView.send_update(Filament.LiveComponent, id: "my-id", filament_msg: msg)
         {:noreply, socket}
       end
 
@@ -60,139 +54,35 @@ defmodule Filament.LiveComponent do
   end
 
   @impl true
-  def update(%{filament_msg: msg} = _assigns, socket) do
-    tree = socket.assigns._filament_tree
-    owner_pid = self()
-
-    case process_filament_msg(msg, tree, owner_pid) do
-      {:ok, new_tree, new_rendered, pending_effects} ->
-        {:ok,
-         socket
-         |> Phoenix.Component.assign(:_filament_tree, new_tree)
-         |> Phoenix.Component.assign(:_filament_rendered, new_rendered)
-         |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
-
-      {:cached, new_tree} ->
-        {:ok, Phoenix.Component.assign(socket, :_filament_tree, new_tree)}
-
-      :ignore ->
-        {:ok, socket}
-    end
+  def update(%{filament_msg: msg}, socket) do
+    {:ok, Filament.LiveView.apply_to_socket(socket, msg)}
   end
 
   def update(assigns, socket) do
     component = Map.fetch!(assigns, :component)
-    excluded = [:id, :component, :filament_msg]
-    props = assigns |> Map.drop(excluded) |> Map.new()
+    props = Filament.LiveView.extract_props(assigns, component)
 
-    case socket.assigns._filament_tree do
-      nil ->
-        {tree, rendered, pending_effects} =
-          Reconciler.mount(component, props, owner_pid: self())
+    {tree, rendered, pending_effects} =
+      case socket.assigns._filament_tree do
+        %{"root" => %{component: ^component}} = tree ->
+          Reconciler.update(tree, "root", props, owner_pid: self(), target: Filament.Web)
 
-        {:ok,
-         socket
-         |> Phoenix.Component.assign(:_filament_tree, tree)
-         |> Phoenix.Component.assign(:_filament_rendered, rendered)
-         |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)
-         |> Phoenix.Component.assign(:_filament_component, component)}
+        tree ->
+          if tree, do: Reconciler.unmount(tree)
+          sources = if Phoenix.LiveView.connected?(socket), do: :subscribe, else: :current
+          Reconciler.mount(component, props, owner_pid: self(), target: Filament.Web, sources: sources)
+      end
 
-      tree ->
-        {new_tree, rendered, pending_effects} =
-          Reconciler.update(tree, "root", props, owner_pid: self())
-
-        {:ok,
-         socket
-         |> Phoenix.Component.assign(:_filament_tree, new_tree)
-         |> Phoenix.Component.assign(:_filament_rendered, rendered)
-         |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)}
-    end
+    {:ok, Filament.LiveView.assign_render(socket, tree, rendered, pending_effects)}
   end
 
   @impl true
   def handle_event("filament:" <> ref, params, socket) do
-    case String.split(ref, ":", parts: 2) do
-      [fiber_id_str, index_str] ->
-        handler_index = String.to_integer(index_str)
-        tree = socket.assigns._filament_tree
-        handler = Filament.FiberTree.get_event_handler(tree, fiber_id_str, handler_index)
-
-        case handler do
-          nil ->
-            {:noreply, socket}
-
-          fun when is_function(fun, 0) ->
-            fun.()
-            {:noreply, socket}
-
-          fun when is_function(fun, 1) ->
-            fun.(params)
-            {:noreply, socket}
-
-          _other ->
-            {:noreply, socket}
-        end
-
-      _ ->
-        {:noreply, socket}
-    end
+    Filament.LiveView.dispatch_filament_event(ref, params, socket)
   end
 
   @impl true
   def render(assigns) do
     assigns._filament_rendered
   end
-
-  # ── Private ─────────────────────────────────────────────────────────────────
-
-  defp process_filament_msg({:filament_set_state, fiber_id, slot_index, new_value}, tree, owner_pid) do
-    case Map.get(tree, fiber_id) do
-      nil ->
-        :ignore
-
-      fiber ->
-        existing = Map.get(fiber.hook_slots, slot_index, {nil, nil})
-        setter = elem(existing, 1)
-        new_slots = Map.put(fiber.hook_slots, slot_index, {new_value, setter})
-        new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-
-        {new_tree, rendered, pending_effects} =
-          Reconciler.update(new_tree, fiber_id, fiber.props, owner_pid: owner_pid)
-
-        {:ok, new_tree, rendered, pending_effects}
-    end
-  end
-
-  defp process_filament_msg({:filament_observable_updates, updates}, tree, owner_pid) do
-    {new_tree, changed?} = Filament.LiveView.apply_observable_updates(tree, updates)
-
-    if changed? do
-      root = Map.fetch!(new_tree, "root")
-
-      {final_tree, rendered, pending_effects} =
-        Reconciler.update(new_tree, "root", root.props, owner_pid: owner_pid)
-
-      {:ok, final_tree, rendered, pending_effects}
-    else
-      {:cached, new_tree}
-    end
-  end
-
-  defp process_filament_msg({:filament_observable_resubscribe, fiber_id, slot_index}, tree, owner_pid) do
-    case Map.get(tree, fiber_id) do
-      nil ->
-        :ignore
-
-      fiber ->
-        new_slots = Map.put(fiber.hook_slots, slot_index, :needs_resubscribe)
-        new_tree = Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots})
-
-        {new_tree, rendered, pending_effects} =
-          Reconciler.update(new_tree, fiber_id, fiber.props, owner_pid: owner_pid)
-
-        {:ok, new_tree, rendered, pending_effects}
-    end
-  end
-
-  defp process_filament_msg(_unknown, _tree, _owner_pid), do: :ignore
 end

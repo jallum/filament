@@ -4,7 +4,7 @@ defmodule Filament.CondBlocksTest do
   import Filament.SigilF
 
   alias Filament.Test, as: ComponentTest
-  alias Phoenix.HTML.Safe
+  alias Phoenix.LiveView.TagEngine.Tokenizer.ParseError
 
   defmodule Counter do
     @moduledoc false
@@ -31,7 +31,7 @@ defmodule Filament.CondBlocksTest do
     assert ComponentTest.render_text(view) == "finish"
     view = ComponentTest.click!(view, "button")
     assert ComponentTest.render_text(view) == "start"
-    Filament.Reconciler.unmount(view.fiber_tree, owner_pid: self())
+    ComponentTest.unmount(view)
   end
 
   test "inline clauses match the issue reproduction and preserve native cond order" do
@@ -79,11 +79,25 @@ defmodule Filament.CondBlocksTest do
           {"{cond do}{end}", ~r/requires at least one clause/},
           {"{true ->}{end}", ~r/clause without matching/}
         ] do
-      assert_raise Phoenix.LiveView.TagEngine.Tokenizer.ParseError, expected, fn ->
+      assert_raise ParseError, expected, fn ->
         Code.eval_string("import Filament.SigilF\n~F|" <> source <> "|", [], file: __ENV__.file)
       end
     end
   end
 
-  defp html(rendered), do: rendered |> Safe.to_iodata() |> IO.iodata_to_binary() |> String.trim()
+  test "tags and slot entries stay within their block" do
+    for {source, expected} <- [
+          {"{if x do}<div>{end}</div>", ~r/<div> at line \d+ must be closed before \{end\} of its \{if\}/},
+          {"<div>{if x do}</div>{end}", ~r/<\/div> closes a tag opened outside the \{if\}/},
+          {"<p>{end}</p>", ~r/\{end\} without matching/},
+          {"<Card>{if x do}<:header>H</:header>{end}</Card>", ~r/must be a direct child of its component/},
+          {"<Card><div><:header>H</:header></div></Card>", ~r/must be a direct child of its component/}
+        ] do
+      assert_raise ParseError, expected, fn ->
+        Code.eval_string("import Filament.SigilF\nx = true\n~F|" <> source <> "|", [], file: __ENV__.file)
+      end
+    end
+  end
+
+  defp html(rendered), do: rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary() |> String.trim()
 end

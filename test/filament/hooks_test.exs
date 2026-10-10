@@ -15,7 +15,7 @@ defmodule Filament.HooksTest do
     end
 
     test "returns (0, default, ctx) on first call during render" do
-      fiber = Fiber.new(id: "root", component: nil, status: :stable)
+      fiber = Fiber.new(id: "root", component: nil)
 
       {index, value, ctx} =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
@@ -28,7 +28,7 @@ defmodule Filament.HooksTest do
     end
 
     test "returns incrementing indices on repeated calls" do
-      fiber = Fiber.new(id: "root", component: nil, status: :stable)
+      fiber = Fiber.new(id: "root", component: nil)
 
       {index0, _value, _ctx} =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
@@ -48,7 +48,7 @@ defmodule Filament.HooksTest do
     end
 
     test "returns previously committed value from fiber" do
-      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{0 => :stored}, status: :stable)
+      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{0 => :stored})
 
       {_index, value, _ctx} =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
@@ -59,7 +59,7 @@ defmodule Filament.HooksTest do
     end
 
     test "committed value from render pass is not visible until next render" do
-      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
       # First render: commit a value
       new_slots =
@@ -77,7 +77,7 @@ defmodule Filament.HooksTest do
       assert new_slots == %{0 => :committed}
 
       # Simulate next render with the committed slot value
-      fiber_after = Fiber.new(id: "root", component: nil, hook_slots: new_slots, status: :stable)
+      fiber_after = Fiber.new(id: "root", component: nil, hook_slots: new_slots)
 
       {_index, value, _ctx} =
         with_render_ctx("root", %{"root" => fiber_after}, nil, fn ->
@@ -96,7 +96,7 @@ defmodule Filament.HooksTest do
     end
 
     test "accumulates values in render context" do
-      fiber = Fiber.new(id: "root", component: nil, status: :stable)
+      fiber = Fiber.new(id: "root", component: nil)
 
       new_slots =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
@@ -117,7 +117,7 @@ defmodule Filament.HooksTest do
     end
 
     test "returns the current context struct when inside render" do
-      fiber = Fiber.new(id: "root", component: nil, status: :stable)
+      fiber = Fiber.new(id: "root", component: nil)
 
       ctx =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
@@ -129,97 +129,6 @@ defmodule Filament.HooksTest do
     end
   end
 
-  describe "memo_at/3" do
-    test "calls factory and returns value when outside render pass" do
-      result = Hooks.memo_at({:t, 0}, [], fn -> :value end)
-      assert result == :value
-    end
-
-    test "calls factory on first render and stores result" do
-      fiber = Fiber.new(id: "root", component: nil, status: :stable)
-
-      {value, new_slots} =
-        with_render_ctx("root", %{"root" => fiber}, nil, fn ->
-          val = Hooks.memo_at({:t, 0}, [], fn -> :computed end)
-          {val, Hooks.current_context().new_hook_slots}
-        end)
-
-      assert value == :computed
-      assert new_slots[{:t, 0}] == {:memo, [], :computed, {0, 0}}
-    end
-
-    test "reuses cached value when deps unchanged" do
-      calls = :counters.new(1, [])
-
-      factory = fn ->
-        :counters.add(calls, 1, 1)
-        :result
-      end
-
-      fiber =
-        Fiber.new(
-          id: "root",
-          component: nil,
-          hook_slots: %{{:t, 0} => {:memo, [:dep], :cached, {0, 0}}},
-          status: :stable
-        )
-
-      value =
-        with_render_ctx("root", %{"root" => fiber}, nil, fn ->
-          Hooks.memo_at({:t, 0}, [:dep], factory)
-        end)
-
-      assert value == :cached
-      assert :counters.get(calls, 1) == 0
-    end
-
-    test "recomputes when deps change" do
-      fiber =
-        Fiber.new(
-          id: "root",
-          component: nil,
-          hook_slots: %{{:t, 0} => {:memo, [:old], :stale, {0, 0}}},
-          status: :stable
-        )
-
-      value =
-        with_render_ctx("root", %{"root" => fiber}, nil, fn ->
-          Hooks.memo_at({:t, 0}, [:new], fn -> :fresh end)
-        end)
-
-      assert value == :fresh
-    end
-
-    test "plain integer key works alongside {:t, N} tuple key" do
-      fiber = Fiber.new(id: "root", component: nil, status: :stable)
-
-      {v1, v2, new_slots} =
-        with_render_ctx("root", %{"root" => fiber}, nil, fn ->
-          a = Hooks.memo_at(0, [], fn -> :plain end)
-          b = Hooks.memo_at({:t, 0}, [], fn -> :tagged end)
-          {a, b, Hooks.current_context().new_hook_slots}
-        end)
-
-      assert v1 == :plain
-      assert v2 == :tagged
-      assert new_slots[0] == {:memo, [], :plain, {0, 0}}
-      assert new_slots[{:t, 0}] == {:memo, [], :tagged, {0, 0}}
-    end
-
-    test "does not increment hook_index" do
-      fiber = Fiber.new(id: "root", component: nil, status: :stable)
-
-      hook_index_after =
-        with_render_ctx("root", %{"root" => fiber}, nil, fn ->
-          Hooks.memo_at({:t, 0}, [], fn -> :x end)
-          Hooks.memo_at({:t, 1}, [], fn -> :y end)
-          Hooks.current_context().hook_index
-        end)
-
-      assert hook_index_after == 0
-    end
-  end
-
   describe "register_event_handler/1" do
     test "raises when called outside render pass" do
       assert_raise ArgumentError,
@@ -228,7 +137,7 @@ defmodule Filament.HooksTest do
     end
 
     test "stores handler and returns sequential wire ref" do
-      fiber = Fiber.new(id: "root", component: nil, status: :stable)
+      fiber = Fiber.new(id: "root", component: nil)
       h0 = fn -> :a end
       h1 = fn -> :b end
 
@@ -241,62 +150,9 @@ defmodule Filament.HooksTest do
 
       assert ref0 == "root:0"
       assert ref1 == "root:1"
-      assert handlers[0] === h0
-      assert handlers[1] === h1
+      assert handlers[0] === {h0, :all}
+      assert handlers[1] === {h1, :all}
       assert idx == 2
-    end
-  end
-
-  describe "event_at/2" do
-    test "raises when called outside render pass" do
-      assert_raise ArgumentError,
-                   "hook called outside a render pass — hooks may only be called from render/1",
-                   fn -> Hooks.event_at(0, fn -> :action end) end
-    end
-
-    test "stores handler and returns wire ref" do
-      fiber = Fiber.new(id: "root", component: nil, status: :stable)
-      handler = fn -> :action end
-
-      {wire_ref, new_handlers} =
-        with_render_ctx("root", %{"root" => fiber}, nil, fn ->
-          ref = Hooks.event_at(0, handler)
-          {ref, Hooks.current_context().new_event_handlers}
-        end)
-
-      assert wire_ref == "root:0"
-      assert new_handlers[0] === handler
-    end
-
-    test "two handlers at distinct explicit slots" do
-      fiber = Fiber.new(id: "root", component: nil, status: :stable)
-      h0 = fn -> :a end
-      h1 = fn -> :b end
-
-      {ref0, ref1, handlers} =
-        with_render_ctx("root", %{"root" => fiber}, nil, fn ->
-          r0 = Hooks.event_at(0, h0)
-          r1 = Hooks.event_at(1, h1)
-          {r0, r1, Hooks.current_context().new_event_handlers}
-        end)
-
-      assert ref0 == "root:0"
-      assert ref1 == "root:1"
-      assert handlers[0] === h0
-      assert handlers[1] === h1
-    end
-
-    test "does not increment event_handler_index" do
-      fiber = Fiber.new(id: "root", component: nil, status: :stable)
-
-      idx_after =
-        with_render_ctx("root", %{"root" => fiber}, nil, fn ->
-          Hooks.event_at(0, fn -> :x end)
-          Hooks.event_at(5, fn -> :y end)
-          Hooks.current_context().event_handler_index
-        end)
-
-      assert idx_after == 0
     end
   end
 

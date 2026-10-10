@@ -51,13 +51,19 @@ defmodule Collaboration.DocumentServer do
     {:ok, initial_view, new_state}
   end
 
-  # Handle unsubscribe when a subscriber process dies.
-  # The first arg is a %Filament.Observable.Subscriber{} struct — extract .pid for lock comparison.
+  # The same value subscribers receive, for Cell.current and refreshes.
+  @impl Filament.Observable
+  def handle_current(state), do: {:ok, observable_view(state), state}
+
+  # Release the lock when its holder's subscription ends. Cell subscribers
+  # are tuples led by the owner pid, which is the lock holder.
   @impl Filament.Observable
   def handle_unsubscribe(subscriber, state) do
+    pid = elem(subscriber, 0)
+
     new_state =
       state
-      |> maybe_release_lock(subscriber.pid)
+      |> maybe_release_lock(pid)
       |> decrement_presence()
 
     notify_observers(observable_view(new_state))
@@ -112,5 +118,11 @@ defmodule Collaboration.DocumentServer do
 
   def via_registry(doc_id) do
     {:via, Registry, {Collaboration.Registry, doc_id}}
+  end
+
+  # Override the default cell/1 from `use Filament.Observable.GenServer`
+  # so components can pass a doc_id directly.
+  def cell(doc_id) when is_binary(doc_id) do
+    Filament.Source.new(Filament.Observable.GenServer, via_registry(doc_id))
   end
 end

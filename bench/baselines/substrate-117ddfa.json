@@ -1,0 +1,1056 @@
+{
+  "metadata": {
+    "cpu": "Apple M4 Pro",
+    "label": "substrate",
+    "os": "{:unix, :darwin}",
+    "dirty": false,
+    "otp": "28",
+    "schedulers": 4,
+    "elixir": "1.19.4",
+    "erts": "16.2",
+    "benchee": "1.5.1",
+    "implementation": "cell-vnode",
+    "recorded_at": "2026-09-27T18:08:00.138280Z",
+    "commit": "117ddfaffa838a7daf7ed531f6d5b18936b9825e",
+    "library_commit": "faa7d776911e8e16bb010014a69779c647e934ff",
+    "architecture": "aarch64-apple-darwin25.1.0",
+    "lock_sha256": "b42a2b08883279583af5496d674c077cb5b3e43faebbbd985f3dc763d05b9a17",
+    "harness_sha256": "e6d849096bb95512dd77f0cae8889dcd4d9cd7bb64ba6aa0636a97ed3c95b649"
+  },
+  "diagnostics": [
+    {
+      "size": 10,
+      "job": "render/mount",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 966,
+        "html_bytes": 1012,
+        "fibers": 11,
+        "caller_reductions_diagnostic": 9121
+      }
+    },
+    {
+      "size": 100,
+      "job": "render/mount",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 9069,
+        "html_bytes": 10285,
+        "fibers": 101,
+        "caller_reductions_diagnostic": 64718
+      }
+    },
+    {
+      "size": 1000,
+      "job": "render/mount",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 93672,
+        "html_bytes": 105688,
+        "fibers": 1001,
+        "caller_reductions_diagnostic": 616658
+      }
+    },
+    {
+      "size": 10,
+      "job": "render/unchanged",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 774,
+        "html_bytes": 1012,
+        "fibers": 11,
+        "caller_reductions_diagnostic": 5605
+      }
+    },
+    {
+      "size": 100,
+      "job": "render/unchanged",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 8067,
+        "html_bytes": 10285,
+        "fibers": 101,
+        "caller_reductions_diagnostic": 57662
+      }
+    },
+    {
+      "size": 1000,
+      "job": "render/unchanged",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 84570,
+        "html_bytes": 105688,
+        "fibers": 1001,
+        "caller_reductions_diagnostic": 587742
+      }
+    },
+    {
+      "size": 10,
+      "job": "render/leaf_state",
+      "metrics": {
+        "messages": 1,
+        "updates": 1,
+        "diff_bytes": 774,
+        "html_bytes": 1012,
+        "fibers": 11,
+        "caller_reductions_diagnostic": 7769
+      }
+    },
+    {
+      "size": 100,
+      "job": "render/leaf_state",
+      "metrics": {
+        "messages": 1,
+        "updates": 1,
+        "diff_bytes": 8066,
+        "html_bytes": 10284,
+        "fibers": 101,
+        "caller_reductions_diagnostic": 64845
+      }
+    },
+    {
+      "size": 1000,
+      "job": "render/leaf_state",
+      "metrics": {
+        "messages": 1,
+        "updates": 1,
+        "diff_bytes": 84568,
+        "html_bytes": 105686,
+        "fibers": 1001,
+        "caller_reductions_diagnostic": 598082
+      }
+    },
+    {
+      "size": 10,
+      "job": "keyed/append",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 1056,
+        "html_bytes": 1115,
+        "fibers": 12,
+        "caller_reductions_diagnostic": 6573
+      }
+    },
+    {
+      "size": 100,
+      "job": "keyed/append",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 9163,
+        "html_bytes": 10391,
+        "fibers": 102,
+        "caller_reductions_diagnostic": 61970
+      }
+    },
+    {
+      "size": 1000,
+      "job": "keyed/append",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 93770,
+        "html_bytes": 105797,
+        "fibers": 1002,
+        "caller_reductions_diagnostic": 603484
+      }
+    },
+    {
+      "size": 10,
+      "job": "keyed/prepend",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 1053,
+        "html_bytes": 1112,
+        "fibers": 12,
+        "caller_reductions_diagnostic": 6568
+      }
+    },
+    {
+      "size": 100,
+      "job": "keyed/prepend",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 9157,
+        "html_bytes": 10385,
+        "fibers": 102,
+        "caller_reductions_diagnostic": 59821
+      }
+    },
+    {
+      "size": 1000,
+      "job": "keyed/prepend",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 93761,
+        "html_bytes": 105788,
+        "fibers": 1002,
+        "caller_reductions_diagnostic": 606865
+      }
+    },
+    {
+      "size": 10,
+      "job": "keyed/reverse",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 774,
+        "html_bytes": 1012,
+        "fibers": 11,
+        "caller_reductions_diagnostic": 5606
+      }
+    },
+    {
+      "size": 100,
+      "job": "keyed/reverse",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 8067,
+        "html_bytes": 10285,
+        "fibers": 101,
+        "caller_reductions_diagnostic": 56577
+      }
+    },
+    {
+      "size": 1000,
+      "job": "keyed/reverse",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 84570,
+        "html_bytes": 105688,
+        "fibers": 1001,
+        "caller_reductions_diagnostic": 583653
+      }
+    },
+    {
+      "size": 10,
+      "job": "keyed/remove_half",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 533,
+        "html_bytes": 509,
+        "fibers": 6,
+        "caller_reductions_diagnostic": 3427
+      }
+    },
+    {
+      "size": 100,
+      "job": "keyed/remove_half",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 4566,
+        "html_bytes": 5132,
+        "fibers": 51,
+        "caller_reductions_diagnostic": 33725
+      }
+    },
+    {
+      "size": 1000,
+      "job": "keyed/remove_half",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 46669,
+        "html_bytes": 52685,
+        "fibers": 501,
+        "caller_reductions_diagnostic": 334064
+      }
+    },
+    {
+      "size": 10,
+      "job": "keyed/clear",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 31,
+        "html_bytes": 9,
+        "fibers": 1,
+        "caller_reductions_diagnostic": 709
+      }
+    },
+    {
+      "size": 100,
+      "job": "keyed/clear",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 31,
+        "html_bytes": 9,
+        "fibers": 1,
+        "caller_reductions_diagnostic": 4579
+      }
+    },
+    {
+      "size": 1000,
+      "job": "keyed/clear",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 31,
+        "html_bytes": 9,
+        "fibers": 1,
+        "caller_reductions_diagnostic": 44317
+      }
+    },
+    {
+      "size": 10,
+      "job": "reactivity/changed",
+      "metrics": {
+        "messages": 1,
+        "updates": 10,
+        "diff_bytes": 222,
+        "html_bytes": 230,
+        "fibers": 11,
+        "server_reductions": 298,
+        "server_memory_before_bytes": 6600,
+        "server_memory_after_bytes": 14496,
+        "caller_reductions_diagnostic": 4644
+      }
+    },
+    {
+      "size": 100,
+      "job": "reactivity/changed",
+      "metrics": {
+        "messages": 1,
+        "updates": 100,
+        "diff_bytes": 2383,
+        "html_bytes": 2301,
+        "fibers": 101,
+        "server_reductions": 2848,
+        "server_memory_before_bytes": 41568,
+        "server_memory_after_bytes": 95744,
+        "caller_reductions_diagnostic": 44759
+      }
+    },
+    {
+      "size": 1000,
+      "job": "reactivity/changed",
+      "metrics": {
+        "messages": 1,
+        "updates": 1000,
+        "diff_bytes": 25784,
+        "html_bytes": 23902,
+        "fibers": 1001,
+        "server_reductions": 26692,
+        "server_memory_before_bytes": 444264,
+        "server_memory_after_bytes": 761456,
+        "caller_reductions_diagnostic": 409961
+      }
+    },
+    {
+      "size": 10,
+      "job": "reactivity/unchanged",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 2,
+        "html_bytes": 230,
+        "fibers": 11,
+        "server_reductions": 238,
+        "server_memory_before_bytes": 6488,
+        "server_memory_after_bytes": 17400,
+        "caller_reductions_diagnostic": 51
+      }
+    },
+    {
+      "size": 100,
+      "job": "reactivity/unchanged",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 2,
+        "html_bytes": 2301,
+        "fibers": 101,
+        "server_reductions": 2262,
+        "server_memory_before_bytes": 41568,
+        "server_memory_after_bytes": 116440,
+        "caller_reductions_diagnostic": 51
+      }
+    },
+    {
+      "size": 1000,
+      "job": "reactivity/unchanged",
+      "metrics": {
+        "messages": 0,
+        "updates": 0,
+        "diff_bytes": 2,
+        "html_bytes": 23902,
+        "fibers": 1001,
+        "server_reductions": 22346,
+        "server_memory_before_bytes": 444264,
+        "server_memory_after_bytes": 761456,
+        "caller_reductions_diagnostic": 51
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "size": 10,
+      "job": "keyed/clear",
+      "time_ns": {
+        "sample_size": 65720,
+        "median": 2417.0,
+        "average": 2972.795556908095,
+        "p99": 10458.0,
+        "std_dev_ratio": 0.8650555659009296
+      },
+      "caller_memory_bytes": {
+        "sample_size": 9164,
+        "median": 7784.0,
+        "average": 7784.0,
+        "p99": 7784.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 6514,
+        "median": 705.0,
+        "average": 705.0,
+        "p99": 705.0,
+        "std_dev_ratio": 0.0
+      }
+    },
+    {
+      "size": 10,
+      "job": "keyed/remove_half",
+      "time_ns": {
+        "sample_size": 28140,
+        "median": 1.55e4,
+        "average": 19603.6855366027,
+        "p99": 56880.28000000004,
+        "std_dev_ratio": 1.1315570008461653
+      },
+      "caller_memory_bytes": {
+        "sample_size": 4455,
+        "median": 47344.0,
+        "average": 47344.0,
+        "p99": 47344.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 4154,
+        "median": 4056.0,
+        "average": 4056.0,
+        "p99": 4056.0,
+        "std_dev_ratio": 0.0
+      }
+    },
+    {
+      "size": 10,
+      "job": "render/mount",
+      "time_ns": {
+        "sample_size": 29216,
+        "median": 27792.0,
+        "average": 28711.957249452356,
+        "p99": 59618.029999999926,
+        "std_dev_ratio": 0.2824572117150647
+      },
+      "caller_memory_bytes": {
+        "sample_size": 4724,
+        "median": 87176.0,
+        "average": 87176.0,
+        "p99": 87176.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 4380,
+        "median": 6812.0,
+        "average": 6812.0,
+        "p99": 6812.0,
+        "std_dev_ratio": 0.0
+      }
+    },
+    {
+      "size": 10,
+      "job": "keyed/reverse",
+      "time_ns": {
+        "sample_size": 17612,
+        "median": 34458.0,
+        "average": 37139.3388030888,
+        "p99": 98128.1699999997,
+        "std_dev_ratio": 0.3973462333282314
+      },
+      "caller_memory_bytes": {
+        "sample_size": 3174,
+        "median": 79696.0,
+        "average": 79696.0,
+        "p99": 79696.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 2718,
+        "median": 6290.0,
+        "average": 6290.0,
+        "p99": 6290.0,
+        "std_dev_ratio": 0.0
+      }
+    },
+    {
+      "size": 10,
+      "job": "render/unchanged",
+      "time_ns": {
+        "sample_size": 17576,
+        "median": 34375.0,
+        "average": 37222.89132908512,
+        "p99": 106592.1399999999,
+        "std_dev_ratio": 0.3952503697253657
+      },
+      "caller_memory_bytes": {
+        "sample_size": 3282,
+        "median": 7.96e4,
+        "average": 7.96e4,
+        "p99": 7.96e4,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 2733,
+        "median": 6284.0,
+        "average": 6284.0,
+        "p99": 6284.0,
+        "std_dev_ratio": 0.0
+      }
+    },
+    {
+      "size": 10,
+      "job": "keyed/append",
+      "time_ns": {
+        "sample_size": 15197,
+        "median": 43083.0,
+        "average": 45179.1431203527,
+        "p99": 133964.82000000012,
+        "std_dev_ratio": 0.45431333672667246
+      },
+      "caller_memory_bytes": {
+        "sample_size": 3475,
+        "median": 95352.0,
+        "average": 95352.0,
+        "p99": 95352.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 2861,
+        "median": 7479.0,
+        "average": 7479.0,
+        "p99": 7479.0,
+        "std_dev_ratio": 0.0
+      }
+    },
+    {
+      "size": 10,
+      "job": "keyed/prepend",
+      "time_ns": {
+        "sample_size": 14710,
+        "median": 43417.0,
+        "average": 45933.118966689326,
+        "p99": 146570.24999999994,
+        "std_dev_ratio": 0.4318227213429108
+      },
+      "caller_memory_bytes": {
+        "sample_size": 3285,
+        "median": 95184.0,
+        "average": 95184.0,
+        "p99": 95184.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 2972,
+        "median": 7581.0,
+        "average": 7581.0,
+        "p99": 7581.0,
+        "std_dev_ratio": 0.0
+      }
+    },
+    {
+      "size": 100,
+      "job": "keyed/clear",
+      "time_ns": {
+        "sample_size": 4428,
+        "median": 27041.0,
+        "average": 32413.75767841012,
+        "p99": 125302.50000000001,
+        "std_dev_ratio": 0.624417170453488
+      },
+      "caller_memory_bytes": {
+        "sample_size": 671,
+        "median": 50272.0,
+        "average": 50272.0,
+        "p99": 50272.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 753,
+        "median": 6261.0,
+        "average": 6261.0,
+        "p99": 6261.0,
+        "std_dev_ratio": 0.0
+      }
+    },
+    {
+      "size": 100,
+      "job": "keyed/remove_half",
+      "time_ns": {
+        "sample_size": 2339,
+        "median": 203292.0,
+        "average": 214635.30098332622,
+        "p99": 384308.1999999999,
+        "std_dev_ratio": 0.20645296327005058
+      },
+      "caller_memory_bytes": {
+        "sample_size": 367,
+        "median": 460112.0,
+        "average": 460112.0,
+        "p99": 460112.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 411,
+        "median": 39243.0,
+        "average": 39243.0,
+        "p99": 39243.0,
+        "std_dev_ratio": 0.0
+      }
+    },
+    {
+      "size": 100,
+      "job": "render/mount",
+      "time_ns": {
+        "sample_size": 2248,
+        "median": 423729.5,
+        "average": 444847.6854982206,
+        "p99": 698986.9199999998,
+        "std_dev_ratio": 0.2090773231781779
+      },
+      "caller_memory_bytes": {
+        "sample_size": 487,
+        "median": 865208.0,
+        "average": 865208.0,
+        "p99": 865208.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 518,
+        "median": 65378.0,
+        "average": 65378.0,
+        "p99": 65378.0,
+        "std_dev_ratio": 0.0
+      }
+    },
+    {
+      "size": 100,
+      "job": "render/unchanged",
+      "time_ns": {
+        "sample_size": 1558,
+        "median": 449083.5,
+        "average": 471760.5706033376,
+        "p99": 588105.7200000002,
+        "std_dev_ratio": 0.10271261783050041
+      },
+      "caller_memory_bytes": {
+        "sample_size": 293,
+        "median": 807456.0,
+        "average": 807456.0,
+        "p99": 807456.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 323,
+        "median": 65240.0,
+        "average": 65240.0,
+        "p99": 65240.0,
+        "std_dev_ratio": 0.0
+      }
+    },
+    {
+      "size": 100,
+      "job": "keyed/prepend",
+      "time_ns": {
+        "sample_size": 1486,
+        "median": 454729.0,
+        "average": 475754.6258411844,
+        "p99": 811141.25,
+        "std_dev_ratio": 0.1513832747490954
+      },
+      "caller_memory_bytes": {
+        "sample_size": 273,
+        "median": 863416.0,
+        "average": 863416.0,
+        "p99": 863416.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 298,
+        "median": 69005.0,
+        "average": 69004.90939597315,
+        "p99": 69005.0,
+        "std_dev_ratio": 4.166776257264105e-6
+      }
+    },
+    {
+      "size": 100,
+      "job": "keyed/append",
+      "time_ns": {
+        "sample_size": 1459,
+        "median": 463958.0,
+        "average": 483443.4084989719,
+        "p99": 745075.0000000002,
+        "std_dev_ratio": 0.1422148204310203
+      },
+      "caller_memory_bytes": {
+        "sample_size": 279,
+        "median": 867296.0,
+        "average": 867296.0,
+        "p99": 867296.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 286,
+        "median": 68981.0,
+        "average": 68981.0,
+        "p99": 68981.0,
+        "std_dev_ratio": 0.0
+      }
+    },
+    {
+      "size": 100,
+      "job": "keyed/reverse",
+      "time_ns": {
+        "sample_size": 1490,
+        "median": 462208.0,
+        "average": 492350.32483221474,
+        "p99": 753564.9999999998,
+        "std_dev_ratio": 0.1573816473162664
+      },
+      "caller_memory_bytes": {
+        "sample_size": 296,
+        "median": 809336.0,
+        "average": 809336.0,
+        "p99": 809336.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 323,
+        "median": 64906.0,
+        "average": 64906.0,
+        "p99": 64906.0,
+        "std_dev_ratio": 0.0
+      }
+    },
+    {
+      "size": 1000,
+      "job": "keyed/clear",
+      "time_ns": {
+        "sample_size": 385,
+        "median": 255625.0,
+        "average": 341413.9402597403,
+        "p99": 734282.9999999995,
+        "std_dev_ratio": 0.4605799991348838
+      },
+      "caller_memory_bytes": {
+        "sample_size": 58,
+        "median": 466792.0,
+        "average": 466792.0,
+        "p99": 466792.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 68,
+        "median": 45263.0,
+        "average": 45236.117647058825,
+        "p99": 46053.0,
+        "std_dev_ratio": 0.006429011279376001
+      }
+    },
+    {
+      "size": 1000,
+      "job": "keyed/remove_half",
+      "time_ns": {
+        "sample_size": 191,
+        "median": 3161166.0,
+        "average": 3151916.1884816755,
+        "p99": 4428533.3599999705,
+        "std_dev_ratio": 0.1683403230379012
+      },
+      "caller_memory_bytes": {
+        "sample_size": 33,
+        "median": 4587464.0,
+        "average": 4587464.0,
+        "p99": 4587464.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 39,
+        "median": 322923.0,
+        "average": 323185.0,
+        "p99": 330968.0,
+        "std_dev_ratio": 0.004105994693344261
+      }
+    },
+    {
+      "size": 1000,
+      "job": "render/mount",
+      "time_ns": {
+        "sample_size": 226,
+        "median": 4831562.0,
+        "average": 4836980.792035398,
+        "p99": 6479419.499999991,
+        "std_dev_ratio": 0.08582727536739267
+      },
+      "caller_memory_bytes": {
+        "sample_size": 42,
+        "median": 8789848.0,
+        "average": 8789848.0,
+        "p99": 8789848.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 44,
+        "median": 633396.5,
+        "average": 633452.6363636364,
+        "p99": 634370.0,
+        "std_dev_ratio": 3.486973033673179e-4
+      }
+    },
+    {
+      "size": 1000,
+      "job": "keyed/reverse",
+      "time_ns": {
+        "sample_size": 133,
+        "median": 5264042.0,
+        "average": 5445138.458646617,
+        "p99": 9867861.439999994,
+        "std_dev_ratio": 0.12652986739424776
+      },
+      "caller_memory_bytes": {
+        "sample_size": 20,
+        "median": 8297008.0,
+        "average": 8297008.0,
+        "p99": 8297008.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 21,
+        "median": 581489.0,
+        "average": 581528.7142857143,
+        "p99": 583744.0,
+        "std_dev_ratio": 0.0023822788065705684
+      }
+    },
+    {
+      "size": 1000,
+      "job": "render/unchanged",
+      "time_ns": {
+        "sample_size": 125,
+        "median": 5652666.0,
+        "average": 5741124.008,
+        "p99": 8288441.499999996,
+        "std_dev_ratio": 0.11267241319549295
+      },
+      "caller_memory_bytes": {
+        "sample_size": 24,
+        "median": 8281616.0,
+        "average": 8281630.666666667,
+        "p99": 8281704.0,
+        "std_dev_ratio": 4.045221141100081e-6
+      },
+      "caller_reductions": {
+        "sample_size": 28,
+        "median": 594803.5,
+        "average": 594999.0714285715,
+        "p99": 596831.0,
+        "std_dev_ratio": 0.0010724532023295005
+      }
+    },
+    {
+      "size": 1000,
+      "job": "keyed/prepend",
+      "time_ns": {
+        "sample_size": 118,
+        "median": 6142687.5,
+        "average": 6117113.279661017,
+        "p99": 7323055.210000001,
+        "std_dev_ratio": 0.0917788095775197
+      },
+      "caller_memory_bytes": {
+        "sample_size": 22,
+        "median": 8689832.0,
+        "average": 8689832.0,
+        "p99": 8689832.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 26,
+        "median": 606582.5,
+        "average": 606946.5769230769,
+        "p99": 609967.0,
+        "std_dev_ratio": 0.0017053042645885494
+      }
+    },
+    {
+      "size": 1000,
+      "job": "keyed/append",
+      "time_ns": {
+        "sample_size": 111,
+        "median": 6.435e6,
+        "average": 6541568.675675675,
+        "p99": 10478516.12,
+        "std_dev_ratio": 0.12177506709911491
+      },
+      "caller_memory_bytes": {
+        "sample_size": 20,
+        "median": 8705408.0,
+        "average": 8705408.0,
+        "p99": 8705408.0,
+        "std_dev_ratio": 0.0
+      },
+      "caller_reductions": {
+        "sample_size": 21,
+        "median": 622380.0,
+        "average": 622636.9523809524,
+        "p99": 625250.0,
+        "std_dev_ratio": 0.0016430223456528304
+      }
+    },
+    {
+      "size": 10,
+      "job": "reactivity/unchanged",
+      "time_ns": {
+        "sample_size": 28391,
+        "median": 3.0e3,
+        "average": 3391.060054242542,
+        "p99": 8336.35999999992,
+        "std_dev_ratio": 0.7075943726681185
+      },
+      "caller_memory_bytes": null,
+      "caller_reductions": null
+    },
+    {
+      "size": 10,
+      "job": "reactivity/changed",
+      "time_ns": {
+        "sample_size": 18705,
+        "median": 29834.0,
+        "average": 32121.35632183908,
+        "p99": 73526.99999999968,
+        "std_dev_ratio": 0.44312900957354406
+      },
+      "caller_memory_bytes": null,
+      "caller_reductions": null
+    },
+    {
+      "size": 10,
+      "job": "render/leaf_state",
+      "time_ns": {
+        "sample_size": 17914,
+        "median": 34083.0,
+        "average": 37081.553086971086,
+        "p99": 97520.74999999939,
+        "std_dev_ratio": 0.40471008421409915
+      },
+      "caller_memory_bytes": null,
+      "caller_reductions": null
+    },
+    {
+      "size": 100,
+      "job": "reactivity/unchanged",
+      "time_ns": {
+        "sample_size": 2445,
+        "median": 27583.0,
+        "average": 29938.125971370144,
+        "p99": 57948.67999999999,
+        "std_dev_ratio": 0.2672400881557198
+      },
+      "caller_memory_bytes": null,
+      "caller_reductions": null
+    },
+    {
+      "size": 100,
+      "job": "reactivity/changed",
+      "time_ns": {
+        "sample_size": 1810,
+        "median": 327417.0,
+        "average": 328910.95580110495,
+        "p99": 440705.11999999994,
+        "std_dev_ratio": 0.1307382710331282
+      },
+      "caller_memory_bytes": null,
+      "caller_reductions": null
+    },
+    {
+      "size": 100,
+      "job": "render/leaf_state",
+      "time_ns": {
+        "sample_size": 1509,
+        "median": 475543.0,
+        "average": 483359.8296885355,
+        "p99": 690016.1000000009,
+        "std_dev_ratio": 0.13838090718592877
+      },
+      "caller_memory_bytes": null,
+      "caller_reductions": null
+    },
+    {
+      "size": 1000,
+      "job": "reactivity/unchanged",
+      "time_ns": {
+        "sample_size": 250,
+        "median": 208251.0,
+        "average": 223123.664,
+        "p99": 488163.7500000007,
+        "std_dev_ratio": 0.27610582225729025
+      },
+      "caller_memory_bytes": null,
+      "caller_reductions": null
+    },
+    {
+      "size": 1000,
+      "job": "reactivity/changed",
+      "time_ns": {
+        "sample_size": 155,
+        "median": 4245893.0,
+        "average": 4277850.019354839,
+        "p99": 5754638.999999999,
+        "std_dev_ratio": 0.07373746678633039
+      },
+      "caller_memory_bytes": null,
+      "caller_reductions": null
+    },
+    {
+      "size": 1000,
+      "job": "render/leaf_state",
+      "time_ns": {
+        "sample_size": 124,
+        "median": 5634941.0,
+        "average": 5770424.169354838,
+        "p99": 9841145.5,
+        "std_dev_ratio": 0.11428000709780396
+      },
+      "caller_memory_bytes": null,
+      "caller_reductions": null
+    }
+  ],
+  "schema": 1,
+  "configuration": {
+    "time": 2,
+    "warmup": 1,
+    "memory_time": 0.5,
+    "reduction_time": 0.5,
+    "time_only_jobs": [
+      "render/leaf_state",
+      "reactivity/changed",
+      "reactivity/unchanged"
+    ]
+  }
+}

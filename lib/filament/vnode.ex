@@ -11,6 +11,7 @@ defmodule Filament.VNode do
           | {:element, binary(), [{binary(), term()}], [t()]}
           | {:component, module(), map(), term() | nil}
           | {:fragment, [t()]}
+          | {:slot, atom(), [Filament.Slot.Entry.t()], module() | nil}
 
   @doc """
   Validates a VNode tree recursively.
@@ -38,6 +39,8 @@ defmodule Filament.VNode do
   end
 
   defp validate_node!({:component, _module, _props, _key}), do: :ok
+
+  defp validate_node!({:slot, _name, _entries, _default}), do: :ok
 
   defp validate_node!({:fragment, children}) do
     Enum.each(children, &validate_node!/1)

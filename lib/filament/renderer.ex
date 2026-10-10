@@ -3,299 +3,237 @@ defmodule Filament.Renderer do
 
   alias Filament.Fiber
   alias Filament.RenderContext
-  alias Phoenix.HTML.Safe
-  alias Phoenix.LiveView.Rendered
 
   @doc """
-  Renders a component with the given props and context.
+  Render `fiber` with `props`, or reuse its stored output when `reusable?/2`.
 
-  ## Algorithm
-  1. Validate props via __validate_props__!
-  2. Set render context in process dictionary (reset hook_index, new_hook_slots, pending_effects)
-  3. Call component.render(props)
-  4. Collect new fibers, hook slots, and effects from context
-  5. Clear render context
-  6. Return {Rendered, new_hook_slots, pending_effects, new_fibers}
+  Returns the updated fiber and the pass's final context. The context's
+  `new_fibers` and `pending_effects` accumulate across the pass: `context`
+  carries in what came before, and every fiber rendered or rewalked below
+  `fiber` adds its entry and effects (newest first). A clean subtree adds
+  nothing, since the tree already holds it.
   """
-  @spec render(module(), map(), RenderContext.t()) ::
-          {Rendered.t(), %{non_neg_integer() => term()}, list(), %{String.t() => Fiber.t()},
-           %{non_neg_integer() => function()}}
-  def render(component_module, props, %RenderContext{} = context) do
-    # Apply prop defaults for any props not supplied.
-    # Code.ensure_loaded is required because function_exported?/3 returns false
-    # for modules that haven't been called yet, since modules load lazily on
-    # their first function call — which happens later (component_module.render/1).
-    Code.ensure_loaded(component_module)
+  @spec render_fiber(Fiber.t(), map(), RenderContext.t()) :: {Fiber.t(), RenderContext.t()}
+  def render_fiber(fiber, props, context) do
+    cond do
+      not reusable?(fiber, props) ->
+        {rendered, ctx} = render(fiber.component, props, %{context | hook_slots: fiber.hook_slots})
 
+        {%{
+           fiber
+           | props: props,
+             hook_slots: ctx.new_hook_slots,
+             event_handlers: ctx.new_event_handlers,
+             capture_handlers: ctx.new_capture_handlers,
+             children: Enum.reverse(ctx.children),
+             rendered: rendered,
+             dirty: nil
+         }, ctx}
+
+      fiber.dirty == nil ->
+        {fiber, context}
+
+      # Only descendants are dirty: walk the stored output again so each
+      # child component renders or is reused.
+      true ->
+        {rendered, ctx} = in_context(context, fn -> rewalk(fiber.rendered) end)
+        {%{fiber | children: Enum.reverse(ctx.children), rendered: rendered, dirty: nil}, ctx}
+    end
+  end
+
+  @doc """
+  Whether `fiber` can skip its render: it has a stored output, its props are
+  unchanged (`===`), and neither its own state nor a value it reads changed.
+  Closures in props compare equal when they come from the same code and
+  capture equal values.
+  """
+  @spec reusable?(Fiber.t(), map()) :: boolean()
+  def reusable?(%Fiber{props: old_props, dirty: dirty, rendered: rendered}, props),
+    do: old_props === props and dirty != :self and rendered != :unrendered
+
+  # Validates props, then calls render/1 and walks its output with `context`
+  # as the current render context.
+  defp render(component_module, props, context) do
+    # function_exported?/3 is false until the module is loaded.
+    Code.ensure_loaded(component_module)
     props = apply_prop_defaults(component_module, props)
 
-    # Validate props
     if function_exported?(component_module, :__validate_props__!, 1) do
       component_module.__validate_props__!(props)
     end
 
-    # Look up existing fiber for hook state continuity
-    existing_fiber = Map.get(context.fiber_tree, context.fiber_id)
-    hook_slots = if existing_fiber, do: existing_fiber.hook_slots, else: %{}
+    in_context(%{context | props: props}, fn -> walk_child(component_module.render(props), context) end)
+  end
 
-    # Save current context (if any) and set new context with reset state
-    Process.put(:filament_render_context, %{
-      context
-      | hook_index: 0,
-        new_hook_slots: %{},
-        pending_effects: [],
-        event_handler_index: 0,
-        new_event_handlers: %{},
-        hook_slots: hook_slots
-    })
+  defp in_context(context, fun) do
+    Process.put(:filament_render_context, context)
 
     try do
-      # Call render/1
-      result = component_module.render(props)
-
-      # If render returns a vnode instead of Rendered, recursively render it
-      rendered =
-        case result do
-          %Rendered{} ->
-            result
-
-          vnode when is_tuple(vnode) ->
-            render_vnode(vnode, context)
-
-          _ ->
-            raise ArgumentError,
-                  "render/1 must return %Phoenix.LiveView.Rendered{} or vnode, got: #{inspect(result)}"
-        end
-
-      # Force evaluation of dynamic expressions so side effects like
-      # register_event_handler run while the render context is active.
-      _ = Safe.to_iodata(rendered)
-
-      # Harvest context fields
-      final_ctx = Process.get(:filament_render_context)
-
-      {rendered, final_ctx.new_hook_slots, final_ctx.pending_effects, final_ctx.new_fibers,
-       final_ctx.new_event_handlers}
+      result = fun.()
+      {result, Process.get(:filament_render_context)}
     after
-      # Always clear render context after render
       Process.delete(:filament_render_context)
     end
   end
 
   @doc """
-  Renders a Filament child component within the current render pass, creating its
-  own fiber and registering it as a child of the current fiber.
-
-  Called by `Filament.TagEngine.component/3` when inside a Filament render pass
-  so that sub-components get isolated fibers (and thus isolated hook state).
+  Render a child component inside the current render pass. The child gets its
+  own fiber (so its hooks are isolated), identified by its parent, module and
+  `key`, or its position among the parent's children of that module when
+  `key` is `nil`. Returns the child's output.
   """
-  @spec render_component_child(RenderContext.t(), module(), map()) ::
-          Rendered.t()
-  def render_component_child(parent_ctx, mod, props) do
-    indices = parent_ctx.child_component_indices
-    index = Map.get(indices, mod, 0)
-    parent_fiber = Map.get(parent_ctx.fiber_tree, parent_ctx.fiber_id)
+  @spec render_component_child(RenderContext.t(), module(), map(), term() | nil) :: term()
+  def render_component_child(parent_ctx, mod, props, key \\ nil) do
+    {discriminator, indices} = child_discriminator(parent_ctx, mod, key)
+    child_id = Fiber.child_id(parent_ctx.fiber_id, mod, discriminator)
 
-    child_id =
-      if parent_fiber do
-        Fiber.child_id(parent_fiber, mod, {:index, index})
-      else
-        "#{parent_ctx.fiber_id}.#{mod}[#{index}]"
-      end
-
-    existing_fiber = Map.get(parent_ctx.fiber_tree, child_id)
-    hook_slots = if existing_fiber, do: existing_fiber.hook_slots, else: %{}
-
-    child_ctx = %RenderContext{
-      fiber_id: child_id,
-      fiber_tree: parent_ctx.fiber_tree,
-      owner_pid: parent_ctx.owner_pid,
-      new_fibers: %{},
-      pending_effects: [],
-      observable_stubs: parent_ctx.observable_stubs,
-      subscribe_enabled: parent_ctx.subscribe_enabled,
-      hook_index: 0,
-      new_hook_slots: %{},
-      event_handler_index: 0,
-      new_event_handlers: %{},
-      hook_slots: hook_slots
-    }
-
-    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers, child_event_handlers} =
-      render(mod, props, child_ctx)
-
-    child_fiber = %Fiber{
-      id: child_id,
-      component: mod,
-      props: props,
-      hook_slots: Map.merge(hook_slots, child_new_hook_slots),
-      event_handlers: child_event_handlers,
-      children: Map.keys(grandchild_fibers),
-      parent_id: parent_ctx.fiber_id,
-      status: if(existing_fiber, do: :stable, else: :mounting)
-    }
-
-    updated_new_fibers =
-      parent_ctx.new_fibers
-      |> Map.put(child_id, child_fiber)
-      |> Map.merge(grandchild_fibers)
-
-    updated_ctx = %{
-      parent_ctx
-      | new_fibers: updated_new_fibers,
-        pending_effects: parent_ctx.pending_effects ++ child_pending_effects,
-        child_component_indices: Map.put(indices, mod, index + 1)
-    }
-
-    Process.put(:filament_render_context, updated_ctx)
-
-    rendered_child
-  end
-
-  @doc """
-  Like `render_component_child/3` but uses a caller-supplied key for fiber identity
-  instead of a positional index. Used by `Filament.TagEngine.component_keyed/4`.
-  """
-  @spec render_component_child_keyed(RenderContext.t(), module(), map(), term()) :: Rendered.t()
-  def render_component_child_keyed(parent_ctx, mod, props, key) do
-    parent_fiber = Map.get(parent_ctx.fiber_tree, parent_ctx.fiber_id)
-
-    child_id =
-      if parent_fiber do
-        Fiber.child_id(parent_fiber, mod, {:key, key})
-      else
-        "#{parent_ctx.fiber_id}.#{mod}[key=#{inspect(key)}]"
-      end
-
-    existing_fiber = Map.get(parent_ctx.fiber_tree, child_id)
-    hook_slots = if existing_fiber, do: existing_fiber.hook_slots, else: %{}
-
-    child_ctx = %RenderContext{
-      fiber_id: child_id,
-      fiber_tree: parent_ctx.fiber_tree,
-      owner_pid: parent_ctx.owner_pid,
-      new_fibers: %{},
-      pending_effects: [],
-      observable_stubs: parent_ctx.observable_stubs,
-      subscribe_enabled: parent_ctx.subscribe_enabled,
-      hook_index: 0,
-      new_hook_slots: %{},
-      event_handler_index: 0,
-      new_event_handlers: %{},
-      hook_slots: hook_slots
-    }
-
-    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers, child_event_handlers} =
-      render(mod, props, child_ctx)
-
-    child_fiber = %Fiber{
-      id: child_id,
-      key: key,
-      component: mod,
-      props: props,
-      hook_slots: Map.merge(hook_slots, child_new_hook_slots),
-      event_handlers: child_event_handlers,
-      children: Map.keys(grandchild_fibers),
-      parent_id: parent_ctx.fiber_id,
-      status: if(existing_fiber, do: :stable, else: :mounting)
-    }
-
-    updated_new_fibers =
-      parent_ctx.new_fibers
-      |> Map.put(child_id, child_fiber)
-      |> Map.merge(grandchild_fibers)
-
-    updated_ctx = %{
-      parent_ctx
-      | new_fibers: updated_new_fibers,
-        pending_effects: parent_ctx.pending_effects ++ child_pending_effects
-    }
-
-    Process.put(:filament_render_context, updated_ctx)
-
-    rendered_child
-  end
-
-  @doc """
-  Recursively renders a vnode tree into Rendered structs.
-  """
-  @spec render_vnode(Filament.VNode.t(), RenderContext.t()) :: term()
-  def render_vnode({:text, content}, _context) do
-    content
-  end
-
-  def render_vnode({:element, tag, attrs, children}, context) do
-    tag_str = to_string(tag)
-    rendered_children = Enum.map(children, &render_vnode(&1, context))
-
-    if void_element?(tag_str) do
-      ["<", tag_str, render_attrs(attrs), ">"]
-    else
-      ["<", tag_str, render_attrs(attrs), ">", rendered_children, "</", tag_str, ">"]
+    # Siblings with one key would share a fiber, and with it their state.
+    if Map.has_key?(parent_ctx.new_fibers, child_id) do
+      raise ArgumentError,
+            "duplicate key #{inspect(key)} for #{inspect(mod)} in fiber #{parent_ctx.fiber_id}: keys must be " <>
+              "unique among the #{inspect(mod)} children a component renders, across all its lists"
     end
-  end
 
-  def render_vnode({:component, mod, props, key}, context) do
-    parent_fiber = Map.get(context.fiber_tree, context.fiber_id)
-    discriminator = if key, do: {:key, key}, else: {:index, 0}
-    child_id = Fiber.child_id(parent_fiber, mod, discriminator)
-    existing_fiber = Map.get(context.fiber_tree, child_id)
-    hook_slots = if existing_fiber, do: existing_fiber.hook_slots, else: %{}
+    fiber =
+      Map.get(parent_ctx.fiber_tree, child_id) ||
+        Fiber.new(id: child_id, component: mod, parent_id: parent_ctx.fiber_id)
 
-    child_context = %RenderContext{
+    child_ctx = %RenderContext{
       fiber_id: child_id,
-      fiber_tree: context.fiber_tree,
-      owner_pid: context.owner_pid,
-      new_fibers: %{},
-      pending_effects: [],
-      observable_stubs: context.observable_stubs,
-      subscribe_enabled: context.subscribe_enabled,
-      hook_index: 0,
-      new_hook_slots: %{},
-      event_handler_index: 0,
-      new_event_handlers: %{},
-      hook_slots: hook_slots
+      fiber_tree: parent_ctx.fiber_tree,
+      owner_pid: parent_ctx.owner_pid,
+      sources: parent_ctx.sources,
+      target: parent_ctx.target,
+      new_fibers: parent_ctx.new_fibers,
+      pending_effects: parent_ctx.pending_effects
     }
 
-    # Save parent context before child render/3 overwrites and deletes it
-    parent_ctx = Process.get(:filament_render_context)
-
-    {rendered_child, child_new_hook_slots, child_pending_effects, grandchild_fibers, child_event_handlers} =
-      render(mod, props, child_context)
-
-    child_fiber = %Fiber{
-      id: child_id,
-      key: key,
-      component: mod,
-      props: props,
-      hook_slots: Map.merge(hook_slots, child_new_hook_slots),
-      event_handlers: child_event_handlers,
-      children: Map.keys(grandchild_fibers),
-      parent_id: context.fiber_id,
-      status: if(existing_fiber, do: :stable, else: :mounting)
-    }
-
-    # Restore parent context (deleted by render/3's after block) and update with child info
-    updated_new_fibers =
-      parent_ctx.new_fibers
-      |> Map.put(child_id, child_fiber)
-      |> Map.merge(grandchild_fibers)
+    {child, ctx} = render_fiber(fiber, props, child_ctx)
 
     Process.put(:filament_render_context, %{
       parent_ctx
-      | new_fibers: updated_new_fibers,
-        pending_effects: parent_ctx.pending_effects ++ child_pending_effects
+      | new_fibers: Map.put(ctx.new_fibers, child_id, child),
+        pending_effects: ctx.pending_effects,
+        children: [child_id | parent_ctx.children],
+        child_component_indices: indices
     })
 
-    rendered_child
+    child.rendered
   end
 
-  def render_vnode({:fragment, children}, context) do
-    Enum.map(children, &render_vnode(&1, context))
+  # Walked output keeps event refs resolved and child output inline, so only
+  # `:component` nodes need visiting. Child ids come out the same as in the
+  # original render because the component nodes are visited in the same order.
+  defp rewalk({:component, mod, props, key, _child_render}) do
+    {:component, mod, props, key, render_component_child(Process.get(:filament_render_context), mod, props, key || nil)}
   end
 
-  def render_vnode(invalid, _context) do
+  # Compiled templates hold child output in their child bindings.
+  defp rewalk(%Filament.Template{bindings: bindings, values: values} = plan) do
+    values =
+      Enum.zip_with(bindings, values, fn
+        {kind, _key}, value when kind in [:child, :components] -> rewalk(value)
+        _, value -> value
+      end)
+
+    %{plan | values: values}
+  end
+
+  defp rewalk({:element, tag, attrs, children}), do: {:element, tag, attrs, rewalk(children)}
+  defp rewalk({:fragment, children}), do: {:fragment, rewalk(children)}
+  defp rewalk(nodes) when is_list(nodes), do: Enum.map(nodes, &rewalk/1)
+  defp rewalk(node), do: node
+
+  defp child_discriminator(parent_ctx, mod, nil) do
+    indices = parent_ctx.child_component_indices
+    index = Map.get(indices, mod, 0)
+    {{:index, index}, Map.put(indices, mod, index + 1)}
+  end
+
+  defp child_discriminator(parent_ctx, _mod, key) do
+    {{:key, key}, parent_ctx.child_component_indices}
+  end
+
+  @doc """
+  Substrate-only walk of a vnode tree.
+
+  Visits each node, recurses into `:element` and `:fragment` children, and for
+  `:component` nodes runs the substrate side effect (child fiber registration
+  via `render_component_child/4`).
+
+  Returns a *walked* vnode tree: same shape as the input except `:component`
+  nodes are rewritten to a 5-tuple `{:component, mod, props, key, child_render}`
+  carrying the child component's render output. The web-bound conversion to
+  HTML iodata is the converter's job (Phase 1.3); this walker emits no HTML,
+  no `phx-event` strings, no escapes.
+  """
+  @spec walk_vnode(Filament.VNode.t(), RenderContext.t()) :: term()
+  def walk_vnode({:text, _content} = node, _context), do: node
+  def walk_vnode({:safe, _iodata} = safe, _context), do: safe
+
+  def walk_vnode({:element, tag, attrs, children}, context) do
+    resolved_attrs = Enum.map(attrs, &resolve_event_attr/1)
+    walked = Enum.map(children, &walk_child(&1, context))
+    {:element, tag, resolved_attrs, walked}
+  end
+
+  def walk_vnode({:component, mod, props, key}, _context) do
+    parent_ctx = Process.get(:filament_render_context)
+
+    child_render = render_component_child(parent_ctx, mod, props, key || nil)
+
+    {:component, mod, props, key, child_render}
+  end
+
+  def walk_vnode({:fragment, children}, context) do
+    walked = Enum.map(children, &walk_child(&1, context))
+    {:fragment, walked}
+  end
+
+  def walk_vnode({:slot, _name, [], nil}, _context) do
+    {:fragment, []}
+  end
+
+  def walk_vnode({:slot, _name, [], default_mod}, context) when not is_nil(default_mod) do
+    walk_vnode({:component, default_mod, %{}, nil}, context)
+  end
+
+  def walk_vnode({:slot, _name, entries, _default}, context) do
+    children =
+      Enum.map(entries, fn %Filament.Slot.Entry{render_fn: f} ->
+        walk_child(f.(), context)
+      end)
+
+    {:fragment, children}
+  end
+
+  def walk_vnode(invalid, _context) do
     raise ArgumentError, "invalid vnode: #{inspect(invalid)}"
+  end
+
+  @doc false
+  def walk_value(value, context), do: walk_child(value, context)
+
+  # Element/fragment children may include scalar values (a string interpolation
+  # `{name}`, a number, etc.) alongside vnode tuples. Tuples recurse through
+  # the walker; scalars pass through and are stringified/escaped by
+  # `Filament.Web.to_iodata`.
+  defp walk_child(%Filament.Template{} = template, context), do: Filament.Template.walk(template, context)
+  defp walk_child(children, context) when is_list(children), do: Enum.map(children, &walk_child(&1, context))
+  defp walk_child(child, context) when is_tuple(child), do: walk_vnode(child, context)
+  defp walk_child(child, _context), do: child
+
+  # Substrate-side resolution of `on_*` attribute handlers: registers the
+  # closure as an event handler under the active fiber and replaces the
+  # function value with a `{:wire_ref, ref_string}` marker. The web converter
+  # consumes the marker and emits the corresponding `phx-*` attribute.
+  defp resolve_event_attr({key, value} = attr) do
+    if is_function(value) and String.starts_with?(to_string(key), "on_") do
+      wire_ref = Filament.Hooks.register_event_handler(value)
+      {key, {:wire_ref, wire_ref}}
+    else
+      attr
+    end
   end
 
   defp apply_prop_defaults(component_module, props) do
@@ -314,80 +252,11 @@ defmodule Filament.Renderer do
     end
   end
 
-  defp void_element?("br"), do: true
-  defp void_element?("hr"), do: true
-  defp void_element?("input"), do: true
-  defp void_element?("img"), do: true
-  defp void_element?("meta"), do: true
-  defp void_element?("link"), do: true
-  defp void_element?("area"), do: true
-  defp void_element?("base"), do: true
-  defp void_element?("col"), do: true
-  defp void_element?("embed"), do: true
-  defp void_element?("param"), do: true
-  defp void_element?("source"), do: true
-  defp void_element?("track"), do: true
-  defp void_element?("wbr"), do: true
-  defp void_element?(_), do: false
-
-  defp render_attrs([]), do: ""
-
-  defp render_attrs(attrs) do
-    {parts, _} =
-      Enum.map_reduce(attrs, 0, fn {key, value}, on_idx ->
-        key_str = to_string(key)
-
-        if String.starts_with?(key_str, "on_") do
-          attr_key = "phx-" <> String.slice(key_str, 3..-1//1)
-          wire_ref = Filament.Hooks.event_at(on_idx, value)
-          {[" ", attr_key, "=\"", wire_ref, "\""], on_idx + 1}
-        else
-          {render_attr_value(key_str, value), on_idx}
-        end
-      end)
-
-    parts
-  end
-
-  defp render_attr_value(_key_str, false), do: []
-  defp render_attr_value(key_str, true), do: [" ", key_str]
-
-  defp render_attr_value(key_str, value) do
-    escaped_value = Plug.HTML.html_escape_to_iodata(to_string(value))
-    [" ", key_str, "=\"", escaped_value, "\""]
-  end
-
-  @doc """
-  Returns the current render context from the process dictionary.
-  """
-  @spec current_context() :: RenderContext.t() | nil
-  def current_context do
-    Process.get(:filament_render_context)
-  end
-
-  @doc """
-  Gets the next hook slot index and increments the counter.
-
-  ## Examples
-
-      iex> {index, _ctx} = Filament.Renderer.next_hook_slot()
-      iex> index
-      0
-
-      iex> {index, _ctx} = Filament.Renderer.next_hook_slot()
-      iex> index
-      1
-  """
-  @spec next_hook_slot() :: {non_neg_integer(), RenderContext.t()}
-  def next_hook_slot do
-    context =
-      Process.get(:filament_render_context) ||
-        raise "hook called outside render context"
-
-    index = context.hook_index
-    new_context = %{context | hook_index: index + 1}
-    Process.put(:filament_render_context, new_context)
-
-    {index, new_context}
+  @doc false
+  def current_props do
+    case Process.get(:filament_render_context) do
+      %RenderContext{props: props} -> props
+      nil -> raise "render props requested outside render context"
+    end
   end
 end

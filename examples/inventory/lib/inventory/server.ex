@@ -26,17 +26,18 @@ defmodule Inventory.Server do
     {:ok, %__MODULE__{items: Map.new(items, &{&1.id, &1})}}
   end
 
-  # Return the items map as the observable value so subscribers' project fns
-  # (e.g. `&Map.get(&1, item_id)`) continue to work against a plain map.
+  # Publish the items map so subscribers' projections
+  # (e.g. `&Map.get(&1, item_id)`) work against a plain map.
   @impl Filament.Observable
-  def handle_subscribe(_subscriber, state) do
-    {:ok, state.items, state}
-  end
+  def handle_current(state), do: {:ok, state.items, state}
 
   # Automatic hold release when a subscriber's LiveView process terminates.
+  # Cell subscribers are tuples led by the owner pid.
   @impl Filament.Observable
   def handle_unsubscribe(subscriber, state) do
-    case Map.pop(state.holds, subscriber.pid) do
+    holder_pid = elem(subscriber, 0)
+
+    case Map.pop(state.holds, holder_pid) do
       {nil, _} ->
         {:ok, state}
 

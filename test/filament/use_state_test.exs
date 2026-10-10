@@ -7,7 +7,7 @@ defmodule Filament.UseStateTest do
 
   describe "use_state/1" do
     test "first render returns {initial, setter}" do
-      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
       {value, setter} =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
@@ -19,13 +19,12 @@ defmodule Filament.UseStateTest do
     end
 
     test "second render returns previously committed value" do
-      # First render commits the initial value as {value, setter} tuple
+      # First render commits the initial value as a {:state, value, setter, token} slot
       fiber =
         Fiber.new(
           id: "root",
           component: nil,
-          hook_slots: %{0 => {:stored, fn _ -> :ok end}},
-          status: :stable
+          hook_slots: %{0 => {:state, :stored, fn _ -> :ok end, make_ref()}}
         )
 
       {value, setter} =
@@ -37,20 +36,24 @@ defmodule Filament.UseStateTest do
       assert is_function(setter, 1)
     end
 
-    test "setter is a no-op when owner_pid is nil" do
-      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+    test "setter raises when owner_pid is nil" do
+      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
       {_value, setter} =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
           Hooks.use_state(:initial)
         end)
 
-      # No crash, returns :ok
-      assert :ok = setter.(:new_value)
+      # Calling a setter without an owner is a programmer error — Reconciler.mount
+      # was invoked without owner_pid: self(). Raise loudly rather than silently
+      # dropping the update.
+      assert_raise ArgumentError, ~r/use_state setter called but the render had no :owner_pid/, fn ->
+        setter.(:new_value)
+      end
     end
 
     test "two use_state calls get consecutive slot indices" do
-      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
       {values, _ctx} =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
@@ -64,15 +67,14 @@ defmodule Filament.UseStateTest do
       # Verify hook_index was incremented twice
       # (We check by seeing the second call read from slot 1, not slot 0)
       # If slot 1 was empty, b should be :b (the default)
-      # Note: stored value is now {value, setter} tuple
+      # Note: the stored slot is {:state, value, setter, token}
       stable_setter = fn _ -> :ok end
 
       fiber2 =
         Fiber.new(
           id: "root",
           component: nil,
-          hook_slots: %{0 => {:stored_a, stable_setter}},
-          status: :stable
+          hook_slots: %{0 => {:state, :stored_a, stable_setter, make_ref()}}
         )
 
       {values2, _ctx2} =
@@ -86,23 +88,28 @@ defmodule Filament.UseStateTest do
       assert values2 == [:stored_a, :b]
     end
 
-    test "setter captures fiber_id and slot_index correctly" do
-      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+    test "setter built without an owner_pid raises when invoked" do
+      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
       {_value, setter} =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
           Hooks.use_state(:initial)
         end)
 
-      # When owner_pid is nil, the setter is a no-op but still returns :ok
-      assert :ok = setter.(:anything)
+      # Building the setter is harmless; invoking it without an owner_pid is the
+      # bug that this raise surfaces.
+      assert is_function(setter, 1)
+
+      assert_raise ArgumentError, fn ->
+        setter.(:anything)
+      end
     end
   end
 
   describe "use_state/1 with owner_pid" do
     test "setter sends message to owner_pid when set" do
       owner = self()
-      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
       {_value, setter} =
         with_render_ctx("root", %{"root" => fiber}, owner, fn ->
@@ -111,12 +118,12 @@ defmodule Filament.UseStateTest do
 
       assert :ok = setter.(:new_value)
 
-      assert_receive {:filament_set_state, "root", 0, :new_value}, 100
+      assert_receive {:filament_set_state, "root", 0, _token, :new_value}, 100
     end
 
     test "setter uses correct slot index" do
       owner = self()
-      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+      fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
       {_value1, setter1} =
         with_render_ctx("root", %{"root" => fiber}, owner, fn ->
@@ -124,7 +131,7 @@ defmodule Filament.UseStateTest do
         end)
 
       assert :ok = setter1.(:updated_first)
-      assert_receive {:filament_set_state, "root", 0, :updated_first}, 100
+      assert_receive {:filament_set_state, "root", 0, _token, :updated_first}, 100
 
       # Start fresh render for second slot
       {_, setter2} =
@@ -134,30 +141,30 @@ defmodule Filament.UseStateTest do
         end)
 
       assert :ok = setter2.(:updated_second)
-      assert_receive {:filament_set_state, "root", 1, :updated_second}, 100
+      assert_receive {:filament_set_state, "root", 1, _token, :updated_second}, 100
     end
 
     test "setter is stable across renders" do
       owner = self()
 
       # First render: create a setter
-      fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{}, status: :stable)
+      fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
       {_value1, setter1} =
         with_render_ctx("root", %{"root" => fiber1}, owner, fn ->
           Hooks.use_state(:initial)
         end)
 
+      setter1.(:updated)
+      assert_receive {:filament_set_state, "root", 0, token, new_state}
+
       # Simulate a render pass: setter was committed, state was updated via setter
-      # The slot now contains {new_value, setter1}
-      new_state = :updated
 
       fiber2 =
         Fiber.new(
           id: "root",
           component: nil,
-          hook_slots: %{0 => {new_state, setter1}},
-          status: :stable
+          hook_slots: %{0 => {:state, new_state, setter1, token}}
         )
 
       # Second render: should get the SAME setter function reference

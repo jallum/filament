@@ -7,41 +7,34 @@ defmodule Filament.Hooks do
   Call these at the top level of `render/1`:
 
     - `use_state/1` — local mutable state; returns `{value, setter}`
-    - `use_observable/1` — resolves a server reference to a pid (or nil when disconnected)
-    - `use_observable/2` — resolves a server and projects its state; fn receives `:disconnected` when unavailable
+    - `use_source/1` — bind a reactive source once (factory fn or cell tuple); returns a stable handle
+    - `use_value/2` — read a projected value from a source and subscribe to its updates
     - `use_effect/2` — side-effect with optional cleanup
-    - `memo_at/3` and `event_at/2` — invoked by compiler-generated code from `~F` templates
+    - `event_at/2` — invoked by compiler-generated code from `~F` templates
 
-  ## Pattern: use_observable/1 + use_observable/2
+  ## Pattern: use_source + use_value
 
-  Resolve the server once with `/1`, then project from it with `/2`. This lets you pass
-  the server pid to child components and apply multiple projections from the same process:
+  Bind the source once with `use_source`, then read values from it with `use_value`.
+  This lets you pass the source to child components and apply multiple projections
+  from the same source:
 
       def render(%{session_id: session_id}) do
-        server = use_observable(fn -> MyServer.start_link(session_id) end)
-        count  = use_observable(server, fn
+        source = use_source(fn -> MyServer.cell(session_id) end)
+
+        count = use_value(source, fn
           :disconnected -> 0
           state -> state.count
         end)
-        label  = use_observable(server, fn
-          :disconnected -> ""
-          state -> state.label
-        end)
-        ...
+
+        <ChildComponent source={source} />
       end
 
-  Passing the server as a prop lets child components project their own values without
-  creating redundant subscriptions:
-
-      <ChildComponent server={server} />
-
       # In the child:
-      def render(%{server: server}) do
-        value = use_observable(server, fn
+      def render(%{source: source}) do
+        value = use_value(source, fn
           :disconnected -> nil
           s -> s.some_field
         end)
-        ...
       end
 
   ## Rules of hooks
@@ -51,8 +44,6 @@ defmodule Filament.Hooks do
   3. Hook identity is determined by call order (slot index). Conditional hooks corrupt state.
   """
 
-  alias Filament.Observable.Subscriber
-  alias Filament.Observable.Subscription
   alias Filament.RenderContext
 
   @doc false
@@ -112,32 +103,39 @@ defmodule Filament.Hooks do
   """
   @spec use_state(initial :: term()) :: {value :: term(), setter :: (term() -> :ok)}
   def use_state(initial) do
-    {index, previous, ctx} = use_slot({initial, :__no_setter__})
+    {index, previous, ctx} = use_slot(:uninitialized)
 
-    {value, setter} =
+    slot =
       case previous do
-        {val, s} when is_function(s, 1) ->
-          # Reuse stable setter from previous render
-          {val, s}
+        {:state, _value, _setter, _token} = slot ->
+          slot
 
         _ ->
-          # First render or no setter stored — build a new one
-          {initial, build_setter(ctx.fiber_id, index, ctx.owner_pid)}
+          # The token tells this mount's setter from one left by an earlier
+          # mount at the same fiber id.
+          token = make_ref()
+          {:state, initial, build_setter(ctx.fiber_id, index, token, ctx.owner_pid), token}
       end
 
-    commit_slot(index, {value, setter})
+    commit_slot(index, slot)
+    {:state, value, setter, _token} = slot
     {value, setter}
   end
 
-  defp build_setter(fiber_id, slot_index, owner_pid) when is_pid(owner_pid) do
+  defp build_setter(fiber_id, slot_index, token, owner_pid) when is_pid(owner_pid) do
     fn new_value ->
-      send(owner_pid, {:filament_set_state, fiber_id, slot_index, new_value})
+      send(owner_pid, {:filament_set_state, fiber_id, slot_index, token, new_value})
       :ok
     end
   end
 
-  defp build_setter(_fiber_id, _slot_index, nil) do
-    fn _new_value -> :ok end
+  defp build_setter(_fiber_id, _slot_index, _token, nil) do
+    fn _new_value ->
+      raise ArgumentError,
+            "use_state setter called but the render had no :owner_pid. " <>
+              "This usually means Reconciler.mount/2 or Reconciler.update/3 " <>
+              "was invoked without the owner_pid: self() option."
+    end
   end
 
   @doc """
@@ -178,10 +176,8 @@ defmodule Filament.Hooks do
     ctx = Process.get(:filament_render_context)
     effect_entry = {index, ctx.fiber_id, effect_fn, deps, old_cleanup}
 
-    Process.put(
-      :filament_render_context,
-      %{ctx | pending_effects: [effect_entry | ctx.pending_effects]}
-    )
+    # Declaration order; a child's effects sit where the child rendered.
+    Process.put(:filament_render_context, %{ctx | pending_effects: [effect_entry | ctx.pending_effects]})
   end
 
   defp extract_fn_cleanup({_prev_deps, cleanup}) when is_function(cleanup, 0), do: cleanup
@@ -191,314 +187,234 @@ defmodule Filament.Hooks do
   defp extract_cleanup(_), do: nil
 
   @doc """
-  Resolves an observable server reference to a pid, without subscribing.
+  Bind a reactive source once for the calling fiber and return a stable
+  `%Filament.Source{}` struct.
 
-  The argument can be any of:
-  - a pid, atom, `{:via, ...}`, or `{node, name}` — used directly as the server
-  - a zero-arity function — called on first connect (and again if the process dies) to
-    obtain a pid or `{:ok, pid}`; useful when the component owns the server's lifecycle
-
-  Returns `nil` during disconnected (HTTP static) mounts. On subsequent renders,
-  reuses an existing pid if still alive; restarts a factory fn otherwise.
-
-  Use this hook when you want to pass the server identity to child components or
-  apply multiple projections from the same server via `use_observable/2`.
-
-  Must be called at the top level of `render/1` in consistent order (like all hooks).
-  """
-  @spec use_observable(
-          server_or_fn ::
-            GenServer.server()
-            | (-> pid() | {:ok, pid()} | GenServer.server())
-        ) :: pid() | GenServer.server() | nil
-  def use_observable(server_or_fn) do
-    {slot_index, previous, ctx} = use_slot(:uninitialized)
-
-    if ctx.subscribe_enabled do
-      server = resolve_server(server_or_fn, previous, ctx)
-      commit_slot(slot_index, {:resolved, server})
-      server
-    else
-      commit_slot(slot_index, :uninitialized)
-      nil
-    end
-  end
-
-  @doc """
-  Resolve an observable server and project its state into a value.
-
-  The first argument is a server reference (same as `use_observable/1`). The second
-  argument is a projection function called on every state update from the server. When
-  the server is unavailable (disconnected HTTP mount or nil), the function is called
-  with the atom `:disconnected` so it can return a safe default:
-
-      count = use_observable(CartServer, fn
-        :disconnected -> 0
-        state        -> state.count
-      end)
-
-  Passing the server as a prop lets a parent resolve the process once and share it with
-  children that each apply their own projection:
+  Accepts an existing source or a 0-arity factory fn that returns one.
+  Parents bind the source once (e.g. via a session-keyed
+  `ensure_started/1`) and pass the struct down to children that read
+  their own projections via `use_value/2`.
 
       # Parent
-      server = use_observable(fn -> MyServer.start_link([]) end)
-      <Child server={server} />
+      source = use_source(fn -> CartServer.cell(session_id) end)
+
+      <Child source={source} />
 
       # Child
-      value = use_observable(server, fn
-        :disconnected -> nil
-        s             -> s.some_field
+      count = use_value(source, fn
+        :disconnected -> 0
+        state         -> state.count
       end)
 
-  Must be called at the top level of `render/1` in consistent order (like all hooks).
-  Do not call inside conditionals or loops.
+  Returns `nil` when sources are disconnected (static HTTP renders with
+  `static_subscribe: false`). On subsequent
+  renders, reuses the cached handle if its underlying transport is still
+  reachable; calls the factory again otherwise (e.g. the GenServer behind
+  the source crashed).
+
+  The struct exposes the underlying transport data via `source.data` for
+  components that need to invoke server actions in event handlers:
+
+      on_click={fn -> CartServer.add_item(source.data, item) end}
+
+  See `Filament.Source` for the struct shape and `Filament.Cell` for the
+  transport behaviour.
+
+  Must be called at the top level of `render/1` in consistent order.
   """
-  @spec use_observable(
-          server_or_fn ::
-            GenServer.server()
-            | (-> pid() | {:ok, pid()} | GenServer.server()),
-          project :: (term() | :disconnected -> term())
-        ) :: term()
-  def use_observable(server_or_fn, project) when is_function(project, 1) do
+  @spec use_source(Filament.Source.t() | (-> Filament.Source.t())) :: Filament.Source.t() | nil
+  def use_source(source_or_fn) when is_function(source_or_fn, 0) or is_struct(source_or_fn, Filament.Source) do
     {slot_index, previous, ctx} = use_slot(:uninitialized)
 
-    if ctx.subscribe_enabled do
-      server = resolve_server(server_or_fn, previous, ctx)
-      {value, raw} = resolve_value(server, project, slot_index, previous, ctx)
-      commit_slot(slot_index, %Subscription{server: server, raw: raw, project: project, value: value})
-      value
-    else
+    if ctx.sources == :disconnected do
       commit_slot(slot_index, :uninitialized)
-      project.(:disconnected)
+      nil
+    else
+      source = resolve_source_factory(source_or_fn, previous)
+      commit_slot(slot_index, {:cell_resolved, source})
+      source
     end
   end
 
-  defp resolve_server(factory_fn, previous, _ctx) when is_function(factory_fn, 0) do
+  defp resolve_source_factory(factory_fn, previous) when is_function(factory_fn, 0) do
     case previous do
-      %Subscription{server: pid} when is_pid(pid) ->
-        if Process.alive?(pid), do: pid, else: call_factory(factory_fn)
-
-      {:resolved, pid} when is_pid(pid) ->
-        if Process.alive?(pid), do: pid, else: call_factory(factory_fn)
+      {:cell_resolved, %Filament.Source{} = cached} ->
+        if Filament.Cell.whereis(cached), do: cached, else: factory_fn.()
 
       _ ->
-        call_factory(factory_fn)
+        factory_fn.()
     end
   end
 
-  defp resolve_server(server, _previous, ctx) do
-    Map.get(ctx.observable_stubs, server, server)
-  end
+  defp resolve_source_factory(%Filament.Source{} = source, _previous), do: source
 
-  defp call_factory(factory_fn) do
-    case factory_fn.() do
-      {:ok, pid} -> pid
-      pid -> pid
-    end
-  end
+  @doc """
+  Read a projected value from a source and subscribe to its updates.
 
-  defp resolve_value(server, project, slot_index, previous, ctx) do
-    case previous do
-      :uninitialized ->
-        do_subscribe(server, project, ctx, slot_index)
+  Generic over the source's transport — works against any module that implements
+  `Filament.Cell` (the GenServer-backed observable, an in-process struct, a
+  focus tracker, etc.). The component is unaware of how the source is fed.
 
-      %Subscription{server: ^server, raw: prev_raw} ->
-        # Same server — re-apply project with current closure.
-        # Prefer fresher raw state from new_hook_slots (server update since last render).
-        raw =
-          case Map.get(ctx.new_hook_slots, slot_index) do
-            %Subscription{raw: new_raw} -> new_raw
-            _ -> prev_raw
-          end
+  The hook subscribes with identity projection (the source delivers raw values)
+  and applies the user-supplied `projection` at render time. A projection that
+  closes over local component state always sees the current value.
 
-        {project.(raw), raw}
+  A static HTTP render reads the source's current value without subscribing.
+  Returns `projection.(:disconnected)` when the source is `nil`, sources are
+  disconnected, or the source can't reach its underlying state. An
+  unreachable source is retried with backoff, and when the process behind a
+  source exits (see `c:Filament.Cell.whereis/1`) the hook subscribes again,
+  reaching a server restarted under the same name.
 
-      %Subscription{server: old_server} ->
-        # Server changed — remove our projection from old server, subscribe to new.
-        maybe_remove_projection(ctx, old_server, slot_index)
-        do_subscribe(server, project, ctx, slot_index)
+  ## Example
 
-      :needs_resubscribe ->
-        do_subscribe(server, project, ctx, slot_index)
-    end
-  end
+      defmodule Counter do
+        use Filament.Observable.GenServer
+        # ... handlers omitted ...
+      end
 
-  defp maybe_remove_projection(ctx, old_server, slot_index) do
-    if is_map_key(ctx.fiber_tree, ctx.fiber_id) do
-      Filament.Observable.remove_projection(
-        old_server,
-        ctx.owner_pid,
-        ctx.fiber_id,
-        slot_index
-      )
-    end
-  end
+      def render(%{counter: counter}) do
+        source = Counter.cell(counter)
 
-  defp do_subscribe(server, project, ctx, slot_index) do
-    subscriber = %Subscriber{
-      pid: ctx.owner_pid,
-      proj_keys: %{{ctx.fiber_id, slot_index} => true},
-      session_token: ctx.session_token
-    }
+        count =
+          use_value(source, fn
+            :disconnected -> 0
+            n -> n
+          end)
 
-    case Filament.Observable.subscribe(server, subscriber) do
-      {:ok, initial_raw} ->
-        {project.(initial_raw), initial_raw}
+        ~F"<p>{count}</p>"
+      end
 
-      {:error, reason} ->
-        raise Filament.ObservableError,
-          message: "use_observable subscription rejected: #{inspect(reason)}",
-          observable: server,
-          reason: reason
-    end
-  end
+  Must be called at the top level of `render/1` in consistent order.
+  """
+  @spec use_value(Filament.Source.t() | nil, (term() | :disconnected -> term())) :: term()
+  def use_value(cell, projection) when is_function(projection, 1) do
+    {slot_index, previous, ctx} = use_slot(:uninitialized)
 
-  @doc false
-  @spec memo_at(
-          slot :: non_neg_integer() | {:t, non_neg_integer()},
-          deps :: [term()] | :no_deps,
-          factory :: (-> term())
-        ) :: term()
-  def memo_at(slot, deps, factory) when is_function(factory, 0) do
-    ctx = Process.get(:filament_render_context)
-
-    if is_nil(ctx) do
-      # Called outside a render pass (PLV diff engine re-evaluating comprehension entry fns).
-      # Just compute and return — no caching needed here.
-      factory.()
+    if is_nil(cell) or ctx.sources != :subscribe do
+      Filament.HookSlot.cleanup(previous)
+      commit_slot(slot_index, :uninitialized)
+      projection.(if cell && ctx.sources == :current, do: Filament.Cell.current(cell, & &1), else: :disconnected)
     else
-      previous = read_slot_at(ctx, slot)
+      observable_subscribed(cell, projection, slot_index, previous, ctx)
+    end
+  end
 
+  # The slot keeps this render's projection and value, so an update that
+  # leaves the projected value unchanged can skip the next render.
+  defp observable_subscribed(cell, projection, slot_index, previous, ctx) do
+    subscription =
       case previous do
-        {:memo, cached_deps, cached_value, handler_range}
-        when deps != :no_deps and cached_deps == deps ->
-          # Cache hit: replay event handlers registered by the factory last time
-          # so the fiber's event_handlers map stays populated without re-running factory.
-          replay_handler_range(ctx, handler_range)
-          after_ctx = Process.get(:filament_render_context)
-          slot_entry = {:memo, cached_deps, cached_value, handler_range}
-          updated = Map.put(after_ctx.new_hook_slots, slot, slot_entry)
-          Process.put(:filament_render_context, %{after_ctx | new_hook_slots: updated})
-          cached_value
+        {:cell_subscribed, ^cell, raw, subscriber, _projection, _value} ->
+          {:ok, raw, subscriber}
+
+        # A refresh keeps the subscription, and whatever the source holds for it.
+        {:cell_resubscribe, ^cell, subscriber} ->
+          observable_subscribe(cell, subscriber)
 
         _ ->
-          # Cache miss or first render: run factory, record which handler indices it used.
-          run_memo_factory(slot, deps, factory)
+          Filament.HookSlot.cleanup(previous)
+          observable_subscribe(cell, {ctx.owner_pid, ctx.fiber_id, slot_index, monitor_source(cell)})
       end
-    end
-  end
 
-  defp run_memo_factory(slot, deps, factory) do
-    ctx = Process.get(:filament_render_context)
-    e_start = ctx.event_handler_index
-    value = factory.()
-    after_ctx = Process.get(:filament_render_context)
-    e_end = after_ctx.event_handler_index
-    stored_deps = if deps == :no_deps, do: :no_deps, else: deps
-    slot_entry = {:memo, stored_deps, value, {e_start, e_end}}
-    updated = Map.put(after_ctx.new_hook_slots, slot, slot_entry)
-    Process.put(:filament_render_context, %{after_ctx | new_hook_slots: updated})
-    value
-  end
-
-  defp read_slot_at(ctx, slot) do
-    case Map.get(ctx.hook_slots, slot) do
-      nil ->
-        fiber = Map.get(ctx.fiber_tree, ctx.fiber_id)
-        if fiber, do: Map.get(fiber.hook_slots, slot, :__unset__), else: :__unset__
-
-      value ->
+    case subscription do
+      {:ok, raw, subscriber} ->
+        value = projection.(raw)
+        commit_slot(slot_index, {:cell_subscribed, cell, raw, subscriber, projection, value})
         value
+
+      # The timer owns the next attempt: a monitor that fires at once, on a
+      # name not registered on a remote node, would skip the backoff.
+      {:disconnected, {_owner, _fiber_id, _slot, ref} = subscriber} ->
+        Process.demonitor(ref, [:flush])
+
+        attempts =
+          case previous do
+            {:cell_retry, ^cell, _subscriber, n} -> n
+            _ -> 0
+          end
+
+        retry_subscribe(ctx.owner_pid, subscriber, attempts)
+        commit_slot(slot_index, {:cell_retry, cell, subscriber, attempts + 1})
+        projection.(:disconnected)
     end
   end
 
-  # Replay event handlers from the previous fiber for the given auto-increment index range.
-  defp replay_handler_range(_ctx, {e_start, e_start}), do: :ok
-
-  defp replay_handler_range(ctx, {e_start, e_end}) do
-    fiber = Map.get(ctx.fiber_tree, ctx.fiber_id)
-
-    if fiber do
-      after_ctx = Process.get(:filament_render_context)
-      replayed = Map.take(fiber.event_handlers, Enum.to_list(e_start..(e_end - 1)))
-      merged = Map.merge(after_ctx.new_event_handlers, replayed)
-
-      Process.put(:filament_render_context, %{
-        after_ctx
-        | new_event_handlers: merged,
-          event_handler_index: max(after_ctx.event_handler_index, e_end)
-      })
+  defp observable_subscribe(cell, subscriber) do
+    case Filament.Cell.subscribe(cell, subscriber, &Function.identity/1) do
+      {:ok, raw} -> {:ok, raw, subscriber}
+      :disconnected -> {:disconnected, subscriber}
     end
   end
 
-  # Reserve static events before evaluating a template: nested helpers and loops
-  # allocate after this range. Memo scopes distinguish call sites and repeated calls.
-  @doc false
-  def reserve_template(template, event_count) do
-    case Process.get(:filament_render_context) do
-      nil ->
-        {0, {template, 0}}
-
-      ctx ->
-        index = Map.get(ctx.template_indices, template, 0)
-        base = ctx.event_handler_index
-
-        updated = %{
-          ctx
-          | event_handler_index: base + event_count,
-            template_indices: Map.put(ctx.template_indices, template, index + 1)
-        }
-
-        Process.put(:filament_render_context, updated)
-        {base, {template, index}}
+  # The subscriber's ref monitors the source's process, so the owner hears
+  # `{:cell_resubscribe, ref, :process, pid, reason}` when it exits and
+  # subscribes again, reaching a restarted server.
+  defp monitor_source(cell) do
+    case Filament.Cell.whereis(cell) do
+      process when is_pid(process) or is_tuple(process) -> :erlang.monitor(:process, process, tag: :cell_resubscribe)
+      _ -> make_ref()
     end
   end
 
-  @doc false
-  @spec event_at(slot :: non_neg_integer(), handler :: function()) :: wire_ref :: String.t()
-  def event_at(slot, handler) when is_function(handler) do
+  @retry_ms 100
+  @max_retry_ms 5_000
+
+  # Ask the owner to try again after a backoff, so a source that isn't
+  # running yet, or is restarting, connects once it's up. The message has the
+  # shape of the source's exit, so either finds the slot by its ref.
+  defp retry_subscribe(owner, {_owner, _fiber_id, _slot, ref}, attempts) when is_pid(owner) do
+    delay = min(@retry_ms * Integer.pow(2, min(attempts, 6)), @max_retry_ms)
+    Process.send_after(owner, {:cell_resubscribe, ref, :process, nil, :retry}, delay)
+  end
+
+  defp retry_subscribe(_owner, _subscriber, _attempts), do: :ok
+
+  @doc """
+  Register a bubble or capture-phase event handler at the next slot.
+
+  `kinds` is `:all` (default) or a `MapSet` of atoms. `Filament.Core.dispatch_event/5`
+  fires the handler only when the dispatched kind matches the kinds-set.
+  Backwards-compatible: 1- and 2-arity calls keep working with `kinds = :all`.
+  """
+  @spec register_event_handler(function()) :: String.t()
+  @spec register_event_handler(function(), :bubble | :capture) :: String.t()
+  @spec register_event_handler(function(), :bubble | :capture, :all | MapSet.t(atom())) ::
+          String.t()
+  def register_event_handler(handler, phase \\ :bubble, kinds \\ :all)
+      when is_function(handler) and phase in [:bubble, :capture] do
     ctx =
       Process.get(:filament_render_context) ||
         raise ArgumentError, "hook called outside a render pass — hooks may only be called from render/1"
 
     fiber_id_str = to_string(ctx.fiber_id)
-    new_handlers = Map.put(ctx.new_event_handlers, slot, handler)
-    Process.put(:filament_render_context, %{ctx | new_event_handlers: new_handlers})
-    "#{fiber_id_str}:#{slot}"
+    {idx, new_ctx} = advance_handler_index(ctx, phase, handler, kinds)
+    Process.put(:filament_render_context, new_ctx)
+    "#{fiber_id_str}:#{idx}"
   end
 
-  @doc false
-  def set_event_handler_floor(n) when is_integer(n) do
-    case Process.get(:filament_render_context) do
-      nil ->
-        :ok
-
-      ctx when ctx.event_handler_index < n ->
-        Process.put(:filament_render_context, %{ctx | event_handler_index: n})
-
-      _ ->
-        :ok
-    end
-  end
-
-  @doc false
-  @spec register_event_handler(handler :: function()) :: wire_ref :: String.t()
-  def register_event_handler(handler) when is_function(handler) do
-    ctx =
-      Process.get(:filament_render_context) ||
-        raise ArgumentError, "hook called outside a render pass — hooks may only be called from render/1"
-
+  defp advance_handler_index(ctx, :bubble, handler, kinds) do
     idx = ctx.event_handler_index
-    fiber_id_str = to_string(ctx.fiber_id)
 
     new_ctx = %{
       ctx
       | event_handler_index: idx + 1,
-        new_event_handlers: Map.put(ctx.new_event_handlers, idx, handler)
+        new_event_handlers: Map.put(ctx.new_event_handlers, idx, {handler, kinds})
     }
 
-    Process.put(:filament_render_context, new_ctx)
-    "#{fiber_id_str}:#{idx}"
+    {idx, new_ctx}
+  end
+
+  defp advance_handler_index(ctx, :capture, handler, kinds) do
+    idx = ctx.capture_handler_index
+
+    new_ctx = %{
+      ctx
+      | capture_handler_index: idx + 1,
+        new_capture_handlers: Map.put(ctx.new_capture_handlers, idx, {handler, kinds})
+    }
+
+    {idx, new_ctx}
   end
 
   @doc false

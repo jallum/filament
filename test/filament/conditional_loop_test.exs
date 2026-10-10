@@ -2,7 +2,6 @@ defmodule Filament.ConditionalLoopTest do
   use ExUnit.Case, async: true
 
   alias Filament.Reconciler
-  alias Phoenix.HTML.Safe
 
   defmodule Leaf do
     @moduledoc false
@@ -47,7 +46,7 @@ defmodule Filament.ConditionalLoopTest do
     end
   end
 
-  defp html(rendered), do: rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+  defp html(rendered), do: rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
 
   test "component props stay behind the enclosing if in attribute loops" do
     {tree, rendered, _} = Reconciler.mount(Rows, %{live: nil}, owner_pid: self())
@@ -74,8 +73,50 @@ defmodule Filament.ConditionalLoopTest do
     assert_receive {:leaf_rendered, "yes"}
     refute_receive {:leaf_rendered, _}
     assert map_size(tree["root"].event_handlers) == 1
-    [handler] = Map.values(tree["root"].event_handlers)
+    [{handler, :all}] = Map.values(tree["root"].event_handlers)
     handler.()
     assert_receive {:clicked, "yes"}
+  end
+
+  defmodule Items do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      slot(:item)
+      def render(_props), do: ~F"<ul><:item /></ul>"
+    end
+  end
+
+  defmodule Filtered do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      def render(%{xs: xs}) do
+        ~F"""
+        <div><Filament.ConditionalLoopTest.Leaf :for={x <- xs} :if={x != "b"} :key={x} v={x} /><Filament.ConditionalLoopTest.Items><:item :for={x <- xs} :if={x != "b"}><i>{x}</i></:item></Filament.ConditionalLoopTest.Items></div>
+        """
+      end
+    end
+  end
+
+  test ":if beside :for filters each component and slot iteration on every target" do
+    for target <- [Filament.VNode, Filament.Web] do
+      {tree, output, _} = Reconciler.mount(Filtered, %{xs: ["a", "b", "c"]}, target: target)
+
+      assert output |> Filament.Web.to_iodata() |> IO.iodata_to_binary() ==
+               "<div><b>a</b><b>c</b><ul><i>a</i><i>c</i></ul></div>"
+
+      Reconciler.unmount(tree)
+    end
+  end
+
+  test "sibling components with the same key raise on every target" do
+    for target <- [Filament.VNode, Filament.Web] do
+      assert_raise ArgumentError, ~r/duplicate key "a"/, fn ->
+        Reconciler.mount(Filtered, %{xs: ["a", "a"]}, target: target)
+      end
+    end
   end
 end

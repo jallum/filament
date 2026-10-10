@@ -9,7 +9,7 @@ defmodule Filament.Bench.Workloads do
   alias Phoenix.LiveView.Diff
   alias Phoenix.LiveView.Socket
 
-  @jobs ~w(render/mount render/unchanged render/leaf_state keyed/append keyed/prepend keyed/reverse keyed/remove_half keyed/clear reactivity/changed reactivity/unchanged)
+  @jobs ~w(render/mount render/unchanged render/leaf_state keyed/append keyed/prepend keyed/reverse keyed/move keyed/remove_half keyed/clear reactivity/changed reactivity/unchanged)
   def jobs, do: @jobs
 
   def setup(job, size) do
@@ -38,6 +38,9 @@ defmodule Filament.Bench.Workloads do
       input
     else
       {tree, output, []} = Reconciler.mount(component, props, Compat.render_options())
+
+      {tree, output} = prepare_move(job, tree, output, props, size)
+
       rendered = Compat.rendered(output)
       {initial_diff, prints, components} = Diff.render(socket, rendered, input.prints, input.components)
 
@@ -52,6 +55,15 @@ defmodule Filament.Bench.Workloads do
     end
   end
 
+  defp prepare_move("keyed/move", tree, _output, props, size) do
+    {id, _leaf} = Enum.find(tree, fn {_, fiber} -> fiber.props[:id] == size end)
+    tree = Compat.put_state(tree, id, 0, size + 1)
+    {tree, output, []} = Reconciler.update(tree, "root", props, Compat.render_options())
+    {tree, output}
+  end
+
+  defp prepare_move(_job, tree, output, _props, _size), do: {tree, output}
+
   def run(%{job: "render/mount"} = input) do
     {tree, output, []} = Reconciler.mount(input.component, input.props, Compat.render_options())
     finish(input, tree, output, input.props.items, 0, 0)
@@ -59,12 +71,12 @@ defmodule Filament.Bench.Workloads do
 
   def run(%{job: "render/leaf_state"} = input) do
     {_id, leaf} = Enum.find(input.tree, fn {_, fiber} -> fiber.props[:id] == input.size end)
-    {_value, setter} = leaf.hook_slots[0]
-    :ok = setter.(-1)
+    :ok = Compat.setter(leaf.hook_slots[0]).(-1)
 
     receive do
-      {:filament_set_state, fid, slot, value} ->
-        tree = Filament.FiberTree.update_hook_slot(input.tree, fid, slot, fn {_, setter} -> {value, setter} end)
+      message when elem(message, 0) == :filament_set_state ->
+        value = elem(message, tuple_size(message) - 1)
+        tree = Compat.put_state(input.tree, elem(message, 1), elem(message, 2), value)
         update(input, tree, input.props, 1, 1)
     after
       5_000 -> raise "missing state update"
@@ -91,6 +103,7 @@ defmodule Filament.Bench.Workloads do
   defp next_items("render/unchanged", items, _), do: items
   defp next_items("keyed/append", items, n), do: items ++ [n + 1]
   defp next_items("keyed/prepend", items, _), do: [0 | items]
+  defp next_items("keyed/move", items, _), do: [List.last(items) | Enum.drop(items, -1)]
   defp next_items("keyed/reverse", items, _), do: Enum.reverse(items)
   defp next_items("keyed/remove_half", items, n), do: Enum.take(items, div(n, 2))
   defp next_items("keyed/clear", _, _), do: []
@@ -155,6 +168,7 @@ defmodule Filament.Bench.Workloads do
   defp expected_values(%{job: "reactivity/changed"}, items), do: Enum.map(items, fn _ -> 1 end)
   defp expected_values(%{job: "reactivity/unchanged"}, items), do: Enum.map(items, fn _ -> 0 end)
   defp expected_values(%{job: "render/leaf_state", size: n}, items), do: Enum.map(items, &if(&1 == n, do: -1, else: &1))
+  defp expected_values(%{job: "keyed/move", size: n}, items), do: Enum.map(items, &if(&1 == n, do: n + 1, else: &1))
   defp expected_values(_, items), do: items
 
   defp verify_retained_fibers(old, new) do

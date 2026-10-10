@@ -1,0 +1,439 @@
+defmodule Filament.Observable.CellImplTest do
+  @moduledoc """
+  Phase 2.2: `Filament.Observable.GenServer` implements the `Filament.Cell`
+  behaviour, so a GenServer-backed observable can be addressed as a Cell
+  transport: `Filament.Source.new(Filament.Observable.GenServer, server_pid_or_name)`.
+
+  The legacy `Filament.Observable.subscribe/2` API and `notify_observers/1`
+  message format stay untouched — these tests only exercise the Cell-shaped
+  surface.
+  """
+  use ExUnit.Case, async: true
+
+  alias Filament.Cell
+
+  defmodule Counter do
+    @moduledoc false
+    use Filament.Observable.GenServer
+
+    def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, 0, opts)
+
+    @impl GenServer
+    def init(initial), do: {:ok, initial}
+
+    @impl GenServer
+    def handle_call({:set, value}, _from, _count) do
+      notify_observers(value)
+      {:reply, :ok, value}
+    end
+
+    def handle_call(:increment, _from, count) do
+      new_count = count + 1
+      notify_observers(new_count)
+      {:reply, new_count, new_count}
+    end
+  end
+
+  defmodule SeededCounter do
+    @moduledoc false
+    use Filament.Observable.GenServer
+
+    def start_link(_opts), do: GenServer.start_link(__MODULE__, 0)
+    def init(state), do: {:ok, state}
+    def handle_subscribe(_subscriber, state), do: {:ok, -1, state}
+
+    def handle_call({:set, value}, _from, _state) do
+      notify_observers(value)
+      {:reply, :ok, value}
+    end
+  end
+
+  defmodule ReadOnlyCounter do
+    @moduledoc false
+    use Filament.Observable.GenServer
+
+    def start_link, do: GenServer.start_link(__MODULE__, %{value: 7, subscriptions: 0})
+
+    @impl GenServer
+    def init(state), do: {:ok, state}
+
+    @impl Filament.Observable
+    def handle_subscribe(_subscriber, state) do
+      {:ok, state.value, %{state | subscriptions: state.subscriptions + 1}}
+    end
+
+    @impl Filament.Observable
+    def handle_current(state), do: {:ok, state.value, state}
+  end
+
+  describe "Cell.subscribe/3 against a GenServer-backed observable" do
+    test "delivers the current projected value on subscribe" do
+      {:ok, server} = Counter.start_link()
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+
+      assert {:ok, 0} = Cell.subscribe(cell, self(), & &1)
+    end
+
+    test "applies a projection on subscribe" do
+      {:ok, server} = Counter.start_link()
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+
+      assert {:ok, "0"} = Cell.subscribe(cell, self(), &Integer.to_string/1)
+    end
+
+    test "returns :disconnected when the server isn't running" do
+      cell = Filament.Source.new(Filament.Observable.GenServer, :nonexistent_server_name)
+      assert :disconnected = Cell.subscribe(cell, self(), & &1)
+    end
+
+    test "does not invoke the subscription callback" do
+      {:ok, server} = ReadOnlyCounter.start_link()
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+
+      assert Cell.current(cell, & &1) == 7
+      assert :sys.get_state(server).subscriptions == 0
+    end
+  end
+
+  describe "Cell.current/2" do
+    test "reads the current projected value without subscribing" do
+      {:ok, server} = Counter.start_link()
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+
+      assert Cell.current(cell, & &1) == 0
+      GenServer.call(server, :increment)
+      assert Cell.current(cell, & &1) == 1
+    end
+
+    test "returns :disconnected when the server isn't running" do
+      cell = Filament.Source.new(Filament.Observable.GenServer, :nonexistent_server)
+      assert Cell.current(cell, & &1) == :disconnected
+    end
+  end
+
+  describe "Cell.unsubscribe/2" do
+    test "is idempotent on unknown subscribers" do
+      {:ok, server} = Counter.start_link()
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+
+      assert :ok = Cell.unsubscribe(cell, :never_subscribed)
+    end
+
+    test "is idempotent when the server isn't running" do
+      cell = Filament.Source.new(Filament.Observable.GenServer, :nonexistent_server)
+      assert :ok = Cell.unsubscribe(cell, :anything)
+    end
+  end
+
+  describe "change-or-bust delivery" do
+    test "subscriber receives an update when the projection changes" do
+      {:ok, server} = Counter.start_link()
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+
+      Cell.subscribe(cell, {self(), :counter}, & &1)
+      GenServer.call(server, :increment)
+
+      assert_receive {:cell_update, {self_pid, :counter}, 1}, 200
+      assert self_pid == self()
+    end
+
+    test "subscriber does NOT receive an update when projection unchanged" do
+      {:ok, server} = Counter.start_link()
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+
+      # Project to a constant — every state-change event projects to the same
+      # value, so the change-or-bust filter must suppress updates.
+      Cell.subscribe(cell, :const_sub, fn _ -> :always_same end)
+      GenServer.call(server, :increment)
+      GenServer.call(server, :increment)
+
+      refute_receive {:cell_update, :const_sub, _}, 100
+    end
+
+    test "unsubscribed subscriber stops receiving updates" do
+      {:ok, server} = Counter.start_link()
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+
+      Cell.subscribe(cell, {self(), :unsub_test}, & &1)
+      Cell.unsubscribe(cell, {self(), :unsub_test})
+
+      GenServer.call(server, :increment)
+      refute_receive {:cell_update, {_, :unsub_test}, _}, 100
+    end
+
+    test "batches updates for one owner" do
+      {:ok, server} = Counter.start_link()
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+
+      Cell.subscribe(cell, {self(), :first}, & &1)
+      Cell.subscribe(cell, {self(), :second}, & &1)
+      GenServer.call(server, :increment)
+
+      assert_receive {:cell_updates, updates}, 200
+      assert Enum.sort(updates) == Enum.sort([{{self(), :first}, 1}, {{self(), :second}, 1}])
+      refute_receive {:cell_update, _, _}
+    end
+  end
+
+  test "nil is delivered, deduplicated, and followed by non-nil updates" do
+    server = start_supervised!(Counter)
+    source = Counter.cell(server)
+    subscriber = {self(), :nullable}
+    assert {:ok, 0} = Cell.subscribe(source, subscriber, &Function.identity/1)
+    GenServer.call(server, {:set, nil})
+    assert_receive {:cell_update, ^subscriber, nil}
+    GenServer.call(server, {:set, nil})
+    refute_receive {:cell_update, _, _}
+    GenServer.call(server, {:set, 3})
+    assert_receive {:cell_update, ^subscriber, 3}
+  end
+
+  test "nil projection values are included in owner batches" do
+    server = start_supervised!(Counter)
+    source = Counter.cell(server)
+    first = {self(), :nullable}
+    second = {self(), :number}
+    Cell.subscribe(source, first, fn n -> if n == 0, do: 0 end)
+    Cell.subscribe(source, second, &Function.identity/1)
+    GenServer.call(server, :increment)
+    assert_receive {:cell_updates, updates}
+    assert Map.new(updates) == %{first => nil, second => 1}
+  end
+
+  test "shared owners retain distinct projections and strict equality" do
+    server = start_supervised!(Counter)
+    source = Counter.cell(server)
+    first = {self(), :identity, 0, make_ref()}
+    second = {self(), :constant, 0, make_ref()}
+    assert {:ok, 0} = Cell.subscribe(source, first, &Function.identity/1)
+    assert {:ok, :constant} = Cell.subscribe(source, second, fn _ -> :constant end)
+
+    GenServer.call(server, {:set, 0.0})
+    assert_receive {:cell_update, ^first, 0.0}
+    GenServer.call(server, {:set, 0.0})
+    refute_receive {:cell_update, _, _}
+    refute_receive {:cell_updates, _}
+
+    Cell.unsubscribe(source, first)
+    assert {:ok, 0.0} = Cell.subscribe(source, first, &Function.identity/1)
+    GenServer.call(server, {:set, 2})
+    assert_receive {:cell_update, ^first, 2}
+  end
+
+  test "custom projections still run for repeated equal raw values beside identity subscribers" do
+    server = start_supervised!(Counter)
+    source = Counter.cell(server)
+    observer = self()
+    identity = {self(), :identity}
+    custom = {self(), :custom}
+    Cell.subscribe(source, identity, &Function.identity/1)
+
+    Cell.subscribe(source, custom, fn value ->
+      send(observer, {:projected, value})
+      value
+    end)
+
+    assert_receive {:projected, 0}
+
+    GenServer.call(server, {:set, 0})
+    assert_receive {:projected, 0}
+    GenServer.call(server, {:set, 0})
+    assert_receive {:projected, 0}
+    refute_receive {:cell_update, _, _}
+    refute_receive {:cell_updates, _}
+  end
+
+  test "callback-derived initial values and refreshes receive unchanged raw state" do
+    server = start_supervised!(SeededCounter)
+    source = SeededCounter.cell(server)
+    subscriber = {self(), :seeded, 0, make_ref()}
+    assert {:ok, -1} = Cell.subscribe(source, subscriber, &Function.identity/1)
+    GenServer.call(server, {:set, 0})
+    assert_receive {:cell_update, ^subscriber, 0}
+    GenServer.call(server, {:set, 0})
+    refute_receive {:cell_update, _, _}
+
+    # A repeat subscribe is a refresh: handle_subscribe doesn't run again,
+    # and the reply is the current value.
+    assert {:ok, 0} = Cell.subscribe(source, subscriber, &Function.identity/1)
+    GenServer.call(server, {:set, 0})
+    refute_receive {:cell_update, _, _}
+    GenServer.call(server, {:set, 1})
+    assert_receive {:cell_update, ^subscriber, 1}
+    Cell.unsubscribe(source, subscriber)
+    assert {:ok, -1} = Cell.subscribe(source, subscriber, &Function.identity/1)
+    GenServer.call(server, {:set, 0})
+    assert_receive {:cell_update, ^subscriber, 0}
+  end
+
+  # Counts held resources: each subscription acquires one and releases it once.
+  defmodule Holder do
+    @moduledoc false
+    use Filament.Observable.GenServer
+
+    def start_link(test_pid), do: GenServer.start_link(__MODULE__, %{test: test_pid, held: 0, value: 0})
+    def init(state), do: {:ok, state}
+
+    def handle_subscribe(:reject, state), do: {:error, :nope, state}
+
+    def handle_subscribe(subscriber, state) do
+      send(state.test, {:acquire, subscriber})
+      {:ok, state.value, %{state | held: state.held + 1}}
+    end
+
+    def handle_unsubscribe(subscriber, state) do
+      send(state.test, {:release, subscriber})
+      {:ok, %{state | held: state.held - 1}}
+    end
+
+    def handle_current(state), do: {:ok, state.value, state}
+
+    def handle_call(:held, _from, state), do: {:reply, state.held, state}
+
+    def handle_call({:set, value}, _from, state) do
+      notify_observers(value)
+      {:reply, :ok, %{state | value: value}}
+    end
+
+    def handle_info({:DOWN, _ref, :process, _pid, _reason} = message, state) do
+      send(state.test, {:own_down, message})
+      {:noreply, state}
+    end
+
+    def handle_info(:block, state) do
+      receive do: (:unblock -> :ok)
+      {:noreply, state}
+    end
+  end
+
+  describe "subscriber contract" do
+    setup do
+      server = start_supervised!({Holder, self()})
+      %{server: server, cell: Filament.Source.new(Filament.Observable.GenServer, server)}
+    end
+
+    test "a repeated subscribe refreshes without acquiring or releasing", %{server: server, cell: cell} do
+      sub = {self(), "root", 0, make_ref()}
+      assert {:ok, 0} = Cell.subscribe(cell, sub, &Function.identity/1)
+      assert_receive {:acquire, ^sub}
+      assert {:ok, 0} = Cell.subscribe(cell, sub, &Function.identity/1)
+      refute_receive {:release, _}
+      refute_received {:acquire, _}
+      assert GenServer.call(server, :held) == 1
+
+      Cell.unsubscribe(cell, sub)
+      assert_receive {:release, ^sub}
+      assert GenServer.call(server, :held) == 0
+    end
+
+    test "a rejected subscribe reads as disconnected and keeps the server", %{server: server, cell: cell} do
+      assert Cell.subscribe(cell, :reject, &Function.identity/1) == :disconnected
+      assert Process.alive?(server)
+    end
+
+    test "an opaque subscriber identity receives updates at the caller", %{server: server, cell: cell} do
+      assert {:ok, 0} = Cell.subscribe(cell, :opaque, &Function.identity/1)
+      GenServer.call(server, {:set, 1})
+      assert_receive {:cell_update, :opaque, 1}
+    end
+
+    test "the server's own handle_info still sees its messages", %{server: server, cell: cell} do
+      sub = {self(), "root", 0, make_ref()}
+      {:ok, 0} = Cell.subscribe(cell, sub, &Function.identity/1)
+      ref = Process.monitor(self())
+      send(server, {:DOWN, ref, :process, self(), :normal})
+      assert_receive {:own_down, {:DOWN, ^ref, _, _, _}}
+      assert GenServer.call(server, :held) == 1
+    end
+
+    test "a stray message to a server without handle_info is logged, not fatal" do
+      {:ok, server} = Counter.start_link()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          send(server, :stray)
+          assert GenServer.call(server, :increment) == 1
+        end)
+
+      assert log =~ "unexpected message"
+    end
+
+    test "a subscribe that times out does not stay subscribed", %{server: server, cell: cell} do
+      sub = {self(), "root", 0, make_ref()}
+      send(server, :block)
+      task = Task.async(fn -> Cell.subscribe(cell, sub, &Function.identity/1) end)
+      assert Task.await(task, 10_000) == :disconnected
+      send(server, :unblock)
+      assert_receive {:acquire, ^sub}
+      assert_receive {:release, ^sub}
+      assert GenServer.call(server, :held) == 0
+    end
+  end
+
+  # Keeps a timeout once armed: zero, so it fires as soon as a handler
+  # returns it. Arming itself returns none, so only Filament's handlers can.
+  defmodule WithTimeout do
+    @moduledoc false
+    use Filament.Observable.GenServer
+
+    def start_link(test_pid), do: GenServer.start_link(__MODULE__, test_pid)
+    def init(test_pid), do: {:ok, %{test: test_pid, armed: false}}
+
+    def handle_call(:arm, _from, state), do: {:reply, :ok, %{state | armed: true}}
+
+    def handle_info(:timeout, state) do
+      send(state.test, :timed_out)
+      {:noreply, %{state | armed: false}}
+    end
+
+    @impl Filament.Observable
+    def timeout(%{armed: true}), do: 0
+    def timeout(_state), do: :infinity
+  end
+
+  describe "the server's own timeout" do
+    setup do
+      pid = start_supervised!({WithTimeout, self()})
+      %{pid: pid, cell: Filament.Source.new(Filament.Observable.GenServer, pid)}
+    end
+
+    test "a subscribe keeps it", %{pid: pid, cell: cell} do
+      :ok = GenServer.call(pid, :arm)
+      refute_received :timed_out
+
+      assert {:ok, _state} = Cell.subscribe(cell, {self(), "root", 0, make_ref()}, &Function.identity/1)
+      assert_receive :timed_out
+    end
+
+    test "a current-value read keeps it", %{pid: pid, cell: cell} do
+      :ok = GenServer.call(pid, :arm)
+      assert %{armed: true} = Cell.current(cell, &Function.identity/1)
+      assert_receive :timed_out
+    end
+
+    test "an unsubscribe keeps it", %{pid: pid, cell: cell} do
+      sub = {self(), "root", 0, make_ref()}
+      {:ok, _state} = Cell.subscribe(cell, sub, &Function.identity/1)
+      :ok = GenServer.call(pid, :arm)
+
+      Cell.unsubscribe(cell, sub)
+      assert_receive :timed_out
+    end
+
+    test "a subscriber's exit keeps it", %{pid: pid, cell: cell} do
+      test = self()
+
+      subscriber =
+        spawn(fn ->
+          {:ok, _state} = Cell.subscribe(cell, {self(), "root", 0, make_ref()}, &Function.identity/1)
+          send(test, :subscribed)
+          receive do: (:exit -> :ok)
+        end)
+
+      assert_receive :subscribed
+      :ok = GenServer.call(pid, :arm)
+      send(subscriber, :exit)
+      assert_receive :timed_out
+    end
+  end
+end
