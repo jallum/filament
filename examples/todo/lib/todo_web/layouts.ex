@@ -173,7 +173,7 @@ defmodule TodoWeb.Layouts do
         </style>
       </head>
       <body>
-        <p class="tip">Try opening this page in another tab — the todo list is shared, so changes appear live in every tab.</p>
+        <p class="tip">Try opening this page in another tab — each tab owns its own list, which stops when the tab closes.</p>
         <%= @inner_content %>
         <script src="/phoenix/phoenix.min.js"></script>
         <script src="/phoenix_live_view/phoenix_live_view.min.js"></script>
