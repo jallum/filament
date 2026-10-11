@@ -53,38 +53,26 @@ defmodule Filament.Web.Template do
   defp encode({_key, value, :child}) when is_tuple(value) or is_list(value), do: Filament.Web.to_rendered(value)
   defp encode({_key, value, :child}), do: Safe.to_iodata(value)
 
-  # A keyed loop of components that render one shared template.
-  defp components([]), do: Filament.Web.to_rendered({:fragment, []})
+  # A loop of components that render one shared template. LiveView matches
+  # keyed rows by module and key, unkeyed rows by position.
+  defp components([{:component, _, _, _, %Template{} = first} | _] = children) do
+    keys = Enum.map(children, fn {:component, mod, _, key, _} -> if key not in [nil, false], do: {mod, key} end)
+    keyed? = Enum.all?(keys)
 
-  defp components(children) do
-    if homogeneous_keyed_templates?(children) do
-      [{:component, _, _, _, first} | _] = children
-
-      comprehension(
-        first,
-        Enum.map(children, fn {:component, mod, _, key, output} -> entry({mod, key}, output) end),
-        true
-      )
+    if Enum.all?(children, &shares_template?(&1, first)) and
+         if(keyed?, do: unique?(keys), else: not Enum.any?(keys)) do
+      comprehension(first, Enum.zip_with(keys, children, fn key, child -> entry(key, elem(child, 4)) end), keyed?)
     else
       Filament.Web.to_rendered({:fragment, children})
     end
   end
 
-  defp homogeneous_keyed_templates?([{:component, _, _, _, %Template{} = first} | _] = children) do
-    keys =
-      Enum.map(children, fn
-        {:component, mod, _props, key, %Template{} = output} when key not in [nil, false] ->
-          if output.static == first.static and output.bindings == first.bindings and Template.normal_attributes?(output),
-            do: {mod, key}
+  defp components(children), do: Filament.Web.to_rendered({:fragment, children})
 
-        _ ->
-          nil
-      end)
+  defp shares_template?({:component, _, _, _, %Template{} = output}, first),
+    do: output.static == first.static and output.bindings == first.bindings and Template.normal_attributes?(output)
 
-    not Enum.member?(keys, nil) and unique?(keys)
-  end
-
-  defp homogeneous_keyed_templates?(_), do: false
+  defp shares_template?(_child, _first), do: false
 
   # Rows of one compiled loop share a plan. LiveView matches keyed rows by
   # key and unkeyed rows by position. Rows that can't share the plan's

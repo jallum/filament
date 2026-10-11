@@ -98,6 +98,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request; presence servers also counted the static render as a viewer.
   `static_subscribe: false` still skips reading sources during that render.
 
+- `Filament.LiveView` and `Filament.LiveComponent` send only what changed
+  since the last frame. They keep the complete output last sent and diff
+  the next one against it, so an unchanged subtree sends nothing, however
+  the tree around it rendered. `:for` loops of markup and of components are
+  sent as LiveView comprehensions: keyed rows are patched by key, so a move
+  or insert sends no unchanged row, and rows without `:key` by position.
+  Loops of markup inside `{if}`, `{case}` and `{cond}` branches compile the
+  same way. Rows with an omitted, bare or keyword-list attribute, or a
+  repeated key, are sent as one block as before.
+
 ### Fixed
 
 - `handle_subscribe/2` returning `{:error, reason, state}` reads as

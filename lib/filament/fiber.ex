@@ -64,8 +64,11 @@ defmodule Filament.Fiber do
       "root.MyApp.CartView[key=7]"
   """
   def child_id(parent_id, component, {:index, index}), do: "#{parent_id}.#{component}[#{index}]"
+  def child_id(parent_id, component, {:key, key}) when is_integer(key), do: "#{parent_id}.#{component}[key=#{key}]"
+
   # Every term prints differently in full, without struct Inspect impls or
   # truncation, so distinct keys get distinct fibers.
+
   def child_id(parent_id, component, {:key, key}),
     do: "#{parent_id}.#{component}[key=#{inspect(key, structs: false, limit: :infinity, printable_limit: :infinity)}]"
 end

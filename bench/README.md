@@ -99,8 +99,9 @@ Applying this adapter update changes the harness hash: older archived reports
 must be recaptured with the updated harness before automated comparison.
 
 The Web host selects compiled `~F` template plans when available. Portable targets
-continue to receive vnode tuples. The compiled path hoists static HTML and uses
-keyed LiveView comprehensions for homogeneous keyed component loops. Components
+continue to receive vnode tuples. The compiled path hoists static HTML and sends
+loops of markup and of components that share one template as LiveView
+comprehensions. The LiveView diffs each frame against the output it last sent. Components
 render only when their props, state or `use_value` values change. Dynamic attributes that require different
 HTML shapes, heterogeneous loops, and manual vnode output use the existing
 converter. `keyed/move` checks that the moved row retains its edited local state.

@@ -319,6 +319,29 @@ Filament sends raw state to subscribers and each subscriber's projection
 runs at render time. The component's projection can safely close over
 local state — closures are fresh on every render.
 
+### Rendering and what reaches the browser
+
+0.6 separates three things that 0.5.x did together:
+
+- **Component reuse.** A child renders only when its props (`===`), its
+  own state, or a `use_value` it reads changed. Data read any other way
+  during render must become a prop, state or `use_value`.
+- **Output tracking.** `Filament.LiveView` and `Filament.LiveComponent`
+  keep the output they last sent and send only the parts that differ. An
+  update that changes nothing visible sends an empty diff, even when a
+  closure in the markup captured a new value; the event handler still sees
+  that value.
+- **Keyed wire updates.** A `:for` loop, of markup or of components, is
+  sent as a LiveView comprehension. Keyed rows (`:key`) are matched by key,
+  so moving, inserting or removing a row sends no unchanged row content.
+  Rows without `:key` are matched by position, so a move resends every row
+  that shifted: add `:key` to lists that reorder.
+
+Some loops are sent as one block, resent whole when any row changes: rows
+of markup with an attribute that is omitted (`nil` or `false`), bare
+(`true`) or a `data`/`aria`/`phx` keyword list; rows of markup that repeat
+a key; and component loops whose rows render different templates.
+
 ## Codemods (where automatable)
 
 Several transformations follow a mechanical pattern that could be automated:
