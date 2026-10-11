@@ -133,6 +133,7 @@ defmodule Filament.Renderer do
     values =
       Enum.zip_with(bindings, values, fn
         {kind, _key}, value when kind in [:child, :components] -> rewalk(value)
+        {{:rows, _keyed?}, _key}, rows -> Enum.map(rows, fn {key, row} -> {key, rewalk(row)} end)
         _, value -> value
       end)
 

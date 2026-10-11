@@ -59,6 +59,38 @@ defmodule Filament.Web do
     }
   end
 
+  @doc false
+  # The view of complete output `current` that LiveView diffs when the client
+  # holds complete output `previous`: asked to track changes, it returns nil
+  # for each slot equal to the previous one, recursing into nested templates.
+  # Asked for everything, it returns `current` whole. The result is never a
+  # baseline for a later frame; keep `current`.
+  def track(%Rendered{fingerprint: print} = current, %Rendered{fingerprint: print} = previous) do
+    %{
+      current
+      | dynamic: fn
+          false -> current.dynamic.(false)
+          true -> track_values(current.dynamic.(false), previous.dynamic.(false))
+        end
+    }
+  end
+
+  def track(current, _previous), do: current
+
+  defp track_values(current, previous), do: Enum.zip_with(current, previous, &track_value/2)
+
+  defp track_value(same, same), do: nil
+
+  defp track_value(%Rendered{fingerprint: print} = current, %Rendered{fingerprint: print} = previous) do
+    values = track_values(current.dynamic.(false), previous.dynamic.(false))
+
+    if Enum.all?(values, &is_nil/1),
+      do: nil,
+      else: %{current | dynamic: &if(&1, do: values, else: current.dynamic.(false))}
+  end
+
+  defp track_value(current, _previous), do: current
+
   # One element at the top, which a LiveComponent's output must be.
   @doc false
   def root?(vnode), do: match?({:element, _, _, _}, vnode)

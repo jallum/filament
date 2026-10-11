@@ -8,12 +8,13 @@ defmodule Filament.Web.Template do
 
   def to_rendered(%Template{} = template) do
     if Template.normal_attributes?(template) do
-      bindings = prepare(template)
+      # Encoded once, so `Filament.Web.track/2` compares finished values.
+      dynamic = template |> prepare() |> Enum.map(&encode/1)
 
       %Rendered{
         static: template.static,
         fingerprint: template.fingerprint,
-        dynamic: fn _track -> Enum.map(bindings, &encode/1) end,
+        dynamic: fn _track -> dynamic end,
         root: Filament.Web.root?(template.vnode),
         caller: :not_available
       }
@@ -24,11 +25,11 @@ defmodule Filament.Web.Template do
 
   defp prepare(template), do: Enum.zip_with(template.bindings, template.values, &prepare_binding/2)
 
+  defp prepare_binding({:components, key}, value), do: {key, components(value), :opaque}
+  defp prepare_binding({{:rows, keyed?}, key}, value), do: {key, rows(value, keyed?), :opaque}
+
   defp prepare_binding({kind, key}, value) do
     cond do
-      kind == :components ->
-        {key, collection(value), :opaque}
-
       kind == :child and (is_struct(value, Template) or is_struct(value, Rendered)) ->
         {key, Filament.Web.to_rendered(value), :opaque}
 
@@ -52,15 +53,18 @@ defmodule Filament.Web.Template do
   defp encode({_key, value, :child}) when is_tuple(value) or is_list(value), do: Filament.Web.to_rendered(value)
   defp encode({_key, value, :child}), do: Safe.to_iodata(value)
 
-  defp collection([]), do: Filament.Web.to_rendered({:fragment, []})
+  # A keyed loop of components that render one shared template.
+  defp components([]), do: Filament.Web.to_rendered({:fragment, []})
 
-  defp collection(children) do
+  defp components(children) do
     if homogeneous_keyed_templates?(children) do
       [{:component, _, _, _, first} | _] = children
-      entries = Enum.map(children, &entry/1)
-      # LiveView tells a comprehension from a template only by fingerprint.
-      fingerprint = Filament.Web.fingerprint({:comprehension, first.fingerprint})
-      %Comprehension{static: first.static, fingerprint: fingerprint, has_key?: true, entries: entries}
+
+      comprehension(
+        first,
+        Enum.map(children, fn {:component, mod, _, key, output} -> entry({mod, key}, output) end),
+        true
+      )
     else
       Filament.Web.to_rendered({:fragment, children})
     end
@@ -77,21 +81,51 @@ defmodule Filament.Web.Template do
           nil
       end)
 
-    not Enum.member?(keys, nil) and MapSet.size(MapSet.new(keys)) == length(keys)
+    not Enum.member?(keys, nil) and unique?(keys)
   end
 
   defp homogeneous_keyed_templates?(_), do: false
 
-  defp entry({:component, mod, _props, key, template}) do
-    bindings = prepare(template)
-    variables = Map.new(for {key, value, mode} <- bindings, mode != :opaque, do: {key, {mode, value}})
+  # Rows of one compiled loop share a plan. LiveView matches keyed rows by
+  # key and unkeyed rows by position. Rows that can't share the plan's
+  # static (an omitted or bare attribute) or repeat a key render in place.
+  defp rows([], _keyed?), do: Filament.Web.to_rendered({:fragment, []})
 
-    {{mod, key}, variables, fn changed, track? -> changed_bindings(bindings, changed, track?) end}
+  defp rows([{_key, first} | _] = rows, keyed?) do
+    templates = Enum.map(rows, &elem(&1, 1))
+
+    if Enum.all?(templates, &Template.normal_attributes?/1) and (not keyed? or unique?(Enum.map(rows, &elem(&1, 0)))) do
+      comprehension(first, Enum.map(rows, fn {key, row} -> entry(key, row) end), keyed?)
+    else
+      Filament.Web.to_rendered({:fragment, templates})
+    end
   end
 
-  defp changed_bindings(bindings, changed, track?) do
-    Enum.map(bindings, fn {key, _value, mode} = binding ->
-      if mode == :opaque or not track? or Map.has_key?(changed, key), do: encode(binding)
-    end)
+  defp unique?(keys), do: MapSet.size(MapSet.new(keys)) == length(keys)
+
+  defp comprehension(first, entries, keyed?) do
+    # LiveView tells a comprehension from a template only by fingerprint.
+    fingerprint = Filament.Web.fingerprint({:comprehension, first.fingerprint})
+    %Comprehension{static: first.static, fingerprint: fingerprint, has_key?: keyed?, entries: entries}
+  end
+
+  # LiveView keeps each entry's variables and passes the ones that changed,
+  # with their previous values when composite; nested output is tracked
+  # against its previous value.
+  defp entry(key, template) do
+    bindings = prepare(template)
+    variables = Map.new(bindings, fn {key, value, mode} -> {key, {mode, value}} end)
+
+    {key, variables, fn changed, track? -> Enum.map(bindings, &changed_binding(&1, changed, track?)) end}
+  end
+
+  defp changed_binding(binding, _changed, false), do: encode(binding)
+
+  defp changed_binding({key, value, mode} = binding, changed, true) do
+    case changed do
+      %{^key => {:opaque, previous}} when mode == :opaque -> Filament.Web.track(value, previous)
+      %{^key => _} -> encode(binding)
+      _ -> nil
+    end
   end
 end

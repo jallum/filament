@@ -9,7 +9,7 @@ defmodule Filament.Bench.Workloads do
   alias Phoenix.LiveView.Diff
   alias Phoenix.LiveView.Socket
 
-  @jobs ~w(render/mount render/unchanged render/leaf_state keyed/append keyed/prepend keyed/reverse keyed/move keyed/remove_half keyed/clear reactivity/changed reactivity/unchanged)
+  @jobs ~w(render/mount render/unchanged render/input render/leaf_state keyed/append keyed/prepend keyed/reverse keyed/move keyed/remove_half keyed/clear reactivity/changed reactivity/unchanged)
   def jobs, do: @jobs
 
   def setup(job, size) do
@@ -42,7 +42,9 @@ defmodule Filament.Bench.Workloads do
       {tree, output} = prepare_move(job, tree, output, props, size)
 
       rendered = Compat.rendered(output)
-      {initial_diff, prints, components} = Diff.render(socket, rendered, input.prints, input.components)
+
+      {initial_diff, prints, components} =
+        Diff.render(socket, Compat.view(rendered, nil), input.prints, input.components)
 
       %{
         input
@@ -95,6 +97,10 @@ defmodule Filament.Bench.Workloads do
     end
   end
 
+  def run(%{job: "render/input"} = input) do
+    update(input, input.tree, Map.put(input.props, :query, "changed"), 0, 0)
+  end
+
   def run(input) do
     items = next_items(input.job, input.props.items, input.size)
     update(input, input.tree, %{input.props | items: items}, 0, 0)
@@ -115,7 +121,8 @@ defmodule Filament.Bench.Workloads do
 
   defp finish(input, tree, output, items, messages, updates) do
     rendered = Compat.rendered(output)
-    {diff, _prints, _components} = Diff.render(input.socket, rendered, input.prints, input.components)
+    view = Compat.view(rendered, input.rendered)
+    {diff, _prints, _components} = Diff.render(input.socket, view, input.prints, input.components)
     result(input, tree, rendered, diff, items, messages, updates)
   end
 
@@ -135,7 +142,7 @@ defmodule Filament.Bench.Workloads do
   # These checks are run before timing and in Benchee's excluded after_each hook.
   def verify(result) do
     input = result.input
-    html = result.rendered |> Safe.to_iodata() |> IO.iodata_to_binary()
+    html = result.rendered |> Compat.view(nil) |> Safe.to_iodata() |> IO.iodata_to_binary()
 
     client_html =
       input.client |> Phoenix.LiveViewTest.Diff.merge_diff(result.diff) |> Diff.to_iodata() |> IO.iodata_to_binary()

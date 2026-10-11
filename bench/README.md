@@ -37,6 +37,7 @@ setup, correctness checks, and cleanup.
 |---|---|
 | render/mount | Mount N keyed stateful rows and produce the initial diff |
 | render/unchanged | Rerender with identical props and produce the next diff |
+| render/input | Change only an input value beside unchanged rows and produce the next diff |
 | render/leaf_state | Invoke one leaf's setter, receive/apply its message, rerender the root, and produce the diff |
 | keyed/* | Append, prepend, reverse, move the last row to the front after editing its state, remove half, or clear a keyed list |
 | reactivity/changed | Synchronously write new observable state, consume all delivered updates, rerender once, and produce the diff |

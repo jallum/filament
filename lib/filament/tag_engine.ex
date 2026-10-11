@@ -1245,10 +1245,8 @@ defmodule Filament.TagEngine do
       {:ok, key} ->
         # Element keys do not own component fibers, but the key expression is
         # still part of the loop's lexical scope and must be evaluated there.
-        quote do
-          _ = unquote(key)
-          unquote(body)
-        end
+        # The Web template compiler finds the key by the `:filament_key` meta.
+        {:__block__, [], [{:=, [filament_key: true], [{:_, [], nil}, key]}, body]}
 
       :error ->
         body

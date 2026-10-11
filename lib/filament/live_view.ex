@@ -37,6 +37,7 @@ defmodule Filament.LiveView do
   import Phoenix.Component, only: [sigil_H: 2]
 
   alias Filament.Reconciler
+  alias Phoenix.LiveView.Rendered
 
   require Logger
 
@@ -44,9 +45,29 @@ defmodule Filament.LiveView do
 
   @callback root_component() :: module()
 
+  @root_fingerprint :erlang.md5(:erlang.term_to_binary(["", ""]))
+
   @doc false
   def render(assigns) do
-    ~H"<%= @_filament_rendered %>"
+    view = view(assigns)
+    %Rendered{static: ["", ""], dynamic: fn _track -> [view] end, fingerprint: @root_fingerprint, root: false}
+  end
+
+  # The socket keeps complete output. LiveView keeps the output the client
+  # was last sent in `__changed__`, even across several assigns, so the view
+  # sends only what differs from it.
+  @doc false
+  def view(%{_filament_rendered: rendered} = assigns) do
+    case assigns do
+      %{__changed__: %{_filament_rendered: %Rendered{} = previous}} ->
+        Filament.Web.track(rendered, previous)
+
+      %{__changed__: %{} = changed} when not is_map_key(changed, :_filament_rendered) ->
+        Filament.Web.track(rendered, rendered)
+
+      _ ->
+        rendered
+    end
   end
 
   @runtime_assets_js File.read!(Path.join(:code.priv_dir(:filament), "static/filament.js"))

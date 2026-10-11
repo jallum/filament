@@ -12,6 +12,13 @@ defmodule Filament.Bench.Compat do
                    end)
   def implementation, do: @implementation
 
+  # What a LiveView sends: its own render of the output, given the output the
+  # client last received (nil when it has none).
+  def view(rendered, previous) do
+    changed = if previous, do: %{_filament_rendered: previous}
+    Filament.LiveView.render(%{__changed__: changed, _filament_rendered: rendered})
+  end
+
   def render_options do
     if @compiled_web or @direct_web, do: [owner_pid: self(), target: Filament.Web], else: [owner_pid: self()]
   end

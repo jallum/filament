@@ -40,10 +40,11 @@ defmodule Filament.Bench.Rows do
 
   defcomponent do
     prop(:items, :list, required: true)
+    prop(:query, :string, default: "")
 
-    def render(%{items: items}) do
+    def render(%{items: items, query: query}) do
       ~F"""
-      <ul><Filament.Bench.Row :for={id <- items} :key={id} id={id} /></ul>
+      <div><input value={query} /><ul><Filament.Bench.Row :for={id <- items} :key={id} id={id} /></ul></div>
       """
     end
   end

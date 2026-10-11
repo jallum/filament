@@ -19,6 +19,9 @@ defmodule Filament.Template do
         {kind, _key}, value when kind in [:child, :components] ->
           Filament.Renderer.walk_value(value, context)
 
+        {{:rows, _keyed?}, _key}, rows ->
+          Enum.map(rows, fn {key, row} -> {key, walk(row, context)} end)
+
         _, value ->
           value
       end)
@@ -39,7 +42,13 @@ defmodule Filament.Template do
     |> Enum.all?()
   end
 
-  def materialize(%__MODULE__{vnode: vnode, values: values}) do
+  def materialize(%__MODULE__{vnode: vnode, bindings: bindings, values: values}) do
+    values =
+      Enum.zip_with(bindings, values, fn
+        {{:rows, _keyed?}, _key}, rows -> Enum.map(rows, fn {_key, row} -> materialize(row) end)
+        _, value -> value
+      end)
+
     materialize(vnode, List.to_tuple(values))
   end
 

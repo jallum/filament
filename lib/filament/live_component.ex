@@ -82,7 +82,5 @@ defmodule Filament.LiveComponent do
   end
 
   @impl true
-  def render(assigns) do
-    assigns._filament_rendered
-  end
+  def render(assigns), do: Filament.LiveView.view(assigns)
 end
