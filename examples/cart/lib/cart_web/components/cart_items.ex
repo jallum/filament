@@ -24,14 +24,12 @@ defmodule CartWeb.Components.CartItems do
             <p class="cart-empty">Your cart is empty.</p>
           {else}
             <ul class="cart-items">
-              {for item <- cart.items do}
-                <li class="cart-item" id={"cart-item-#{item.id}"}>
-                  <span class="item-name">{item.name}</span>
-                  <span class="item-qty">× {item.quantity}</span>
-                  <span class="item-price">{format_price(item.price_cents * item.quantity)}</span>
-                  <button class="btn-remove" on_click={fn -> CartWeb.Hooks.remove_item(cart_ref, item.id) end}>Remove</button>
-                </li>
-              {end}
+              <li :for={item <- cart.items} :key={item.id} class="cart-item" id={"cart-item-#{item.id}"}>
+                <span class="item-name">{item.name}</span>
+                <span class="item-qty">× {item.quantity}</span>
+                <span class="item-price">{format_price(item.price_cents * item.quantity)}</span>
+                <button class="btn-remove" on_click={fn -> CartWeb.Hooks.remove_item(cart_ref, item.id) end}>Remove</button>
+              </li>
             </ul>
           {end}
           <div class="cart-total">Total: {format_price(cart.total_cents)}</div>
