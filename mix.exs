@@ -92,7 +92,9 @@ defmodule Filament.MixProject do
       {:floki, ">= 0.0.0", optional: true},
       # Phoenix LiveView dependencies for runtime and testing
       {:phoenix, "~> 1.7"},
-      {:phoenix_live_view, "~> 1.2"},
+      # Filament builds on LiveView's tag tokenizer and diff structures, which
+      # may change in a minor release. Widen this after testing each one.
+      {:phoenix_live_view, "~> 1.2.0"},
       {:phoenix_html, "~> 4.0"},
       {:plug, "~> 1.16"},
       {:plug_cowboy, "~> 2.7", only: :test}

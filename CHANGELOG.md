@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Requires `phoenix_live_view` `~> 1.2.0`. Filament uses LiveView's template
+  tokenizer and diff structures, which can change between minor versions,
+  so each new minor is supported once it has been tested.
+
 - **Breaking:** `use_observable` now goes through `Filament.Cell`. The hook
   takes a cell tuple `{transport, data}` (or a 0-arity factory returning
   one) instead of a raw GenServer reference. For an observable GenServer
