@@ -96,7 +96,7 @@ defmodule Filament.ConditionalLoopTest do
       def render(%{xs: xs}) do
         ~F"""
         <div><Filament.ConditionalLoopTest.Leaf :for={x <- xs} :if={x != "b"} :key={x} v={x} /><Filament.ConditionalLoopTest.Items><:item :for={x <- xs} :if={x != "b"}><i>{x}</i></:item></Filament.ConditionalLoopTest.Items></div>
-        """
+        """noformat
       end
     end
   end

@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `Filament.SigilFFormatter` formats heredoc `~F"""` templates with
+  `Phoenix.LiveView.HTMLFormatter`. Its own formatter returned every
+  template unchanged on LiveView 1.2. One-line templates and templates with
+  `{for}`, `{if}`, `{case}` or `{cond}` blocks are left as written. Run
+  `mix format` after upgrading: heredoc templates are reindented as `~H`
+  templates would be.
+
 - Requires `phoenix_live_view` `~> 1.2.0`. Filament uses LiveView's template
   tokenizer and diff structures, which can change between minor versions,
   so each new minor is supported once it has been tested.

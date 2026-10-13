@@ -45,7 +45,7 @@ defmodule Filament.Bench.Rows do
     def render(%{items: items, query: query}) do
       ~F"""
       <div><input value={query} /><ul><Filament.Bench.Row :for={id <- items} :key={id} id={id} /></ul></div>
-      """
+      """noformat
     end
   end
 end

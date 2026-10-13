@@ -31,7 +31,7 @@ defmodule Filament.InterpolationTest do
     def render(%{mode: :bind, value: value}) do
       ~F"""
       <div><i>{value}</i><% upper = String.upcase(value) %><b>{upper}</b><%= for x <- [1, 2] do %><% y = x * 10 %><u>{y}</u><% end %></div>
-      """
+      """noformat
     end
 
     def render(%{mode: :scalar, value: value}), do: ~F"{value}"
