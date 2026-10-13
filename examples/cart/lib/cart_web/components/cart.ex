@@ -32,12 +32,17 @@ defmodule CartWeb.Components.Cart do
           <div :for={p <- products()} :key={p.id} class="product-card">
             <div class="product-name">{p.name}</div>
             <div class="product-price">{format_price(p.price_cents)}</div>
-            <button class="btn-add" on_click={fn ->
-              CartWeb.Hooks.add_item(
-                session_id,
-                %Cart.Item{id: p.id, name: p.name, price_cents: p.price_cents}
-              )
-            end}>Add to Cart</button>
+            <button
+              class="btn-add"
+              on_click={
+                fn ->
+                  CartWeb.Hooks.add_item(
+                    session_id,
+                    %Cart.Item{id: p.id, name: p.name, price_cents: p.price_cents}
+                  )
+                end
+              }
+            >Add to Cart</button>
           </div>
         </section>
 

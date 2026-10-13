@@ -28,10 +28,12 @@ defmodule TodoWeb.Components.FilterBar do
           value={value}
           label={label}
           is_active={current == value}
-          on_click={fn ->
-            set_current.(value)
-            if on_change, do: on_change.(value)
-          end}
+          on_click={
+            fn ->
+              set_current.(value)
+              if on_change, do: on_change.(value)
+            end
+          }
         />
       </ul>
       """
