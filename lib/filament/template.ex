@@ -28,38 +28,4 @@ defmodule Filament.Template do
 
     %{plan | values: values}
   end
-
-  def normal_attributes?(%__MODULE__{bindings: bindings, values: values}) do
-    bindings
-    |> Enum.zip_with(values, fn
-      {{:attribute, name}, _key}, value ->
-        value not in [nil, false, true] and not match?({:wire_ref, _}, value) and
-          not Filament.Web.nested_attribute?(name, value)
-
-      _, _ ->
-        true
-    end)
-    |> Enum.all?()
-  end
-
-  def materialize(%__MODULE__{vnode: vnode, bindings: bindings, values: values}) do
-    values =
-      Enum.zip_with(bindings, values, fn
-        {{:rows, _keyed?}, _key}, rows -> Enum.map(rows, fn {_key, row} -> materialize(row) end)
-        _, value -> value
-      end)
-
-    materialize(vnode, List.to_tuple(values))
-  end
-
-  defp materialize({:binding, index}, values), do: elem(values, index)
-
-  defp materialize({:element, name, attrs, children}, values) do
-    {:element, name, Enum.map(attrs, fn {name, value} -> {name, materialize(value, values)} end),
-     materialize(children, values)}
-  end
-
-  defp materialize({:fragment, children}, values), do: {:fragment, materialize(children, values)}
-  defp materialize(children, values) when is_list(children), do: Enum.map(children, &materialize(&1, values))
-  defp materialize(value, _values), do: value
 end

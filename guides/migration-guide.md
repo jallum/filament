@@ -338,9 +338,8 @@ local state — closures are fresh on every render.
   that shifted: add `:key` to lists that reorder.
 
 Some loops are sent as one block, resent whole when any row changes: rows
-of markup with an attribute that is omitted (`nil` or `false`), bare
-(`true`) or a `data`/`aria`/`phx` keyword list; rows of markup that repeat
-a key; and component loops whose rows render different templates.
+of markup that repeat a key, and component loops whose rows render
+different templates.
 
 ## Codemods (where automatable)
 

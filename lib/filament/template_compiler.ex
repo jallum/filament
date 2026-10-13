@@ -133,13 +133,14 @@ defmodule Filament.TemplateCompiler do
     Enum.map_reduce(attrs, state, fn {name, value}, state ->
       name = to_string(name)
 
+      # A dynamic attribute is one slot, as in HEEx: nil, false, true and
+      # keyword lists change its whole text, not just its value.
       if literal_attribute?(value) do
         {value, []} = Code.eval_quoted(value)
         {{name, value}, append(state, name |> Filament.Web.attribute(value) |> IO.iodata_to_binary())}
       else
-        state = append(state, " " <> name <> ~s(="))
         {value, state} = binding(value, {:attribute, name}, state)
-        {{name, value}, append(state, ~s("))}
+        {{name, value}, state}
       end
     end)
   end

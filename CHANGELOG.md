@@ -105,8 +105,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sent as LiveView comprehensions: keyed rows are patched by key, so a move
   or insert sends no unchanged row, and rows without `:key` by position.
   Loops of markup inside `{if}`, `{case}` and `{cond}` branches compile the
-  same way. Rows with an omitted, bare or keyword-list attribute, or a
-  repeated key, are sent as one block as before.
+  same way. A dynamic attribute is one slot, as in HEEx, so a `nil`,
+  `false`, `true` or keyword-list value doesn't change the row's shape.
+  Rows that repeat a key are sent as one block as before.
 
 ### Fixed
 

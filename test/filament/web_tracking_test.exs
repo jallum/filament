@@ -58,6 +58,7 @@ defmodule Filament.WebTrackingTest do
           {case props.mode do}
             {:html -> }<ul><li :for={r <- props.rows} :key={r.id} class="row">{r.label}</li></ul>
             {:unkeyed -> }<ul><li :for={r <- props.rows} class="row">{r.label}</li></ul>
+            {:checkboxes -> }<ul><li :for={r <- props.rows} :key={r.id}><input type="checkbox" checked={rem(r.id, 2) == 0} />{r.label}</li></ul>
             {:components -> }<ul><Filament.WebTrackingTest.Row :for={r <- props.rows} :key={r.id} label={r.label} test={props.test} /></ul>
             {:unkeyed_components -> }<ul><Filament.WebTrackingTest.Row :for={r <- props.rows} label={r.label} test={props.test} /></ul>
           {end}
@@ -152,7 +153,7 @@ defmodule Filament.WebTrackingTest do
     assert diff == %{}
   end
 
-  for mode <- [:html, :unkeyed, :components, :unkeyed_components], n <- [25, 1000] do
+  for mode <- [:html, :unkeyed, :checkboxes, :components, :unkeyed_components], n <- [25, 1000] do
     test "changing an input beside #{n} unchanged #{mode} rows sends only the input" do
       {view, _} = mount(unquote(mode), unquote(n))
       {_view, diff} = view |> set(%{query: "ab"}) |> frame()
@@ -189,14 +190,16 @@ defmodule Filament.WebTrackingTest do
     assert html(view.client) =~ ~r/<ul><li><button[^>]*>row 5<\/button> 1<\/li><li><button[^>]*>row 1<\/button> 0/
   end
 
-  test "moving a keyed HTML row resends no row content" do
-    {view, _} = mount(:html, 5)
-    {_view, diff} = view |> set(%{rows: [List.last(rows(5)) | Enum.drop(rows(5), -1)]}) |> frame()
-    refute payload(diff) =~ "row "
+  for mode <- [:html, :checkboxes] do
+    test "moving a keyed #{mode} row resends no row content" do
+      {view, _} = mount(unquote(mode), 5)
+      {_view, diff} = view |> set(%{rows: [List.last(rows(5)) | Enum.drop(rows(5), -1)]}) |> frame()
+      refute payload(diff) =~ "row "
+    end
   end
 
   test "appending, removing and reinserting rows patches the client and cleans up once" do
-    for mode <- [:html, :unkeyed, :components, :unkeyed_components] do
+    for mode <- [:html, :unkeyed, :checkboxes, :components, :unkeyed_components] do
       {view, _} = mount(mode, 3)
       {view, diff} = view |> set(%{rows: rows(4)}) |> frame()
       assert payload(diff) =~ "row 4"
@@ -281,7 +284,7 @@ defmodule Filament.WebTrackingTest do
   test "loops render the same HTML for the portable target" do
     props = %{query: "a", secret: 1, flag: true, text: "t", rows: rows(3), test: self()}
 
-    for mode <- [:html, :unkeyed, :components, :unkeyed_components] do
+    for mode <- [:html, :unkeyed, :checkboxes, :components, :unkeyed_components] do
       {tree, web, _} = Filament.Reconciler.mount(Page, Map.put(props, :mode, mode), target: Filament.Web)
       {tree2, vnode, _} = Filament.Reconciler.mount(Page, Map.put(props, :mode, mode))
 

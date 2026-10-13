@@ -7,20 +7,16 @@ defmodule Filament.Web.Template do
   alias Phoenix.LiveView.Rendered
 
   def to_rendered(%Template{} = template) do
-    if Template.normal_attributes?(template) do
-      # Encoded once, so `Filament.Web.track/2` compares finished values.
-      dynamic = template |> prepare() |> Enum.map(&encode/1)
+    # Encoded once, so `Filament.Web.track/2` compares finished values.
+    dynamic = template |> prepare() |> Enum.map(&encode/1)
 
-      %Rendered{
-        static: template.static,
-        fingerprint: template.fingerprint,
-        dynamic: fn _track -> dynamic end,
-        root: Filament.Web.root?(template.vnode),
-        caller: :not_available
-      }
-    else
-      template |> Template.materialize() |> Filament.Web.to_rendered()
-    end
+    %Rendered{
+      static: template.static,
+      fingerprint: template.fingerprint,
+      dynamic: fn _track -> dynamic end,
+      root: Filament.Web.root?(template.vnode),
+      caller: :not_available
+    }
   end
 
   defp prepare(template), do: Enum.zip_with(template.bindings, template.values, &prepare_binding/2)
@@ -48,7 +44,7 @@ defmodule Filament.Web.Template do
   defp scalar?(value), do: is_binary(value) or is_number(value) or is_atom(value)
 
   defp encode({_key, value, mode}) when mode in [:encoded, :opaque], do: value
-  defp encode({_key, value, {:attribute, name}}), do: Filament.Web.attribute_value(name, value)
+  defp encode({_key, value, {:attribute, name}}), do: Filament.Web.attribute(name, value)
   defp encode({_key, value, :child}) when value in [nil, false], do: []
   defp encode({_key, value, :child}) when is_tuple(value) or is_list(value), do: Filament.Web.to_rendered(value)
   defp encode({_key, value, :child}), do: Safe.to_iodata(value)
@@ -70,22 +66,19 @@ defmodule Filament.Web.Template do
   defp components(children), do: Filament.Web.to_rendered({:fragment, children})
 
   defp shares_template?({:component, _, _, _, %Template{} = output}, first),
-    do: output.static == first.static and output.bindings == first.bindings and Template.normal_attributes?(output)
+    do: output.static == first.static and output.bindings == first.bindings
 
   defp shares_template?(_child, _first), do: false
 
   # Rows of one compiled loop share a plan. LiveView matches keyed rows by
-  # key and unkeyed rows by position. Rows that can't share the plan's
-  # static (an omitted or bare attribute) or repeat a key render in place.
+  # key and unkeyed rows by position. Rows that repeat a key render in place.
   defp rows([], _keyed?), do: Filament.Web.to_rendered({:fragment, []})
 
   defp rows([{_key, first} | _] = rows, keyed?) do
-    templates = Enum.map(rows, &elem(&1, 1))
-
-    if Enum.all?(templates, &Template.normal_attributes?/1) and (not keyed? or unique?(Enum.map(rows, &elem(&1, 0)))) do
+    if not keyed? or unique?(Enum.map(rows, &elem(&1, 0))) do
       comprehension(first, Enum.map(rows, fn {key, row} -> entry(key, row) end), keyed?)
     else
-      Filament.Web.to_rendered({:fragment, templates})
+      Filament.Web.to_rendered({:fragment, Enum.map(rows, &elem(&1, 1))})
     end
   end
 
