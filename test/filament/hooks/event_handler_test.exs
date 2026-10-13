@@ -40,8 +40,8 @@ defmodule Filament.Hooks.EventHandlerTest do
       end)
 
     assert map_size(handlers) == 2
-    assert {a, :all} = handlers[0]
-    assert {b, :all} = handlers[1]
+    assert a = handlers[0]
+    assert b = handlers[1]
     assert a.() == :a
     assert b.() == :b
   end
@@ -54,7 +54,7 @@ defmodule Filament.Hooks.EventHandlerTest do
         id: "root",
         component: nil,
         hook_slots: %{},
-        event_handlers: %{0 => {fn -> send(test_pid, :clicked) end, :all}}
+        event_handlers: %{0 => fn -> send(test_pid, :clicked) end}
       )
 
     tree = %{"root" => fiber}
@@ -74,7 +74,7 @@ defmodule Filament.Hooks.EventHandlerTest do
         id: "root",
         component: nil,
         hook_slots: %{},
-        event_handlers: %{0 => {fn params -> send(test_pid, {:params, params}) end, :all}}
+        event_handlers: %{0 => fn params -> send(test_pid, {:params, params}) end}
       )
 
     tree = %{"root" => fiber}
@@ -134,7 +134,7 @@ defmodule Filament.Hooks.EventHandlerTest do
       Fiber.new(
         id: "root",
         component: nil,
-        event_handlers: %{0 => {handler, :all}}
+        event_handlers: %{0 => handler}
       )
 
     tree = %{"root" => fiber}
@@ -171,7 +171,7 @@ defmodule Filament.Hooks.EventHandlerTest do
         id: "root",
         component: nil,
         hook_slots: %{},
-        event_handlers: %{0 => {handler, :all}}
+        event_handlers: %{0 => handler}
       )
 
     tree = %{"root" => fiber}
@@ -200,7 +200,7 @@ defmodule Filament.Hooks.EventHandlerTest do
         id: "root.A[0]",
         component: nil,
         hook_slots: %{},
-        event_handlers: %{0 => {make_handler.("a"), :all}}
+        event_handlers: %{0 => make_handler.("a")}
       )
 
     fiber_b =
@@ -208,7 +208,7 @@ defmodule Filament.Hooks.EventHandlerTest do
         id: "root.B[0]",
         component: nil,
         hook_slots: %{},
-        event_handlers: %{0 => {make_handler.("b"), :all}}
+        event_handlers: %{0 => make_handler.("b")}
       )
 
     tree = %{"root.A[0]" => fiber_a, "root.B[0]" => fiber_b}

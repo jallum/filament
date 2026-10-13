@@ -73,7 +73,7 @@ defmodule Filament.ConditionalLoopTest do
     assert_receive {:leaf_rendered, "yes"}
     refute_receive {:leaf_rendered, _}
     assert map_size(tree["root"].event_handlers) == 1
-    [{handler, :all}] = Map.values(tree["root"].event_handlers)
+    [handler] = Map.values(tree["root"].event_handlers)
     handler.()
     assert_receive {:clicked, "yes"}
   end

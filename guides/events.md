@@ -135,6 +135,6 @@ based on event flow, not on a routed identity.
 ## See also
 
 - **`Filament.Core`** — `dispatch_event/4`, `stop_propagation/1`.
-- **`Filament.Hooks`** — `register_event_handler/3`.
+- **`Filament.Hooks`** — `register_event_handler/2`.
 - **[Hooks guide](hooks.html)** — the broader hook system that
-  `register_event_handler/3` is part of.
+  `register_event_handler/2` is part of.

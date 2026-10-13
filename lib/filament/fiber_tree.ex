@@ -13,9 +13,7 @@ defmodule Filament.FiberTree do
           function() | nil
   def get_event_handler(tree, fiber_id, handler_index, phase \\ :bubble) when phase in [:bubble, :capture] do
     with %{} = fiber <- Map.get(tree, fiber_id),
-         {handler, _kinds} <- Map.get(handler_map_for(fiber, phase), handler_index) do
-      handler
-    end
+         do: Map.get(handler_map_for(fiber, phase), handler_index)
   end
 
   defp handler_map_for(fiber, :bubble), do: fiber.event_handlers

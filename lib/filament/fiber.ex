@@ -13,12 +13,11 @@ defmodule Filament.Fiber do
     props: %{},
     # %{non_neg_integer() => term()} — hook slot state map
     hook_slots: %{},
-    # %{non_neg_integer() => {function(), kinds()}} — bubble-phase event
-    # handlers and the event kinds each accepts
+    # %{non_neg_integer() => function()} — bubble-phase event handlers
     event_handlers: %{},
     # [String.t()]      — direct child fiber IDs, in render order
     children: [],
-    # %{non_neg_integer() => {function(), kinds()}} — capture-phase handlers
+    # %{non_neg_integer() => function()} — capture-phase handlers
     capture_handlers: %{},
     # walked output of the last render, reused while the fiber's props are
     # unchanged and nothing below it is dirty; :unrendered before the first
@@ -29,15 +28,13 @@ defmodule Filament.Fiber do
     dirty: nil
   ]
 
-  @type kinds :: :all | MapSet.t(atom())
-
   @type t :: %__MODULE__{
           id: String.t(),
           component: module(),
           props: map(),
           hook_slots: %{non_neg_integer() => term()},
-          event_handlers: %{non_neg_integer() => {function(), kinds()}},
-          capture_handlers: %{non_neg_integer() => {function(), kinds()}},
+          event_handlers: %{non_neg_integer() => function()},
+          capture_handlers: %{non_neg_integer() => function()},
           rendered: term() | :unrendered,
           dirty: nil | :self | :descendants,
           children: [String.t()],

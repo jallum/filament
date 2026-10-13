@@ -373,45 +373,44 @@ defmodule Filament.Hooks do
   @doc """
   Register a bubble or capture-phase event handler at the next slot.
 
-  `kinds` is `:all` (default) or a `MapSet` of atoms. `Filament.Core.dispatch_event/5`
-  fires the handler only when the dispatched kind matches the kinds-set.
-  Backwards-compatible: 1- and 2-arity calls keep working with `kinds = :all`.
+  A handler takes no arguments or the event's params. The LiveView adapter
+  also accepts `fn params, push -> ... end` for a bubble handler, which
+  `Filament.Core.dispatch_event/4` doesn't run.
   """
   @spec register_event_handler(function()) :: String.t()
   @spec register_event_handler(function(), :bubble | :capture) :: String.t()
-  @spec register_event_handler(function(), :bubble | :capture, :all | MapSet.t(atom())) ::
-          String.t()
-  def register_event_handler(handler, phase \\ :bubble, kinds \\ :all)
-      when is_function(handler) and phase in [:bubble, :capture] do
+  def register_event_handler(handler, phase \\ :bubble)
+      when (is_function(handler, 0) or is_function(handler, 1) or is_function(handler, 2)) and
+             phase in [:bubble, :capture] do
     ctx =
       Process.get(:filament_render_context) ||
         raise ArgumentError, "hook called outside a render pass — hooks may only be called from render/1"
 
     fiber_id_str = to_string(ctx.fiber_id)
-    {idx, new_ctx} = advance_handler_index(ctx, phase, handler, kinds)
+    {idx, new_ctx} = advance_handler_index(ctx, phase, handler)
     Process.put(:filament_render_context, new_ctx)
     "#{fiber_id_str}:#{idx}"
   end
 
-  defp advance_handler_index(ctx, :bubble, handler, kinds) do
+  defp advance_handler_index(ctx, :bubble, handler) do
     idx = ctx.event_handler_index
 
     new_ctx = %{
       ctx
       | event_handler_index: idx + 1,
-        new_event_handlers: Map.put(ctx.new_event_handlers, idx, {handler, kinds})
+        new_event_handlers: Map.put(ctx.new_event_handlers, idx, handler)
     }
 
     {idx, new_ctx}
   end
 
-  defp advance_handler_index(ctx, :capture, handler, kinds) do
+  defp advance_handler_index(ctx, :capture, handler) do
     idx = ctx.capture_handler_index
 
     new_ctx = %{
       ctx
       | capture_handler_index: idx + 1,
-        new_capture_handlers: Map.put(ctx.new_capture_handlers, idx, {handler, kinds})
+        new_capture_handlers: Map.put(ctx.new_capture_handlers, idx, handler)
     }
 
     {idx, new_ctx}

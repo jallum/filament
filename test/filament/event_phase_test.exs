@@ -36,9 +36,13 @@ defmodule Filament.EventPhaseTest do
       _ref = Hooks.register_event_handler(fn -> :ok end)
 
       ctx = Process.get(:filament_render_context)
-      assert {handler, :all} = Map.get(ctx.new_event_handlers, 0)
+      assert handler = Map.get(ctx.new_event_handlers, 0)
       assert is_function(handler)
       assert ctx.event_handler_index == 1
+    end
+
+    test "a handler of another arity is rejected when registered" do
+      assert_raise FunctionClauseError, fn -> Hooks.register_event_handler(fn _, _, _ -> :ok end) end
     end
 
     test ":capture phase uses an independent slot space" do
@@ -63,8 +67,8 @@ defmodule Filament.EventPhaseTest do
       fiber = %Filament.Fiber{
         id: "root",
         component: __MODULE__,
-        event_handlers: %{0 => {bubble, :all}},
-        capture_handlers: %{0 => {capture, :all}}
+        event_handlers: %{0 => bubble},
+        capture_handlers: %{0 => capture}
       }
 
       {:ok, tree: %{"root" => fiber}, bubble: bubble, capture: capture}

@@ -3,10 +3,10 @@ defmodule Filament.Core do
   Target-agnostic substrate primitives shared by every Filament backend.
 
   Today this exposes the capture/bubble event dispatcher
-  (`dispatch_event/5`, `stop_propagation/1`). Backends contribute event
+  (`dispatch_event/4`, `stop_propagation/1`). Backends contribute event
   sources — DOM events for the web adapter, terminal escape sequences for
   TUI, etc. — and feed them into the dispatcher; event semantics
-  (ancestor walk, propagation control, kinds filtering) live here.
+  (ancestor walk, propagation control) live here.
   """
 
   alias Filament.FiberTree
@@ -15,7 +15,6 @@ defmodule Filament.Core do
   @type fiber_id :: String.t()
   @type slot :: non_neg_integer()
   @type params :: map()
-  @type kind :: atom()
 
   @doc """
   Dispatch an event to a target fiber.
@@ -26,27 +25,22 @@ defmodule Filament.Core do
   `{:ok, {:stopped, value}}` if a handler called `stop_propagation/1`, or
   `{:error, :no_target}` if the target fiber doesn't exist.
 
-  The optional `kind` arg lets the dispatcher filter handlers by the
-  kinds-set they registered with: a handler runs only if its kinds are
-  `:all` or contain `kind`, for capture and bubble handlers alike.
-  Defaults to `:all`, which fires every handler.
-
   Handler arity:
 
     * 0-arity (`fn -> ... end`) — invoked with no args.
     * 1-arity (`fn params -> ... end`) — receives `params`.
   """
-  @spec dispatch_event(tree(), fiber_id(), slot(), params(), kind()) ::
+  @spec dispatch_event(tree(), fiber_id(), slot(), params()) ::
           {:ok, :dispatched} | {:ok, {:stopped, term()}} | {:error, :no_target}
-  def dispatch_event(tree, target_fiber_id, target_slot, params \\ %{}, kind \\ :all) do
+  def dispatch_event(tree, target_fiber_id, target_slot, params \\ %{}) do
     case Map.get(tree, target_fiber_id) do
       nil ->
         {:error, :no_target}
 
       target ->
         try do
-          run_capture_phase(tree, ancestor_path(tree, target_fiber_id), params, kind)
-          run_target_handler(target, target_slot, params, kind)
+          run_capture_phase(tree, ancestor_path(tree, target_fiber_id), params)
+          run_target_handler(target, target_slot, params)
           {:ok, :dispatched}
         catch
           {:filament_stop_propagation, value} -> {:ok, {:stopped, value}}
@@ -75,36 +69,18 @@ defmodule Filament.Core do
     end
   end
 
-  defp run_capture_phase(tree, ancestor_ids, params, kind) do
+  defp run_capture_phase(tree, ancestor_ids, params) do
     Enum.each(ancestor_ids, fn id ->
-      run_capture_handlers(Map.fetch!(tree, id), params, kind)
+      Enum.each(Map.fetch!(tree, id).capture_handlers, fn {_slot, handler} -> invoke(handler, params) end)
     end)
   end
 
-  defp run_capture_handlers(fiber, params, kind) do
-    Enum.each(fiber.capture_handlers, fn {_slot, {handler, kinds}} ->
-      if kind_matches?(kinds, kind), do: invoke(handler, params)
-    end)
-  end
-
-  defp run_target_handler(target, target_slot, params, kind) do
+  defp run_target_handler(target, target_slot, params) do
     case Map.get(target.event_handlers, target_slot) do
-      {handler, kinds} -> if kind_matches?(kinds, kind), do: invoke(handler, params), else: :ok
       nil -> :ok
+      handler -> invoke(handler, params)
     end
   end
-
-  # Dispatch kind :all is a wildcard from the dispatcher side: it fires
-  # every handler regardless of what kinds-set the handler registered
-  # with (back-compat for callers that haven't adopted kinds).
-  # Handler kinds :all is a wildcard from the handler side: it fires for
-  # every dispatched kind.
-  defp kind_matches?(:all, _kind), do: true
-  defp kind_matches?(_slot_kinds, :all), do: true
-
-  defp kind_matches?(%MapSet{} = slot_kinds, kind), do: MapSet.member?(slot_kinds, kind)
-
-  defp kind_matches?(_slot_kinds, _kind), do: false
 
   defp invoke(handler, _params) when is_function(handler, 0), do: handler.()
   defp invoke(handler, params) when is_function(handler, 1), do: handler.(params)

@@ -150,8 +150,8 @@ defmodule Filament.HooksTest do
 
       assert ref0 == "root:0"
       assert ref1 == "root:1"
-      assert handlers[0] === {h0, :all}
-      assert handlers[1] === {h1, :all}
+      assert handlers[0] === h0
+      assert handlers[1] === h1
       assert idx == 2
     end
   end

@@ -57,9 +57,9 @@ defmodule Filament.RenderContext do
           new_hook_slots: %{non_neg_integer() => term()},
           pending_effects: [{non_neg_integer(), String.t(), (-> term()), term(), (-> term()) | nil}],
           event_handler_index: non_neg_integer(),
-          new_event_handlers: %{non_neg_integer() => {function(), Filament.Fiber.kinds()}},
+          new_event_handlers: %{non_neg_integer() => function()},
           capture_handler_index: non_neg_integer(),
-          new_capture_handlers: %{non_neg_integer() => {function(), Filament.Fiber.kinds()}},
+          new_capture_handlers: %{non_neg_integer() => function()},
           sources: :subscribe | :current | :disconnected,
           hook_slots: %{non_neg_integer() => term()},
           child_component_indices: %{module() => non_neg_integer()}
