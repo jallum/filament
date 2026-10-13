@@ -209,7 +209,7 @@ defmodule Filament.LiveView do
       Phoenix LiveView event handler.
 
       Routes `filament:` wire events to registered fiber handlers (event closures
-      registered by `Filament.Hooks.register_event_handler/3`). All other events are forwarded to the root
+      registered by `Filament.Hooks.register_event_handler/2`). All other events are forwarded to the root
       component if it defines `handle_event/3`.
 
       The component-level `handle_event/3` callback receives
