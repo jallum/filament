@@ -23,6 +23,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   During the static render it reads sources as the view's mount did, so a
   `handle_params/3` there doesn't subscribe.
 
+- `Filament.Test.mount/3` takes `cells: %{server => stub_pid}`, answering
+  one server's subscriptions from a `Filament.Test.Stub` while the
+  component's own calls to the server still reach it. Passing the stub as
+  the prop, as 0.6.0-rc.1 suggested, breaks a component that also reads the
+  server it subscribes to:
+
+  ```elixir
+  {:ok, stub} = Filament.Test.Stub.start(fn _ -> {:loading, %{phase: :scanning}} end)
+  view = mount!(QueuePage, %{catalog: catalog}, cells: %{catalog => stub})
+  ```
+
+  It applies to `Filament.Observable.GenServer` sources, in any component
+  of the view, and replaces 0.5.x's `:stub` option.
+
 ### Changed
 
 ### Deprecated

@@ -306,6 +306,7 @@ defmodule Filament.Hooks do
   @spec use_value(Filament.Source.t() | nil, (term() | :disconnected -> term())) :: term()
   def use_value(cell, projection) when is_function(projection, 1) do
     {slot_index, previous, ctx} = use_slot(:uninitialized)
+    cell = stand_in(cell, ctx.cells)
 
     if is_nil(cell) or ctx.sources != :subscribe do
       Filament.HookSlot.cleanup(previous)
@@ -315,6 +316,18 @@ defmodule Filament.Hooks do
       observable_subscribed(cell, projection, slot_index, previous, ctx)
     end
   end
+
+  # A test's stand-in replaces the server the source names, so the slot holds
+  # the stub's source and every later subscribe, refresh and unsubscribe goes
+  # to the stub. Calls made with the prop itself still reach the real server.
+  defp stand_in(%Filament.Source{transport: Filament.Observable.GenServer, data: server} = cell, cells) do
+    case cells do
+      %{^server => stub} -> %{cell | data: stub}
+      _ -> cell
+    end
+  end
+
+  defp stand_in(cell, _cells), do: cell
 
   # The slot keeps this render's projection and value, so an update that
   # leaves the projected value unchanged can skip the next render.

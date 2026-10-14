@@ -164,6 +164,28 @@ returns `{:ok, pid}` where the pid implements the same
 component that subscribes via `use_value/2` receives the stub's
 state.
 
+### Stubbing a server the component also calls
+
+Passing the stub as the prop replaces the server everywhere the prop goes.
+When the component also calls the server, for reads or actions, keep the
+real server in the props and answer only its subscriptions from the stub
+with the `:cells` option:
+
+```elixir
+test "shows the scanning phase" do
+  {:ok, stub} = Stub.start(fn _req -> {:loading, %{phase: :scanning}} end)
+
+  view = mount!(QueuePage, %{catalog: catalog}, cells: %{catalog => stub})
+
+  assert render_text(view) =~ "Scanning"
+end
+```
+
+The key is the server as the source holds it: the pid, name or
+`{:via, ...}` tuple the domain hook passes to `cell/1`. Every
+`Filament.Observable.GenServer` source for that server, in any component
+of the view, subscribes to the stub, and `Stub.push/2` updates them.
+
 ### Pushing updates
 
 `Filament.Test.Stub.push/2` sends a new value to a stub, simulating a

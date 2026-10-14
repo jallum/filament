@@ -29,7 +29,8 @@ defmodule Filament.Test do
     :fiber_tree,
     :rendered,
     :rendered_html,
-    :owner_pid
+    :owner_pid,
+    cells: %{}
   ]
 
   @type t :: %__MODULE__{
@@ -38,7 +39,8 @@ defmodule Filament.Test do
           fiber_tree: map(),
           rendered: Rendered.t(),
           rendered_html: String.t(),
-          owner_pid: pid()
+          owner_pid: pid(),
+          cells: %{term() => pid()}
         }
 
   # ── Floki availability check ──────────────────────────────────────────────
@@ -59,13 +61,28 @@ defmodule Filament.Test do
 
   A view belongs to the process that mounts it: state and cell updates
   arrive in that process's mailbox, so mount one view per process.
+
+  ## Options
+
+    * `:cells` - `%{server => stub_pid}`. A `Filament.Observable.GenServer`
+      source for `server` subscribes to the stub instead, while calls the
+      component makes to `server` itself still reach the real server. Use it
+      when a component both reads a server and subscribes to it through a
+      domain hook built from the same prop:
+
+          {:ok, stub} = Filament.Test.Stub.start(fn _ -> {:loading, %{phase: :scanning}} end)
+          view = mount!(QueuePage, %{catalog: catalog}, cells: %{catalog => stub})
+
+      The key is the server as the source holds it: the pid, name or
+      `{:via, ...}` tuple passed to `cell/1`.
   """
-  @spec mount(component :: module(), props :: map()) :: {:ok, t()}
-  def mount(component, props) do
+  @spec mount(component :: module(), props :: map(), opts :: keyword()) :: {:ok, t()}
+  def mount(component, props, opts \\ []) do
     owner_pid = self()
+    cells = Map.new(Keyword.get(opts, :cells, %{}))
 
     {tree, rendered, pending_effects} =
-      Filament.Reconciler.mount(component, props, owner_pid: owner_pid)
+      Filament.Reconciler.mount(component, props, owner_pid: owner_pid, cells: cells)
 
     tree = run_effects(tree, pending_effects)
 
@@ -77,7 +94,8 @@ defmodule Filament.Test do
       fiber_tree: tree,
       rendered: rendered,
       rendered_html: html,
-      owner_pid: owner_pid
+      owner_pid: owner_pid,
+      cells: cells
     }
 
     {:ok, view}
@@ -235,9 +253,9 @@ defmodule Filament.Test do
   # ── Bang variants ─────────────────────────────────────────────────────────
 
   @doc "Like `mount/3` but returns the view directly."
-  @spec mount!(module(), map()) :: t()
-  def mount!(component, props) do
-    {:ok, view} = mount(component, props)
+  @spec mount!(module(), map(), keyword()) :: t()
+  def mount!(component, props, opts \\ []) do
+    {:ok, view} = mount(component, props, opts)
     view
   end
 
@@ -447,7 +465,8 @@ defmodule Filament.Test do
         view.fiber_tree,
         "root",
         view.props,
-        owner_pid: view.owner_pid
+        owner_pid: view.owner_pid,
+        cells: view.cells
       )
 
     new_tree = run_effects(new_tree, pending_effects)

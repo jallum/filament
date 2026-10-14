@@ -95,6 +95,48 @@ defmodule Filament.TestTest do
     end
   end
 
+  defmodule CatalogComp do
+    @moduledoc false
+    use Filament.Observable.GenServer
+    use Filament.Component
+
+    alias Filament.TestTest.CatalogComp
+
+    def start_link(phase), do: GenServer.start_link(__MODULE__, phase)
+    def label(server), do: GenServer.call(server, :label)
+
+    @impl GenServer
+    def init(phase), do: {:ok, phase}
+
+    @impl GenServer
+    def handle_call(:label, _from, phase), do: {:reply, "catalog", phase}
+
+    defcomponent Phase do
+      prop(:catalog, :term, required: true)
+
+      def render(%{catalog: catalog}) do
+        phase =
+          use_value(CatalogComp.cell(catalog), fn
+            :disconnected -> nil
+            p -> p
+          end)
+
+        ~F"<p>{phase}</p>"
+      end
+    end
+
+    defcomponent Page do
+      prop(:catalog, :term, required: true)
+
+      def render(%{catalog: catalog}) do
+        ~F"""
+        <h1>{CatalogComp.label(catalog)}</h1>
+        <CatalogComp.Phase catalog={catalog} />
+        """
+      end
+    end
+  end
+
   defmodule KeyModalComp do
     @moduledoc false
     use Filament.Component
@@ -205,6 +247,32 @@ defmodule Filament.TestTest do
     Stub.push(stub, 99)
     view = Filament.Test.update(view)
     assert render_text(view) =~ "99"
+  end
+
+  test "cells: answers a server's subscriptions from a stub while calls reach the server" do
+    {:ok, catalog} = CatalogComp.start_link(:ready)
+    {:ok, stub} = Stub.start(fn _req -> :scanning end)
+
+    view = mount!(CatalogComp.Page, %{catalog: catalog}, cells: %{catalog => stub})
+    assert render_text(view) =~ "catalog"
+    assert render_text(view) =~ "scanning"
+
+    Stub.push(stub, :matching)
+    view = Filament.Test.update(view)
+    assert render_text(view) =~ "matching"
+
+    assert cell_subscribers(catalog) == %{}
+    assert map_size(cell_subscribers(stub)) == 1
+
+    unmount(view)
+    assert cell_subscribers(stub) == %{}
+  end
+
+  defp cell_subscribers(server) do
+    # Wait for casts already sent, such as an unsubscribe.
+    :sys.get_state(server)
+    {:dictionary, dictionary} = Process.info(server, :dictionary)
+    Keyword.get(dictionary, :__filament_cell_subscribers__, %{})
   end
 
   test "click on nonexistent selector" do
