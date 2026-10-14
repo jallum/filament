@@ -337,6 +337,33 @@ defmodule Filament.LiveViewTest do
     end
   end
 
+  describe "put_props/2" do
+    test "merges props into the root's and renders it again" do
+      {:ok, socket} = CounterLiveView.mount(%{}, %{}, test_socket(%{count: 0}))
+
+      socket = Filament.LiveView.put_props(socket, count: 5)
+      assert socket.assigns._filament_tree["root"].props == %{count: 5}
+      assert socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary() =~ "Counter: 5"
+
+      socket = Filament.LiveView.put_props(socket, %{count: 6})
+      assert socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary() =~ "Counter: 6"
+    end
+
+    test "a static render reads a new source without subscribing" do
+      {:ok, first} = ObservableComponent.start_link(1)
+      {:ok, second} = ObservableComponent.start_link(2)
+      socket = %{test_socket(%{server: first}) | transport_pid: nil}
+
+      {:ok, socket} = StaticSubscribeLiveView.mount(%{}, %{}, socket)
+      socket = Filament.LiveView.put_props(socket, server: second)
+
+      rendered = socket.assigns._filament_rendered |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
+      assert rendered =~ "<div>2</div>"
+      assert cell_subscribers(first) == %{}
+      assert cell_subscribers(second) == %{}
+    end
+  end
+
   describe "handle_info/2" do
     test "handles cell_update messages with no matching fiber" do
       socket = %Socket{

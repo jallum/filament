@@ -38,6 +38,7 @@ defmodule Filament.LiveView do
 
   alias Filament.Reconciler
   alias Phoenix.LiveView.Rendered
+  alias Phoenix.LiveView.Socket
 
   require Logger
 
@@ -176,16 +177,14 @@ defmodule Filament.LiveView do
       def mount(_params, _session, socket) do
         component = root_component()
         props = build_props(socket)
+        sources = if Phoenix.LiveView.connected?(socket), do: :subscribe, else: unquote(static_sources)
 
         {tree, rendered, pending_effects} =
-          Reconciler.mount(component, props,
-            owner_pid: self(),
-            target: Filament.Web,
-            sources: if(Phoenix.LiveView.connected?(socket), do: :subscribe, else: unquote(static_sources))
-          )
+          Reconciler.mount(component, props, owner_pid: self(), target: Filament.Web, sources: sources)
 
         socket =
           socket
+          |> Phoenix.Component.assign(:_filament_sources, sources)
           |> Filament.LiveView.assign_render(tree, rendered, pending_effects)
           |> Phoenix.LiveView.attach_hook(:filament_effects, :after_render, &Filament.LiveView.run_pending_effects/1)
 
@@ -347,6 +346,25 @@ defmodule Filament.LiveView do
     end
   end
 
+  @doc """
+  Merges `props` into the root component's props and renders it again.
+
+  The root's props come from the socket's assigns at mount. Use this in the
+  view's own callbacks to change them afterwards, as `handle_params/3` does
+  when a `push_patch` changes the URL:
+
+      def handle_params(params, _uri, socket) do
+        {:noreply, Filament.LiveView.put_props(socket, params: params)}
+      end
+
+  As with any render, children whose props are unchanged are reused.
+  """
+  @spec put_props(Socket.t(), map() | keyword()) :: Socket.t()
+  def put_props(socket, props) when is_map(props) or is_list(props) do
+    tree = socket.assigns._filament_tree
+    render_root(socket, tree, Enum.into(props, tree["root"].props))
+  end
+
   @doc false
   def dispatch_component_event(event, params, socket) do
     tree = socket.assigns._filament_tree
@@ -456,10 +474,14 @@ defmodule Filament.LiveView do
     end
   end
 
-  # The output always covers the whole tree, whichever fiber changed.
+  # The output always covers the whole tree, whichever fiber changed. A
+  # static render (`put_props/2` from `handle_params/3`) keeps reading sources
+  # the way its mount did.
   defp render_root(socket, tree, props) do
+    sources = Map.get(socket.assigns, :_filament_sources, :subscribe)
+
     {tree, rendered, pending_effects} =
-      Reconciler.update(tree, "root", props, owner_pid: self(), target: Filament.Web)
+      Reconciler.update(tree, "root", props, owner_pid: self(), target: Filament.Web, sources: sources)
 
     assign_render(socket, tree, rendered, pending_effects)
   end

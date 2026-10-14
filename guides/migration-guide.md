@@ -342,6 +342,20 @@ Some loops are sent as one block, resent whole when any row changes: rows
 of markup that repeat a key, and component loops whose rows render
 different templates.
 
+### Rendering the root with new props
+
+0.5.x injected a private `rerender_from_root/2` into each
+`Filament.LiveView`, and some views called it after changing the root's
+props, for example in `handle_params/3`. 0.6 removes it; use
+`Filament.LiveView.put_props/2`, which merges the props it's given into
+the root's and renders it again:
+
+```elixir
+def handle_params(params, _uri, socket) do
+  {:noreply, Filament.LiveView.put_props(socket, params: params)}
+end
+```
+
 ## Codemods (where automatable)
 
 Several transformations follow a mechanical pattern that could be automated:

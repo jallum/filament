@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Filament.LiveView.put_props/2` merges props into the root component's
+  and renders it again, from the view's own callbacks. It replaces 0.5.x's
+  injected private `rerender_from_root/2`, which 0.6.0-rc.1 removed without
+  a replacement; the usual caller is `handle_params/3`:
+
+  ```elixir
+  def handle_params(params, _uri, socket) do
+    {:noreply, Filament.LiveView.put_props(socket, params: params)}
+  end
+  ```
+
+  During the static render it reads sources as the view's mount did, so a
+  `handle_params/3` there doesn't subscribe.
+
 ### Changed
 
 ### Deprecated
