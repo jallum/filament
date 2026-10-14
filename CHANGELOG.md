@@ -9,37 +9,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.6.0-rc.1] - 2026-10-14
+
+### Added
+
 - A target-independent vnode renderer and `Filament.Core` event dispatcher,
   with capture/bubble phases and `stop_propagation/1`. Phoenix LiveView and
   LiveComponent convert resolved vnodes through `Filament.Web`.
+
 - `%Filament.Source{}` and the `Filament.Cell` transport behaviour for reactive
   values beyond GenServers.
+
 - `use_source/1,2` to bind a source, including factories keyed by resource
   identity, and `use_value/2` to subscribe and project its value. The examples
   show custom domain hooks that hide source construction from components.
+
 - `Filament.LiveView` unmounts its tree in `terminate/2`, running effect
   cleanups when the client disconnects. `Filament.Test.unmount/1` does the
   same for a test view.
+
 - `use_value/2` reconnects. It monitors the process behind a source, through
   the optional `Filament.Cell.whereis/1` callback, and subscribes again when
   that process exits, so a server restarted under a name or via-tuple
   reaches its readers without a reload. A subscribe that can't reach its
   source retries with backoff (100 ms doubling to 5 s) until it connects or
   the reader unmounts; so does one whose `handle_subscribe/2` rejected it.
-  Requires OTP 27 or later, for tagged monitors.
 
 ### Changed
 
-- `Filament.SigilFFormatter` formats heredoc `~F"""` templates with
-  `Phoenix.LiveView.HTMLFormatter`. Its own formatter returned every
-  template unchanged on LiveView 1.2. One-line templates and templates with
-  `{for}`, `{if}`, `{case}` or `{cond}` blocks are left as written. Run
-  `mix format` after upgrading: heredoc templates are reindented as `~H`
-  templates would be.
+- **Breaking:** components render only when their inputs change. A parent's
+  render reuses each child whose props are unchanged (`===`), with its whole
+  subtree; a child's state or `use_value` update renders that child alone,
+  not its ancestors; and setting state to the value it holds renders
+  nothing. Closures in props compare equal when they come from the same
+  `fn` and capture equal values. A component that read anything else during
+  render (ETS, the process dictionary, a GenServer call, a render-prop
+  function reading such data) and relied on an unrelated render to refresh
+  must take that data as a prop, state or `use_value` instead. This replaces
+  0.5.x's compiler-generated `memo_at` child memoization.
 
-- Requires `phoenix_live_view` `~> 1.2.0`. Filament uses LiveView's template
-  tokenizer and diff structures, which can change between minor versions,
-  so each new minor is supported once it has been tested.
+- **Breaking:** component `render/1` and `Reconciler.mount/3` / `update/4`
+  produce vnode output. Low-level callers use `Filament.Web.to_rendered/1`
+  or `to_iodata/1` for Phoenix/HTML output; the adapters do this automatically.
+
+- `Filament.LiveView` and `Filament.LiveComponent` send only what changed
+  since the last frame. They keep the complete output last sent and diff
+  the next one against it, so an unchanged subtree sends nothing, however
+  the tree around it rendered. `:for` loops of markup and of components are
+  sent as LiveView comprehensions: keyed rows are patched by key, so a move
+  or insert sends no unchanged row, and rows without `:key` by position.
+  Loops of markup inside `{if}`, `{case}` and `{cond}` branches compile the
+  same way. A dynamic attribute is one slot, as in HEEx, so a `nil`,
+  `false`, `true` or keyword-list value doesn't change the row's shape.
+  Rows that repeat a key are sent as one block as before.
 
 - **Breaking:** replace `use_observable/1,2` with `use_source/1,2` and
   `use_value/2`. Sources are structs, not `{transport, data}` tuples:
@@ -56,26 +88,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   When resolving a server from an identifier, put
   `use_source(fn -> MyServer.cell(id) end, id)` inside a domain hook.
   See the migration guide for the full 0.5.x upgrade.
+
 - Reactive hooks subscribe to raw state and run the user projection during
   rendering, so projections can capture current local state. Equal raw writes
   produce no delivery. A changed raw value is kept in the slot but skips the
   render when every projected value is unchanged (`===`), as in 0.5.6.
+
 - **Breaking:** `handle_unsubscribe/2` receives the opaque subscriber tuple
   `{owner_pid, fiber_id, slot_index, generation}`. Destructure this tuple rather
   than reading the former `Subscriber.pid` field.
-- **Breaking:** component `render/1` and `Reconciler.mount/3` / `update/4`
-  produce vnode output. Low-level callers use `Filament.Web.to_rendered/1`
-  or `to_iodata/1` for Phoenix/HTML output; the adapters do this automatically.
-- **Breaking:** components render only when their inputs change. A parent's
-  render reuses each child whose props are unchanged (`===`), with its whole
-  subtree; a child's state or `use_value` update renders that child alone,
-  not its ancestors; and setting state to the value it holds renders
-  nothing. Closures in props compare equal when they come from the same
-  `fn` and capture equal values. A component that read anything else during
-  render (ETS, the process dictionary, a GenServer call, a render-prop
-  function reading such data) and relied on an unrelated render to refresh
-  must take that data as a prop, state or `use_value` instead. This replaces
-  0.5.x's compiler-generated `memo_at` child memoization.
+
 - **Breaking:** `use_state` setters send
   `{:filament_set_state, fiber_id, slot_index, token, value}`. The token
   identifies the component instance, so a setter kept from an unmounted
@@ -90,105 +112,138 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     {:noreply, socket}
   end
   ```
+
 - **Breaking:** components rendered by the same parent component with the
   same module and `:key` raise `ArgumentError`
   instead of sharing one fiber and its state.
+
 - **Breaking:** a slot entry (`<:header>`) must be a direct child of its
   component, as in HEEx; inside `{if}`, `{for}`, `{case}` or an element it
   was hoisted out and rendered regardless. Use `:if` or `:for` on the entry.
   A tag opened in a block must close in it; both are now syntax errors with
   a location instead of compiler crashes.
+
 - A repeat subscribe under the same identity, as after a saturation notice, is
   a refresh: it calls neither `handle_subscribe/2` nor `handle_unsubscribe/2`,
   so held resources survive, and it replies with `handle_current/1`. The
   default `handle_subscribe/2` accepts with `handle_current/1`'s value, so a
   server publishing something other than its whole state overrides
   `handle_current/1` alone.
+
 - `Filament.Observable.GenServer` wraps the module's own `handle_info/2`
   instead of adding clauses in front of it: the module still receives its own
   `:DOWN` messages, and a module without `handle_info/2` logs unexpected
   messages as `GenServer` does.
+
 - Effects run in declaration order, a parent's before its children's.
+
 - `Filament.Observable.GenServer` receives unsubscribes as a cast, so
   unmounting doesn't wait on a busy server. A later call from the same owner
   still sees the unsubscribe applied.
+
 - The static HTTP render reads each source's current value
   (`handle_current/1`) instead of subscribing. Under HTTP keep-alive the static
   render runs in the connection's process, so its subscriptions outlived the
   request; presence servers also counted the static render as a viewer.
   `static_subscribe: false` still skips reading sources during that render.
 
-- `Filament.LiveView` and `Filament.LiveComponent` send only what changed
-  since the last frame. They keep the complete output last sent and diff
-  the next one against it, so an unchanged subtree sends nothing, however
-  the tree around it rendered. `:for` loops of markup and of components are
-  sent as LiveView comprehensions: keyed rows are patched by key, so a move
-  or insert sends no unchanged row, and rows without `:key` by position.
-  Loops of markup inside `{if}`, `{case}` and `{cond}` branches compile the
-  same way. A dynamic attribute is one slot, as in HEEx, so a `nil`,
-  `false`, `true` or keyword-list value doesn't change the row's shape.
-  Rows that repeat a key are sent as one block as before.
+- **Breaking:** requires Erlang/OTP 27 or later, for the tagged monitors
+  that reconnect `use_value/2`, and `phoenix_live_view` `~> 1.2.0`.
+  Filament uses LiveView's template tokenizer and diff structures, which
+  can change between minor versions, so each new minor is supported once
+  it has been tested.
 
-### Fixed
-
-- `handle_subscribe/2` returning `{:error, reason, state}` reads as
-  `:disconnected`, as documented, instead of crashing the server.
-- Subscribers with identities other than the hook tuple receive updates at
-  the subscribing process.
-- A subscribe that times out removes the subscription the server may still
-  make.
-- `on_click={nil}` and other `on_*` attributes given `nil` or `false` omit the
-  attribute, as HEEx omits `phx-click={nil}`, instead of raising.
-- `:if` beside `:for` on components and slot entries compiles and filters
-  each iteration.
-- Attribute names, event references, and `data`/`aria`/`phx` keyword values
-  are escaped as HEEx escapes them, and literal attribute values render as
-  written.
-- Send saturation recovery notices once per episode, resuming delivery from fresh state after resubscription.
-- Removed descendants run cleanup exactly once; keyed descendants retain
-  state, and stale messages from replaced subscriptions are ignored.
-- LiveComponent handles batched Cell updates while preserving its root output.
-- A cell server no longer crashes notifying a subscriber on another node.
-- `Filament.LiveComponent` renders inside a real LiveView, whose diff engine
-  requires a single root tag. A component rendering one element is marked
-  as rooted.
-- A component whose `render/1` returns `false` renders nothing, as `nil`
-  does.
-- Keyed components whose keys differ only beyond `inspect/1`'s default
-  limits, or in struct fields hidden by a custom `Inspect`, get separate
-  fibers.
-- A click on a handler removed by a later render runs nothing; it no longer
-  fires the capture handlers of the target's ancestors. `Filament.Test`
-  runs handlers taking a push function, sending `{:push_event, event,
-  payload}` to the test process.
-- A `Filament.LiveView` receiving a message it doesn't handle logs it and
-  continues, as Phoenix does, instead of crashing. A view with its own
-  `handle_info/2` ends with `def handle_info(msg, socket), do: super(msg, socket)`.
-- `Filament.LiveComponent` remounts when its `component` assign changes,
-  instead of rendering the new component with the old one's tree.
-- HTML loop `:key` expressions are evaluated in generator scope, avoiding
-  unused-variable warnings for bindings used only by the key.
-- The 0.5.6 observable fixes apply on the cell transport: the injected
-  cell subscribe, current-value, unsubscribe and `:DOWN` handlers keep
-  the server's `timeout/1`, and a cell subscriber that has exited is
-  skipped quietly until its `:DOWN`.
+- `Filament.SigilFFormatter` formats heredoc `~F"""` templates with
+  `Phoenix.LiveView.HTMLFormatter`. Its own formatter returned every
+  template unchanged on LiveView 1.2. One-line templates and templates with
+  `{for}`, `{if}`, `{case}` or `{cond}` blocks are left as written. Run
+  `mix format --force` once after upgrading (`mix format` caches results per
+  file): heredoc templates are reindented as `~H` templates would be.
 
 ### Removed
 
 - `Filament.Observable.Subscriber`, `Filament.Observable.subscribe/2`,
   `remove_projection/4`, and the parallel Subscriber-keyed subscription path.
+
 - Legacy `:filament_observable_updates` / `:filament_observable_resubscribe`
   messages. Transports use `:cell_update`, `:cell_updates`, and
   `:cell_resubscribe`; host LiveViews forwarding to LiveComponent must include
   all three forms.
+
 - `Filament.RenderContext.observable_stubs` and `session_token`. Tests pass
   sources built against stub pids directly.
+
 - Compiler-generated `memo_at/3` calls. The vnode compiler no longer depends
   on Phoenix's lazy comprehension functions or their hoisting passes.
+
 - `Filament.ObservableError`, which nothing raised.
+
 - `Reconciler.unmount/2` ignores its options; cleanup no longer needs the owner.
+
 - `Filament.Test.mount/3`'s `:stub` option, which no longer did anything.
   Pass a source built on a `Filament.Test.Stub` pid as a prop instead.
+
+### Fixed
+
+- `handle_subscribe/2` returning `{:error, reason, state}` reads as
+  `:disconnected`, as documented, instead of crashing the server.
+
+- Subscribers with identities other than the hook tuple receive updates at
+  the subscribing process.
+
+- A subscribe that times out removes the subscription the server may still
+  make.
+
+- `on_click={nil}` and other `on_*` attributes given `nil` or `false` omit the
+  attribute, as HEEx omits `phx-click={nil}`, instead of raising.
+
+- `:if` beside `:for` on components and slot entries compiles and filters
+  each iteration.
+
+- Attribute names, event references, and `data`/`aria`/`phx` keyword values
+  are escaped as HEEx escapes them, and literal attribute values render as
+  written.
+
+- A saturated subscriber gets one recovery notice per episode, and delivery
+  resumes from fresh state after it resubscribes.
+
+- Removed descendants run cleanup exactly once; keyed descendants retain
+  state, and stale messages from replaced subscriptions are ignored.
+
+- LiveComponent handles batched Cell updates while preserving its root output.
+
+- A cell server no longer crashes notifying a subscriber on another node.
+
+- `Filament.LiveComponent` renders inside a real LiveView, whose diff engine
+  requires a single root tag. A component rendering one element is marked
+  as rooted.
+
+- A component whose `render/1` returns `false` renders nothing, as `nil`
+  does.
+
+- Keyed components whose keys differ only beyond `inspect/1`'s default
+  limits, or in struct fields hidden by a custom `Inspect`, get separate
+  fibers.
+
+- A click on a handler removed by a later render runs nothing; it no longer
+  fires the capture handlers of the target's ancestors. `Filament.Test`
+  runs handlers taking a push function, sending `{:push_event, event,
+  payload}` to the test process.
+
+- A `Filament.LiveView` receiving a message it doesn't handle logs it and
+  continues, as Phoenix does, instead of crashing. A view with its own
+  `handle_info/2` ends with `def handle_info(msg, socket), do: super(msg, socket)`.
+
+- `Filament.LiveComponent` remounts when its `component` assign changes,
+  instead of rendering the new component with the old one's tree.
+
+- HTML loop `:key` expressions are evaluated in generator scope, avoiding
+  unused-variable warnings for bindings used only by the key.
+
+- The 0.5.6 observable fixes apply on the cell transport: the injected
+  cell subscribe, current-value, unsubscribe and `:DOWN` handlers keep
+  the server's `timeout/1`, and a cell subscriber that has exited is
+  skipped quietly until its `:DOWN`.
 
 ## [0.5.6] - 2026-10-08
 

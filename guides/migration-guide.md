@@ -14,10 +14,10 @@ Add the dependency:
 
 ```elixir
 # mix.exs
-{:filament, "~> 0.6"}
+{:filament, "~> 0.6.0-rc.1"}
 ```
 
-Filament 0.6 needs Elixir 1.18+, Erlang/OTP 27+ and Phoenix LiveView 1.2+.
+Filament 0.6 needs Elixir 1.18+, Erlang/OTP 27+ and Phoenix LiveView 1.2.
 
 Run `mix deps.get`. No other changes to your existing LiveViews are required yet.
 
