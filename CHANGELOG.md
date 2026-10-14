@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.6.0-rc.2] - 2026-10-14
+
+### Added
+
 - `Filament.LiveView.put_props/2` merges props into the root component's
   and renders it again, from the view's own callbacks. It replaces 0.5.x's
   injected private `rerender_from_root/2`, which 0.6.0-rc.1 removed without
@@ -37,18 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It applies to `Filament.Observable.GenServer` sources, in any component
   of the view, and replaces 0.5.x's `:stub` option.
 
-### Changed
-
-### Deprecated
-
-### Removed
-
 ### Fixed
 
 - An `on_*` attribute given a literal `fn` no longer gets a type warning
   under Elixir 1.20 for the `nil`/`false` check `~F` generates around it.
-
-### Security
 
 ## [0.6.0-rc.1] - 2026-10-14
 
