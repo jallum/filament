@@ -68,7 +68,6 @@ defmodule Filament.VNodeTest do
 
       assert VNode.validate!(vnode) == vnode
     end
-
   end
 
   describe "validate!/1 with deeply nested trees" do

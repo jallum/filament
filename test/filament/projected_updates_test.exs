@@ -17,9 +17,11 @@ defmodule Filament.ProjectedUpdatesTest do
     use Filament.Component
 
     defcomponent do
-      def render(%{server: server}) do
+      prop(:cell, :any, required: true)
+
+      def render(%{cell: cell}) do
         {field, set_field} = use_state(:a)
-        value = use_observable(server, &Map.fetch!(&1, field))
+        value = use_value(cell, &Map.fetch!(&1, field))
         send(self(), {:rendered, value})
         ~F"<p>{inspect(value)}</p><button on_click={fn -> set_field.(:b) end}>b</button>"
       end
@@ -38,9 +40,11 @@ defmodule Filament.ProjectedUpdatesTest do
     use Filament.Component
 
     defcomponent do
-      def render(%{server: server}) do
-        a = use_observable(server, & &1.a)
-        b = use_observable(server, & &1.b)
+      prop(:cell, :any, required: true)
+
+      def render(%{cell: cell}) do
+        a = use_value(cell, & &1.a)
+        b = use_value(cell, & &1.b)
         send(self(), {:both_rendered, a, b})
         ~F"<p>{inspect({a, b})}</p>"
       end
@@ -54,68 +58,93 @@ defmodule Filament.ProjectedUpdatesTest do
     def root_component, do: Both
   end
 
-  defp socket do
-    %Socket{assigns: %{__changed__: %{}}, private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}}
+  defp socket(raw) do
+    server = start_supervised!({Store, raw})
+    cell = Filament.Source.new(Filament.Observable.GenServer, server)
+
+    %Socket{
+      transport_pid: self(),
+      assigns: %{__changed__: %{}, cell: cell},
+      private: %{live_temp: %{}, lifecycle: Lifecycle.__struct__()}
+    }
+  end
+
+  defp subscriber(tree, slot_index) do
+    {:cell_subscribed, _cell, _raw, subscriber, _projection, _value} = tree["root"].hook_slots[slot_index]
+    subscriber
   end
 
   test "unchanged projection skips rendering but retains raw state for a fresh local closure" do
-    server = start_supervised!({Store, %{a: 1, b: 10}})
-    {:ok, socket} = Host.mount(%{}, %{}, Phoenix.Component.assign(socket(), :server, server))
+    {:ok, socket} = Host.mount(%{}, %{}, socket(%{a: 1, b: 10}))
     assert_receive {:rendered, 1}
+    sub = subscriber(socket.assigns._filament_tree, 1)
 
-    {:noreply, socket} = Host.handle_info({:filament_observable_updates, [{"root", 1, %{a: 1, b: 11}}]}, socket)
+    {:noreply, socket} = Host.handle_info({:cell_update, sub, %{a: 1, b: 11}}, socket)
     refute_receive {:rendered, _}
 
-    {:noreply, socket} = Host.handle_info({:filament_set_state, "root", 0, :b}, socket)
+    {:noreply, socket} =
+      Host.handle_info(Filament.StateHelper.set_state(socket.assigns._filament_tree, "root", 0, :b), socket)
+
     assert_receive {:rendered, 11}
 
-    {:noreply, socket} = Host.handle_info({:filament_observable_updates, [{"root", 1, %{a: 2, b: 11}}]}, socket)
+    {:noreply, socket} = Host.handle_info({:cell_update, sub, %{a: 2, b: 11}}, socket)
     refute_receive {:rendered, _}
-    {:noreply, _socket} = Host.handle_info({:filament_observable_updates, [{"root", 1, %{a: 2, b: 12}}]}, socket)
+    {:noreply, _socket} = Host.handle_info({:cell_update, sub, %{a: 2, b: 12}}, socket)
     assert_receive {:rendered, 12}
   end
 
   test "projected equality is strict and nil is a real value" do
-    server = start_supervised!({Store, %{a: 1, b: 0}})
-    {:ok, socket} = Host.mount(%{}, %{}, Phoenix.Component.assign(socket(), :server, server))
+    {:ok, socket} = Host.mount(%{}, %{}, socket(%{a: 1, b: 0}))
     assert_receive {:rendered, 1}
+    sub = subscriber(socket.assigns._filament_tree, 1)
 
-    {:noreply, socket} = Host.handle_info({:filament_observable_updates, [{"root", 1, %{a: 1.0, b: 0}}]}, socket)
+    {:noreply, socket} = Host.handle_info({:cell_update, sub, %{a: 1.0, b: 0}}, socket)
     assert_receive {:rendered, value}
     assert value === 1.0
-    {:noreply, socket} = Host.handle_info({:filament_observable_updates, [{"root", 1, %{a: nil, b: 0}}]}, socket)
+    {:noreply, socket} = Host.handle_info({:cell_update, sub, %{a: nil, b: 0}}, socket)
     assert_receive {:rendered, nil}
-    {:noreply, _socket} = Host.handle_info({:filament_observable_updates, [{"root", 1, %{a: nil, b: 1}}]}, socket)
+    {:noreply, _socket} = Host.handle_info({:cell_update, sub, %{a: nil, b: 1}}, socket)
     refute_receive {:rendered, _}
   end
 
   test "a mixed batch renders once if any projection changes and ignores removed slots" do
-    server = start_supervised!({Store, %{a: 1, b: 10}})
-    {:ok, socket} = BothHost.mount(%{}, %{}, Phoenix.Component.assign(socket(), :server, server))
+    {:ok, socket} = BothHost.mount(%{}, %{}, socket(%{a: 1, b: 10}))
     assert_receive {:both_rendered, 1, 10}
-    updates = [{"root", 0, %{a: 1, b: 11}}, {"root", 1, %{a: 1, b: 11}}, {"removed", 0, nil}, {"root", 99, nil}]
-    {:noreply, socket} = BothHost.handle_info({:filament_observable_updates, updates}, socket)
+    tree = socket.assigns._filament_tree
+    {owner, _fiber, _slot, token} = sub_a = subscriber(tree, 0)
+    sub_b = subscriber(tree, 1)
+
+    updates = [
+      {sub_a, %{a: 1, b: 11}},
+      {sub_b, %{a: 1, b: 11}},
+      {{owner, "removed", 0, token}, nil},
+      {{owner, "root", 99, token}, nil}
+    ]
+
+    {:noreply, socket} = BothHost.handle_info({:cell_updates, updates}, socket)
     assert_receive {:both_rendered, 1, 11}
     refute_receive {:both_rendered, _, _}
     refute Map.has_key?(socket.assigns._filament_tree["root"].hook_slots, 99)
-    {:noreply, _socket} = BothHost.handle_info({:filament_observable_updates, updates}, socket)
+    {:noreply, _socket} = BothHost.handle_info({:cell_updates, updates}, socket)
     refute_receive {:both_rendered, _, _}
   end
 
   test "LiveComponent also retains unchanged raw updates without rendering" do
-    server = start_supervised!({Store, %{a: 1, b: 10}})
-    {:ok, socket} = Filament.LiveComponent.mount(socket())
-    {:ok, socket} = Filament.LiveComponent.update(%{component: Selected, id: "selected", server: server}, socket)
+    %Socket{assigns: %{cell: cell}} = base = socket(%{a: 1, b: 10})
+    {:ok, socket} = Filament.LiveComponent.mount(%{base | assigns: %{__changed__: %{}}})
+    {:ok, socket} = Filament.LiveComponent.update(%{component: Selected, id: "selected", cell: cell}, socket)
     assert_receive {:rendered, 1}
+    sub = subscriber(socket.assigns._filament_tree, 1)
 
-    {:ok, socket} =
+    {:ok, socket} = Filament.LiveComponent.update(%{filament_msg: {:cell_update, sub, %{a: 1, b: 11}}}, socket)
+    refute_receive {:rendered, _}
+
+    {:ok, _socket} =
       Filament.LiveComponent.update(
-        %{filament_msg: {:filament_observable_updates, [{"root", 1, %{a: 1, b: 11}}]}},
+        %{filament_msg: Filament.StateHelper.set_state(socket.assigns._filament_tree, "root", 0, :b)},
         socket
       )
 
-    refute_receive {:rendered, _}
-    {:ok, _socket} = Filament.LiveComponent.update(%{filament_msg: {:filament_set_state, "root", 0, :b}}, socket)
     assert_receive {:rendered, 11}
   end
 end

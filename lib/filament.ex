@@ -24,8 +24,8 @@ defmodule Filament do
   and external services:
 
     - `use_state/1` — local component state (re-renders on change)
-    - `use_observable/1` — resolve a server reference to a pid (nil when disconnected)
-    - `use_observable/2` — subscribe to an observable and return the projected value
+    - `use_source/1` — bind a reactive source once; returns a stable handle (nil when disconnected)
+    - `use_value/2` — read a projected value from a source; subscribes the fiber to updates
     - `use_effect/2` — side-effect with cleanup (run after render)
 
   **LiveView adapter** — use a Filament component tree as a LiveView:

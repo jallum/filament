@@ -11,23 +11,17 @@ defmodule Filament.Test.StubObservable do
   @impl GenServer
   def init(opts) do
     stub_fn = Keyword.fetch!(opts, :stub_fn)
-    {:ok, %{stub_fn: stub_fn, last_state: nil}}
-  end
-
-  @impl Filament.Observable
-  def handle_subscribe(_subscriber, state) do
-    initial = state.stub_fn.(nil)
-    {:ok, initial, %{state | last_state: initial}}
+    {:ok, stub_fn.(nil)}
   end
 
   @impl GenServer
-  def handle_call({:push, new_state}, _from, state) do
+  def handle_call({:push, new_state}, _from, _state) do
     notify_observers(new_state)
-    {:reply, :ok, %{state | last_state: new_state}}
+    {:reply, :ok, new_state}
   end
 
   @impl GenServer
   def handle_call(:state, _from, state) do
-    {:reply, state.last_state, state}
+    {:reply, state, state}
   end
 end

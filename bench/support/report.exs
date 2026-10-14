@@ -136,6 +136,7 @@ defmodule Filament.Bench.Report do
       library_commit: command("git", ["log", "-1", "--format=%H", "--", "lib"]),
       dirty: command("git", ["status", "--porcelain", "--untracked-files=no"]) != "",
       implementation: Compat.implementation(),
+      json_library: "Jason",
       elixir: System.version(),
       otp: System.otp_release(),
       erts: to_string(:erlang.system_info(:version)),

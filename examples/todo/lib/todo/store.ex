@@ -1,11 +1,9 @@
 defmodule Todo.Store do
   @moduledoc """
   Observable GenServer that stores the todo list.
-  Used for demonstration of use_observable/2.
+  Used for demonstration of use_value/2.
   """
   use Filament.Observable.GenServer
-
-  alias Filament.Observable.Subscriber
 
   # Client API
 
@@ -68,8 +66,7 @@ defmodule Todo.Store do
     {:reply, state.todos, state}
   end
 
-  @impl true
-  def handle_subscribe(_subscriber, state) do
-    {:ok, state.todos, state}
-  end
+  # Subscribers see the todo list.
+  @impl Filament.Observable
+  def handle_current(state), do: {:ok, state.todos, state}
 end
