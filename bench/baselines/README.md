@@ -131,3 +131,39 @@ add `--suite reactivity/`; their scenario sets intentionally differ, so compare
 the full reports with `bench/compare.exs` for automatic compatibility validation.
 The final measured revision precedes a guard that prevents empty-subscription
 cache retention; the measured scenarios all have at least ten subscribers.
+
+## 0.6 preparation: current main and domain hooks
+
+Two full runs alternate main 0.5.2 (`deb2789`) and the complete PR stack
+(`0cc5dd1`): main run 1, candidate run 1, main run 2, candidate run 2.
+The four `0.6-prep-*.json` reports record exact commits and were captured with
+clean tracked files, Elixir 1.19.4 / OTP 28, and `ERL_FLAGS='+S 4:4'`.
+The harness and lockfile hashes match in all four reports. Both
+`0.6-prep-comparison-run*.md` tables passed `bench/compare.exs` compatibility
+checks. These runs use the full default settings and all 30 verified scenarios.
+
+At 1,000 rows/subscriptions:
+
+| Workload | Main medians, runs 1 / 2 | Candidate medians, runs 1 / 2 | Interpretation |
+|---|---|---|---|
+| Mount | 3.52 / 3.53 ms | 4.77 / 4.21 ms | 19–35% slower; caller allocation is 16% higher |
+| Unchanged render | 6.32 / 5.66 ms | 5.29 / 5.07 ms | 10–16% faster; caller allocation is 15% higher |
+| Changed observable | 8.38 / 6.42 ms | 4.88 / 4.34 ms | 32–42% faster; diff shrinks from 44,806 to 25,784 bytes |
+| Unchanged observable write | 12.25 / 4.35 us | 7.46 / 5.29 us | High variation; ratios reverse between the two pairs |
+
+The substrate improves changed-update completion in these workloads, but the
+mount cost and rendering allocations remain higher. No blanket speedup or
+no-op timing win is claimed. Small timing differences need further controlled
+runs. Allocation distributions exclude the observable process and are not
+collected for reactive or leaf-state jobs. All incremental HTML, keyed fiber
+retention, message counts, and cleanup checks pass.
+
+Commands (each branch run sequentially on the same machine):
+
+```sh
+ERL_FLAGS='+S 4:4' mix run bench/run.exs --label main-1 --output tmp/bench/main-1.json
+ERL_FLAGS='+S 4:4' mix run bench/run.exs --label candidate-1 --output tmp/bench/candidate-1.json
+# Repeat with labels main-2 and candidate-2, in that order.
+mix run bench/compare.exs tmp/bench/main-1.json tmp/bench/candidate-1.json
+mix run bench/compare.exs tmp/bench/main-2.json tmp/bench/candidate-2.json
+```

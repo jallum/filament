@@ -237,6 +237,52 @@ defmodule Filament.Hooks.UseValueTest do
   end
 
   describe "use_source/1 (factory form)" do
+    test "explicit key replaces a reachable factory source when resource identity changes" do
+      {:ok, first} = Counter.start_link(10)
+      {:ok, second} = Counter.start_link(20)
+      calls = :counters.new(1, [])
+
+      defmodule KeyedComp do
+        @moduledoc false
+        use Filament.Component
+
+        defcomponent KeyedComp do
+          prop(:key, :atom, required: true)
+          prop(:servers, :map, required: true)
+          prop(:calls, :any, required: true)
+
+          def render(%{key: key, servers: servers, calls: calls}) do
+            cell =
+              use_source(
+                fn ->
+                  :counters.add(calls, 1, 1)
+                  Filament.Source.new(Filament.Observable.GenServer, Map.fetch!(servers, key))
+                end,
+                key
+              )
+
+            value = use_value(cell, & &1)
+            ~F"<p>{value}</p>"
+          end
+        end
+      end
+
+      props = %{key: :first, servers: %{first: first, second: second}, calls: calls}
+      {tree, walked, _} = Reconciler.mount(KeyedComp.KeyedComp, props, owner_pid: self())
+      assert walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>10</p>"
+
+      {tree, _, _} = Reconciler.update(tree, "root", props, owner_pid: self())
+      assert :counters.get(calls, 1) == 1
+
+      {_, walked, _} =
+        Reconciler.update(tree, "root", %{props | key: :second}, owner_pid: self())
+
+      assert walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>20</p>"
+      assert :counters.get(calls, 1) == 2
+      assert first |> cell_subscribers_in() |> map_size() == 0
+      assert second |> cell_subscribers_in() |> map_size() == 1
+    end
+
     defmodule FactoryCellComp do
       @moduledoc false
       use Filament.Component

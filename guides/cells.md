@@ -13,11 +13,12 @@ Filament splits the API surface into two related names:
 - **`Filament.Cell`** — the *behaviour* a transport author implements.
   Defines the `subscribe/3`, `unsubscribe/2`, `current/2` callbacks plus
   the routing helpers that dispatch through to the transport.
-- **`Filament.Source`** — the *struct* application code holds. Returned
-  by `use_source/1`, accepted by `use_value/2`, passed as a child prop.
+- **`Filament.Source`** — the transport envelope returned by
+  `use_source/1` and accepted by `use_value/2`. Domain hooks can keep it
+  out of component code.
 
 This guide is for developers who want to **author a transport** or work
-with non-default cells. Most application code uses `use_value/2` and never
+with non-default cells. Most application code calls domain hooks and never
 thinks about the cell layer; if that's you, the **[Observables
 guide](observables.html)** is enough — come back here when you need to
 plug something more exotic in.
@@ -139,7 +140,7 @@ end
 ## The `use_value/2` hook
 
 `use_value(cell, projection)` is the generic cell-subscription primitive at
-the component level. It accepts any cell tuple and applies the projection at
+the component level. It accepts a `%Filament.Source{}` or `nil` and applies the projection at
 render time:
 
 ```elixir
@@ -188,16 +189,21 @@ defmodule MyApp.AgentCell do
       new_subs = Map.put(state.subs, subscriber, {pid, projection, projected})
       {{:ok, projected}, %{state | subs: new_subs}}
     end)
+  catch
+    :exit, _ -> :disconnected
   end
 
+  # Idempotent, and quiet when the agent is gone: unmounting calls it.
   @impl Filament.Cell
   def unsubscribe(agent, subscriber) do
-    Agent.update(agent, fn s -> %{s | subs: Map.delete(s.subs, subscriber)} end)
+    Agent.cast(agent, fn s -> %{s | subs: Map.delete(s.subs, subscriber)} end)
   end
 
   @impl Filament.Cell
   def current(agent, projection) do
     Agent.get(agent, fn s -> projection.(s.value) end)
+  catch
+    :exit, _ -> :disconnected
   end
 
   def write(agent, new_value) do
@@ -211,7 +217,7 @@ defmodule MyApp.AgentCell do
     Map.new(subs, fn {sub, {pid, projection, last}} ->
       new_projected = projection.(new_value)
 
-      if new_projected != last do
+      if new_projected !== last do
         send(pid, {:cell_update, sub, new_projected})
       end
 

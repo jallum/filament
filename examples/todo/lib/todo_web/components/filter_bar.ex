@@ -22,17 +22,19 @@ defmodule TodoWeb.Components.FilterBar do
 
       ~F"""
       <ul class="filters">
-        {for {value, label} <- filters do}
-          <FilterItem
-            value={value}
-            label={label}
-            is_active={current == value}
-            on_click={fn ->
+        <FilterItem
+          :for={{value, label} <- filters}
+          :key={value}
+          value={value}
+          label={label}
+          is_active={current == value}
+          on_click={
+            fn ->
               set_current.(value)
               if on_change, do: on_change.(value)
-            end}
-          />
-        {end}
+            end
+          }
+        />
       </ul>
       """
     end

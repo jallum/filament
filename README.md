@@ -6,59 +6,49 @@ to Elixir — so you can build rich real-time UIs without spreading state across
 socket assigns, `handle_event` callbacks, and manual PubSub wiring.
 
 ```elixir
-defmodule CartWeb.Components.CartView do
-  use Filament.Component
+defmodule CartWeb.Hooks do
+  import Filament.Hooks, only: [use_source: 2, use_value: 2]
 
-  defcomponent do
-    prop(:cart_id, :string, required: true)
-
-    def render(%{cart_id: cart_id}) do
-      source = use_source(fn -> Cart.Server.cell(cart_id) end)
-
-      cart = use_value(source, fn
-        :disconnected -> nil
-        state -> state
-      end)
-
-      ~F"""
-      <div class="cart">
-        <header>
-          <CartBadge source={source} />
-        </header>
-        {if cart do}
-          {for item <- cart.items do}
-            <div class="item">
-              <span>{item.name}</span>
-              <button on_click={fn -> Cart.Server.remove_item(source.data, item.id) end}>
-                Remove
-              </button>
-            </div>
-          {end}
-        {end}
-      </div>
-      """
+  # The factory and its identity live in one domain hook.
+  def use_cart(cart_ref) do
+    case use_source(fn -> Cart.Server.cell(cart_ref) end, cart_ref) do
+      nil -> nil
+      source -> source.data
     end
+  end
+
+  def use_cart_count(cart_ref) do
+    cart = use_cart(cart_ref)
+    source = if cart, do: Filament.Source.new(Filament.Observable.GenServer, cart)
+
+    use_value(source, fn
+      :disconnected -> 0
+      state -> Cart.State.item_count(state)
+    end)
+  end
+
+  # The companion action accepts the same stable session ID.
+  def add_item(session_id, item) do
+    Cart.Server.add_item(Cart.Server.via_registry(session_id), item)
   end
 end
 
 defmodule CartWeb.Components.CartBadge do
   use Filament.Component
+  import CartWeb.Hooks
 
   defcomponent do
-    prop(:source, :any, required: true)
+    prop(:cart, :any, required: true)
 
-    def render(%{source: source}) do
-      count = use_value(source, fn
-        :disconnected -> 0
-        state -> Cart.State.item_count(state)
-      end)
-
-      ~F"""
-      <span class="badge">{count} items</span>
-      """
+    def render(%{cart: cart}) do
+      count = use_cart_count(cart)
+      ~F"<span class=\"badge\">{count} items</span>"
     end
   end
 end
+
+# A parent passes session_id to children and calls
+# CartWeb.Hooks.add_item(session_id, item) in event handlers.
 ```
 
 ## What it does
@@ -84,8 +74,8 @@ socket. Calling the setter re-renders only the affected fiber.
 ```
 
 **Observable GenServers.** Wrap any GenServer with
-`use Filament.Observable.GenServer` and components can subscribe to it with
-`use_value/2`. Call `notify_observers(new_state)` after a mutation and
+`use Filament.Observable.GenServer` and put the subscription in a custom hook
+using `use_value/2`. Call `notify_observers(new_state)` after a mutation and
 every subscribed component re-renders automatically — no PubSub, no
 `handle_info` wiring in the LiveView.
 
@@ -96,24 +86,23 @@ WebSocket process subscribes on mount. Set `static_subscribe: false` on a
 LiveView to skip reading sources during the HTTP render and show the
 `:disconnected` fallback until the WebSocket connects.
 
-**Projections and change-or-bust.** Pass a projection function as the second
-argument to `use_value/2` to extract only the slice of state the component
+**Projections and change-or-bust.** A custom hook passes a projection function
+to `use_value/2` to extract only the slice of state the component
 cares about. The function receives `:disconnected` or the raw server state and
 runs on the client when an update arrives and is refreshed on every render, so it
-can safely close over local component state such as filters or selections. If every
-projected value is unchanged (`===`), the component does not re-render. The latest
-raw state is retained for the next render, including local filter changes. This
-keeps large UIs fast without manual shouldComponentUpdate logic.
+can safely close over local component state such as filters or selections. Equal
+raw state writes are suppressed at the transport. If every projected value is
+unchanged (`===`), the component does not re-render; the latest raw state is
+retained for the next render, including local filter changes.
 
 ```elixir
-# CartBadge only re-renders when the item count changes,
-# not on every cart mutation.
-source = use_source(fn -> Cart.Server.cell(cart_id) end)
-count  = use_value(source, fn
-  :disconnected -> 0
-  state -> Cart.State.item_count(state)
-end)
+# CartBadge reads its domain value without handling a Source.
+count = use_cart_count(cart)
 ```
+
+**Keyed component identity.** A child component with `:key` retains its hook
+state as a list is reordered. The reconciler matches component instances by
+key, and the web adapter produces incremental LiveView diffs.
 
 **Renders follow inputs.** A component renders only when its props change
 (`!==`), its own state changes, or a value it reads with `use_value` changes.
@@ -122,7 +111,7 @@ child's update renders that child alone. Closures passed as props compare
 equal when they capture equal values, so callbacks need no memoization.
 
 **Composable custom hooks.** Any function that calls `use_state`,
-`use_value`, or `use_effect` is a custom hook. Domain behaviour — holds,
+`use_source`, `use_value`, or `use_effect` is a custom hook. Domain behaviour — holds,
 presence, pagination, debounce — lives in a plain module function rather than
 scattered across mount/event/info callbacks.
 
@@ -191,14 +180,16 @@ refute render_text(view) =~ "Search commands"
 {:filament, "~> 0.5"}
 ```
 
+Filament needs Elixir 1.18+, Erlang/OTP 27+ and Phoenix LiveView 1.2+.
+
 ## Examples
 
 | Example | What it demonstrates |
 |---------|----------------------|
-| `examples/todo` | `defcomponent`, `use_state`, `use_source` with factory fn, rung-2 tests |
-| `examples/cart` | Observable.GenServer, projections, change-or-bust, rung-3 integration tests |
+| `examples/todo` | `defcomponent`, `use_state`, a custom `use_todos` hook, rung-2 tests |
+| `examples/cart` | Shared session identity, domain hooks, projections, rung-3 integration tests |
 | `examples/inventory` | Custom `use_hold` hook, `handle_unsubscribe` auto-release, per-item projections |
-| `examples/collaboration` | Multiple concurrent subscribers, real-time presence UI |
+| `examples/collaboration` | Custom `use_document` hook, real-time presence UI |
 
 ## Guides
 

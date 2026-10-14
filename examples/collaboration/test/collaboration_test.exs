@@ -70,9 +70,34 @@ defmodule Collaboration.Test do
         )
 
       cell = Filament.Source.new(Filament.Observable.GenServer, server)
-      subscriber = {self(), "presence_test", 0}
+      subscriber = {self(), "presence_test", 0, make_ref()}
       {:ok, view1} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
       assert view1.presence == 1
+    end
+
+    test "multiple read hooks count as one viewer and retain its lock until the last leaves" do
+      server =
+        start_supervised!(
+          {Collaboration.DocumentServer, [doc_id: "test-doc-#{:erlang.unique_integer()}"]},
+          id: make_ref()
+        )
+
+      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+      first = {self(), "first", 0, make_ref()}
+      second = {self(), "second", 0, make_ref()}
+      {:ok, first_view} = Filament.Cell.subscribe(cell, first, &Function.identity/1)
+      {:ok, second_view} = Filament.Cell.subscribe(cell, second, &Function.identity/1)
+      assert first_view.presence == 1
+      assert second_view.presence == 1
+      assert {:ok, :lock_token} = Collaboration.DocumentServer.acquire_lock(server, self())
+
+      :ok = Filament.Cell.unsubscribe(cell, first)
+      assert Filament.Cell.current(cell, & &1).presence == 1
+      assert Filament.Cell.current(cell, & &1).lock_holder == self()
+
+      :ok = Filament.Cell.unsubscribe(cell, second)
+      assert Filament.Cell.current(cell, & &1).presence == 0
+      assert Filament.Cell.current(cell, & &1).lock_holder == nil
     end
   end
 

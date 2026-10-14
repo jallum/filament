@@ -2,19 +2,17 @@ defmodule CartWeb.Components.CartItems do
   @moduledoc false
   use Filament.Component
 
+  import CartWeb.Hooks, only: [use_cart_state: 1]
+
   defcomponent do
-    prop(:source, :any, default: nil)
+    prop(:cart, :any, default: nil)
 
     defp format_price(cents) do
       "$#{div(cents, 100)}.#{String.pad_leading(Integer.to_string(rem(cents, 100)), 2, "0")}"
     end
 
-    def render(%{source: source}) do
-      cart =
-        use_value(source, fn
-          :disconnected -> nil
-          s -> s
-        end)
+    def render(%{cart: cart_ref}) do
+      cart = use_cart_state(cart_ref)
 
       ~F"""
       <section class="cart-section">
@@ -26,14 +24,12 @@ defmodule CartWeb.Components.CartItems do
             <p class="cart-empty">Your cart is empty.</p>
           {else}
             <ul class="cart-items">
-              {for item <- cart.items do}
-                <li class="cart-item" id={"cart-item-#{item.id}"}>
-                  <span class="item-name">{item.name}</span>
-                  <span class="item-qty">× {item.quantity}</span>
-                  <span class="item-price">{format_price(item.price_cents * item.quantity)}</span>
-                  <button class="btn-remove" on_click={fn -> Cart.Server.remove_item(source.data, item.id) end}>Remove</button>
-                </li>
-              {end}
+              <li :for={item <- cart.items} :key={item.id} class="cart-item" id={"cart-item-#{item.id}"}>
+                <span class="item-name">{item.name}</span>
+                <span class="item-qty">× {item.quantity}</span>
+                <span class="item-price">{format_price(item.price_cents * item.quantity)}</span>
+                <button class="btn-remove" on_click={fn -> CartWeb.Hooks.remove_item(cart_ref, item.id) end}>Remove</button>
+              </li>
             </ul>
           {end}
           <div class="cart-total">Total: {format_price(cart.total_cents)}</div>

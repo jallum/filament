@@ -7,35 +7,25 @@ defmodule Filament.Hooks do
   Call these at the top level of `render/1`:
 
     - `use_state/1` — local mutable state; returns `{value, setter}`
-    - `use_source/1` — bind a reactive source once (factory fn or cell tuple); returns a stable handle
+    - `use_source/1,2` — bind a reactive source (optionally keyed); returns a stable handle
     - `use_value/2` — read a projected value from a source and subscribe to its updates
     - `use_effect/2` — side-effect with optional cleanup
-    - `event_at/2` — invoked by compiler-generated code from `~F` templates
 
-  ## Pattern: use_source + use_value
+  ## Pattern: domain hooks
 
-  Bind the source once with `use_source`, then read values from it with `use_value`.
-  This lets you pass the source to child components and apply multiple projections
-  from the same source:
+  Application hooks can bind a source and project values without exposing
+  transport details to components:
 
-      def render(%{session_id: session_id}) do
-        source = use_source(fn -> MyServer.cell(session_id) end)
-
-        count = use_value(source, fn
+      def use_count(server) do
+        source = MyServer.cell(server)
+        use_value(source, fn
           :disconnected -> 0
           state -> state.count
         end)
-
-        <ChildComponent source={source} />
       end
 
-      # In the child:
-      def render(%{source: source}) do
-        value = use_value(source, fn
-          :disconnected -> nil
-          s -> s.some_field
-        end)
-      end
+      # In a component:
+      count = MyHooks.use_count(server)
 
   ## Rules of hooks
 
@@ -235,6 +225,32 @@ defmodule Filament.Hooks do
       source
     end
   end
+
+  @doc """
+  Bind a factory-backed source to an explicit identity.
+
+  When `key` changes, calls the factory again even if the previous source is
+  reachable. Use this for factories that close over a changing resource ID.
+  """
+  @spec use_source((-> Filament.Source.t()), term()) :: Filament.Source.t() | nil
+  def use_source(factory_fn, key) when is_function(factory_fn, 0) do
+    {slot_index, previous, ctx} = use_slot(:uninitialized)
+
+    if ctx.sources == :disconnected do
+      commit_slot(slot_index, :uninitialized)
+      nil
+    else
+      source = resolve_source_factory(factory_fn, previous, key)
+      commit_slot(slot_index, {:cell_resolved, source, key})
+      source
+    end
+  end
+
+  defp resolve_source_factory(factory_fn, {:cell_resolved, cached, key}, key) do
+    if Filament.Cell.whereis(cached), do: cached, else: factory_fn.()
+  end
+
+  defp resolve_source_factory(factory_fn, _previous, _key), do: factory_fn.()
 
   defp resolve_source_factory(factory_fn, previous) when is_function(factory_fn, 0) do
     case previous do
