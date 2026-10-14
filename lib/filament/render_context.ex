@@ -37,6 +37,9 @@ defmodule Filament.RenderContext do
     # :subscribe | :current | :disconnected - how use_value reads sources;
     # a static (HTTP) render reads :current values or none
     sources: :subscribe,
+    # %{term() => pid()} - test stand-ins: an Observable.GenServer source for
+    # a key subscribes to its stub instead
+    cells: %{},
     # %{non_neg_integer() => term()} - existing hook slot state for new child fibers
     hook_slots: %{},
     # %{module() => non_neg_integer()} - per-module counter for stable child fiber IDs.
@@ -61,6 +64,7 @@ defmodule Filament.RenderContext do
           capture_handler_index: non_neg_integer(),
           new_capture_handlers: %{non_neg_integer() => function()},
           sources: :subscribe | :current | :disconnected,
+          cells: %{term() => pid()},
           hook_slots: %{non_neg_integer() => term()},
           child_component_indices: %{module() => non_neg_integer()}
         }

@@ -18,6 +18,9 @@ defmodule Filament.Reconciler do
     * `:target` - `Filament.Web` for compiled LiveView output, otherwise portable vnodes (default: `Filament.VNode`)
     * `:sources` - how `use_value/2` reads sources: `:subscribe`, `:current` (read once,
       for a static render) or `:disconnected` (default: `:subscribe`)
+    * `:cells` - `%{server => stub_pid}`: a `Filament.Observable.GenServer` source
+      for `server` subscribes to and reads `stub_pid` instead (default: `%{}`).
+      `Filament.Test.mount/3` passes its `:cells` option here.
   """
   @spec mount(module(), map(), keyword()) ::
           {fiber_tree(), walked_vnode(), list()}
@@ -49,6 +52,7 @@ defmodule Filament.Reconciler do
       fiber_tree: tree,
       owner_pid: Keyword.get(opts, :owner_pid),
       sources: Keyword.get(opts, :sources, :subscribe),
+      cells: Keyword.get(opts, :cells, %{}),
       target: Keyword.get(opts, :target, Filament.VNode)
     }
 

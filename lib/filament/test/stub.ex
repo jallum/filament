@@ -9,7 +9,12 @@ defmodule Filament.Test.Stub do
 
   The hook constructs `MyServer.cell(stub)` (or
   `Filament.Source.new(Filament.Observable.GenServer, stub)`) and reads it
-  with `use_value/2`. Mount does not replace server references automatically.
+  with `use_value/2`.
+
+  When the component also calls the server it subscribes to, keep the real
+  server in the props and answer only its subscriptions from the stub:
+
+      view = Filament.Test.mount!(QueuePage, %{catalog: catalog}, cells: %{catalog => stub})
 
   To push an update after mount:
 

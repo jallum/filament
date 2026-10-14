@@ -103,6 +103,7 @@ defmodule Filament.Renderer do
       fiber_tree: parent_ctx.fiber_tree,
       owner_pid: parent_ctx.owner_pid,
       sources: parent_ctx.sources,
+      cells: parent_ctx.cells,
       target: parent_ctx.target,
       new_fibers: parent_ctx.new_fibers,
       pending_effects: parent_ctx.pending_effects
