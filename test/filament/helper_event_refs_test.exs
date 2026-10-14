@@ -118,4 +118,23 @@ defmodule Filament.HelperEventRefsTest do
     assert view.rendered_html =~ ~s(<button phx-click="filament:root:0">)
     assert view.rendered_html =~ ~s(phx-hook="FilamentKey")
   end
+
+  test "a literal fn handler compiles without type warnings" do
+    src = ~S'''
+    defmodule Filament.HelperEventRefsTest.LiteralHandlers do
+      use Filament.Component
+
+      defcomponent do
+        def render(_props) do
+          ~F"""
+          <button on_click={fn -> :ok end}>click</button><input on_key={fn _key, _mods -> :ok end} />
+          """
+        end
+      end
+    end
+    '''
+
+    {_modules, diagnostics} = Code.with_diagnostics(fn -> Code.compile_string(src) end)
+    assert diagnostics == []
+  end
 end

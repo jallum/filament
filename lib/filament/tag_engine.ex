@@ -1147,7 +1147,7 @@ defmodule Filament.TagEngine do
     # `Filament.Test.key_down/2` does the same. The `id` attr is the same
     # raw ref so the hook and element id stay aligned.
     group_ast =
-      quote do
+      quote generated: true do
         case unquote(v) do
           handler when handler in [nil, false] ->
             []
@@ -1174,7 +1174,7 @@ defmodule Filament.TagEngine do
 
   defp transform_event_attr_for_vnode({"on_" <> event, v}) do
     value =
-      quote do
+      quote generated: true do
         case unquote(v) do
           handler when handler in [nil, false] -> nil
           handler -> "filament:" <> Filament.Hooks.register_event_handler(handler)

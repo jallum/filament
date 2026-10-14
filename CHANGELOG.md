@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An `on_*` attribute given a literal `fn` no longer gets a type warning
+  under Elixir 1.20 for the `nil`/`false` check `~F` generates around it.
+
 ### Security
 
 ## [0.6.0-rc.1] - 2026-10-14
