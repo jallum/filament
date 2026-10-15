@@ -46,12 +46,18 @@ defmodule Filament.LiveView do
 
   @callback root_component() :: module()
 
-  @root_fingerprint :erlang.md5(:erlang.term_to_binary(["", ""]))
+  @runtime_assets_js File.read!(Path.join(:code.priv_dir(:filament), "static/filament.js"))
+  @external_resource Path.join(:code.priv_dir(:filament), "static/filament.js")
+
+  # The runtime script is the view's trailing static. LiveView sends statics
+  # once per mount and caches them by fingerprint, so diffs never carry it.
+  @root_static ["", ~s(<script data-phx-runtime-hook="FilamentKey">) <> @runtime_assets_js <> "</script>"]
+  @root_fingerprint :erlang.md5(:erlang.term_to_binary(@root_static))
 
   @doc false
   def render(assigns) do
     view = view(assigns)
-    %Rendered{static: ["", ""], dynamic: fn _track -> [view] end, fingerprint: @root_fingerprint, root: false}
+    %Rendered{static: @root_static, dynamic: fn _track -> [view] end, fingerprint: @root_fingerprint, root: false}
   end
 
   # The socket keeps complete output. LiveView keeps the output the client
@@ -71,15 +77,14 @@ defmodule Filament.LiveView do
     end
   end
 
-  @runtime_assets_js File.read!(Path.join(:code.priv_dir(:filament), "static/filament.js"))
-  @external_resource Path.join(:code.priv_dir(:filament), "static/filament.js")
-
   @doc """
   Renders the Filament runtime JS — the `window.filament.handleEvent`
   helper and the `FilamentKey` window-keydown hook.
 
-  Drop this once into your root layout, before the `LiveSocket`
-  initialization:
+  `Filament.LiveView` includes this script in its own output, so a page
+  built from one needs nothing more. Render it in the root layout when
+  `Filament.LiveComponent` runs inside a LiveView of your own, before the
+  `LiveSocket` initialization:
 
       <Filament.LiveView.runtime_assets />
       <script>
@@ -103,11 +108,8 @@ defmodule Filament.LiveView do
       attribute by listening to `window` keydown events and pushing
       them at the right fiber.
 
-  ## Background
-
-  Earlier versions inlined this JS in every `Filament.LiveView` render,
-  which shipped the same script on every WebSocket diff. Moving it to a
-  one-time layout component keeps it out of the per-render diff stream.
+  The script is static output, which LiveView sends once per mount, not
+  with each diff.
   """
   def runtime_assets(assigns) do
     assigns = Phoenix.Component.assign(assigns, :__filament_js__, @runtime_assets_js)
