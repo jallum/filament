@@ -165,21 +165,18 @@ defaulting to `false`. Unspecified fields are ignored in a pattern match, so
 `%{ctrl: true}` matches any combination that includes Ctrl held down.
 
 Under the hood, Filament's `on_key` is wired to a `FilamentKey` Phoenix
-LiveView hook. The hook ships with the framework as inline JS via the
-`Filament.LiveView.runtime_assets` component — drop it once into your
-root layout, before the `LiveSocket` initialization:
+LiveView hook. `Filament.LiveView` includes the hook's script in its own
+output, sent once when the view mounts, and registers it via
+`data-phx-runtime-hook`, so neither the layout nor `LiveSocket`'s `hooks:`
+needs anything.
+
+If `Filament.LiveComponent` runs inside a LiveView of your own, render the
+script once in your root layout, before the `LiveSocket` initialization:
 
 ```heex
 <%!-- in your root layout, before the LiveSocket script --%>
 <Filament.LiveView.runtime_assets />
-<script>
-  let liveSocket = new LiveSocket("/live", Socket, {...})
-  liveSocket.connect()
-</script>
 ```
-
-The script is registered via `data-phx-runtime-hook`, so no
-`hooks: { FilamentKey }` wiring on `LiveSocket` is required.
 
 **Full event attribute reference:**
 

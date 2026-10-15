@@ -1,7 +1,8 @@
 // Filament runtime assets.
 //
-// Loaded once by `<Filament.LiveView.runtime_assets />` in the root layout.
-// Idempotent — guarded with `||` so re-loading on layout swap is safe.
+// Sent once per mount as static output of every `Filament.LiveView`, and by
+// `<Filament.LiveView.runtime_assets />` where a layout renders it.
+// Idempotent — guarded with `||` so loading it more than once is safe.
 
 window.filament = window.filament || {
   // Wire-ref-scoped handleEvent helper for 2-arity event handlers

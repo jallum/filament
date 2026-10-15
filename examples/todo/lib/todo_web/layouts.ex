@@ -177,7 +177,6 @@ defmodule TodoWeb.Layouts do
         <%= @inner_content %>
         <script src="/phoenix/phoenix.min.js"></script>
         <script src="/phoenix_live_view/phoenix_live_view.min.js"></script>
-        <Filament.LiveView.runtime_assets />
         <script>
           let Hooks = {};
           Hooks.AutoFocus = {

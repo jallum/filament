@@ -31,6 +31,12 @@ defmodule Filament.LiveComponent do
 
   This is a Phase 1 limitation. Phase 2 will add automatic forwarding via a
   host LiveView helper.
+
+  ## `on_key`
+
+  `on_key` needs the `FilamentKey` hook's script, which `Filament.LiveView`
+  includes in its output but a LiveView of your own doesn't. Render
+  `Filament.LiveView.runtime_assets/1` once in the root layout.
   """
 
   use Phoenix.LiveComponent

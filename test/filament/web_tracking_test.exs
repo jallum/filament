@@ -147,6 +147,15 @@ defmodule Filament.WebTrackingTest do
   defp html(client), do: client |> Diff.to_iodata() |> IO.iodata_to_binary()
   defp payload(diff), do: Jason.encode!(diff)
 
+  test "the FilamentKey hook's script goes out with the mount, not with updates" do
+    {view, mounted} = mount(:html)
+    assert html(view.client) =~ ~s(<script data-phx-runtime-hook="FilamentKey">)
+    assert payload(mounted) =~ "phx_hook_FilamentKey"
+
+    {_view, diff} = view |> set(%{query: "ab"}) |> frame()
+    refute payload(diff) =~ "phx_hook_FilamentKey"
+  end
+
   test "an identical update sends nothing" do
     {view, _} = mount(:html)
     {_view, diff} = view |> set(%{query: "a", rows: rows(25)}) |> frame()

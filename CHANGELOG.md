@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `on_key` works again without anything in the layout. 0.6.0-rc.1 moved the
+  `FilamentKey` hook's script out of `Filament.LiveView`'s output into
+  `Filament.LiveView.runtime_assets/1`, without saying so, and an app whose
+  layout didn't render it had keys silently ignored. The script is again
+  part of the view's static output, which LiveView sends once per mount,
+  not with each diff. A layout that renders `runtime_assets/1` can keep it
+  or drop it; a `Filament.LiveComponent` inside a LiveView of your own
+  still needs it.
+
 ### Security
 
 ## [0.6.0-rc.2] - 2026-10-14
