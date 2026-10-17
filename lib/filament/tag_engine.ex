@@ -3,9 +3,19 @@ defmodule Filament.TagEngine do
 
   @behaviour EEx.Engine
 
+  # Directly inside a component tag's body, where slot entries go. As in
+  # HEEx: an entry inside a block or an element would be hoisted out of it;
+  # `:if` and `:for` on the entry place it conditionally.
   alias Phoenix.Component.MacroComponent
   alias Phoenix.LiveView.TagEngine.Tokenizer
   alias Phoenix.LiveView.TagEngine.Tokenizer.ParseError
+
+  defguardp is_slot_entry_position(state)
+            when state.slots != [] and elem(hd(state.tags), 0) == :remote_component and
+                   elem(hd(state.stack), 0) == :substate
+
+  # The props of the render a template runs in, for its slot render sites.
+  @props_var Macro.var(:filament_props, __MODULE__)
 
   @doc """
   Compiles the given string into Elixir AST.
@@ -108,10 +118,19 @@ defmodule Filament.TagEngine do
 
     ast = invoke_subengine(token_state, :handle_body, [])
 
-    quote do
-      require Filament.TagEngine
+    if token_state.render_sites? do
+      quote do
+        require Filament.TagEngine
 
-      unquote(ast)
+        unquote(@props_var) = Filament.Renderer.current_props()
+        unquote(ast)
+      end
+    else
+      quote do
+        require Filament.TagEngine
+
+        unquote(ast)
+      end
     end
   end
 
@@ -161,6 +180,7 @@ defmodule Filament.TagEngine do
       stack: [],
       tags: [],
       slots: [],
+      render_sites?: false,
       caller: caller,
       indentation: indentation,
       tag_handler: tag_handler
@@ -600,19 +620,34 @@ defmodule Filament.TagEngine do
     |> continue(tokens)
   end
 
-  # Provider render site: <:slot_name /> inside a component's own render/1 template
+  # Self-closing `<:slot_name />` directly inside a component tag: an entry
+  # with no content, as in HEEx.
+
+  defp handle_token([{:slot, slot_name, attrs, %{closing: :self} = tag_meta} | tokens], state)
+       when state.slots != [] and elem(hd(state.tags), 0) == :remote_component and elem(hd(state.stack), 0) == :substate do
+    {slot_atom, slot_attrs_ast, has_special?, special} = parse_slot_entry(slot_name, attrs, tag_meta, state)
+    entry_ast = build_slot_entry_ast({:fragment, []}, slot_attrs_ast, has_special?, special)
+
+    state
+    |> add_slot_entry(slot_atom, entry_ast)
+    |> continue(tokens)
+  end
+
+  # Provider render site: <:slot_name /> inside a component's own render/1
+  # template. It reads the props the template's render received, bound when
+  # the template starts: a site inside a slot entry's content renders during
+  # another component's render.
 
   defp handle_token([{:slot, slot_name, attrs, %{closing: :self} = tag_meta} | tokens], state) do
     slot_atom = String.to_atom(slot_name)
-    default_ast = parse_slot_default(attrs, state)
+    default_ast = parse_slot_default(attrs, state) || declared_slot_default(state.caller, slot_atom)
 
     vnode_ast =
       quote line: tag_meta.line do
-        {:slot, unquote(slot_atom), Map.get(Filament.Renderer.current_props(), unquote(slot_atom), []),
-         unquote(default_ast)}
+        {:slot, unquote(slot_atom), Map.get(unquote(@props_var), unquote(slot_atom), []), unquote(default_ast)}
       end
 
-    state
+    %{state | render_sites?: true}
     |> update_subengine(:handle_expr, ["=", vnode_ast])
     |> continue(tokens)
   end
@@ -624,9 +659,7 @@ defmodule Filament.TagEngine do
       state.slots == [] ->
         raise_syntax_error!("slot syntax `<:#{slot_name}>` is only valid inside a component tag", tag_meta, state)
 
-      # As in HEEx: an entry inside a block or an element would be hoisted out
-      # of it. `:if` and `:for` on the entry place it conditionally.
-      not (match?([{:remote_component, _, _, _} | _], state.tags) and match?([{:substate, _} | _], state.stack)) ->
+      not is_slot_entry_position(state) ->
         message = "slot entry `<:#{slot_name}>` must be a direct child of its component; use :if or :for on the entry"
         raise_syntax_error!(message, tag_meta, state)
 
@@ -634,14 +667,7 @@ defmodule Filament.TagEngine do
         :ok
     end
 
-    slot_atom = String.to_atom(slot_name)
-
-    for {":" <> special_name, _value, attr_meta} <- attrs, special_name not in ~w(if for) do
-      raise_syntax_error!(":#{special_name} is not supported on slot entries", attr_meta, state)
-    end
-
-    {has_special?, special, attrs} = pop_special_attrs!(attrs, tag_meta, state)
-    slot_attrs_ast = parse_slot_attrs(attrs, state)
+    {slot_atom, slot_attrs_ast, has_special?, special} = parse_slot_entry(slot_name, attrs, tag_meta, state)
 
     state
     |> push_substate_to_stack()
@@ -1254,6 +1280,27 @@ defmodule Filament.TagEngine do
 
     if has_special?, do: wrap_special(entry, special), else: entry
   end
+
+  defp parse_slot_entry(slot_name, attrs, tag_meta, state) do
+    for {":" <> special_name, _value, attr_meta} <- attrs, special_name not in ~w(if for) do
+      raise_syntax_error!(":#{special_name} is not supported on slot entries", attr_meta, state)
+    end
+
+    {has_special?, special, attrs} = pop_special_attrs!(attrs, tag_meta, state)
+    {String.to_atom(slot_name), parse_slot_attrs(attrs, state), has_special?, special}
+  end
+
+  # `slot :name, default: Mod` in the template's component, declared before render/1.
+  defp declared_slot_default(%Macro.Env{module: module}, slot_atom) when is_atom(module) and module != nil do
+    with true <- Module.open?(module) and Module.has_attribute?(module, :filament_slots),
+         {_name, opts} <- List.keyfind(Module.get_attribute(module, :filament_slots), slot_atom, 0) do
+      Keyword.get(opts, :default)
+    else
+      _ -> nil
+    end
+  end
+
+  defp declared_slot_default(_caller, _slot_atom), do: nil
 
   defp parse_slot_attrs(attrs, state) do
     pairs =

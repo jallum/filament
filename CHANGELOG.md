@@ -107,6 +107,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Slots behave as in HEEx in three more places:
+  - A self-closing `<:name />` directly inside a component tag is an entry
+    with no content. It was a render site, passing the enclosing
+    component's own `name` slot as the child's `children`.
+  - A render site inside a slot entry's content, such as
+    `<:item><li><:title /></li></:item>`, renders the slot of the template's
+    own component. It read the props of the component rendering the entry.
+  - `slot :name, default: Mod` renders `Mod` when no entry is given, as the
+    render site's `default={Mod}` does. The declared default was ignored.
+
 - A hook a render stops calling, such as a `use_effect` or `use_value`
   under an `if`, is cleaned up by that render: the effect's cleanup runs
   and the subscription ends. Both lasted until the view exited, and an

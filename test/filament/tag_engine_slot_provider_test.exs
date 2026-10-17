@@ -11,6 +11,72 @@ defmodule Filament.TagEngine.SlotProviderTest do
   alias Filament.Slot.Entry
   alias Filament.TagEngine
 
+  defmodule Fallback do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      def render(_props), do: ~F"<em>fallback</em>"
+    end
+  end
+
+  defmodule Card do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      slot(:footer, default: Filament.TagEngine.SlotProviderTest.Fallback)
+      slot(:item)
+
+      def render(props) do
+        ~F"""
+        <div>footers={length(Map.get(props, :footer, []))} children={inspect(Map.has_key?(props, :children))}</div>
+        <ul><:item /></ul><p><:footer /></p>
+        """
+      end
+    end
+  end
+
+  defmodule Page do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      slot(:title)
+      prop(:empty_footer, :boolean, default: false)
+
+      def render(props) do
+        ~F"""
+        <Filament.TagEngine.SlotProviderTest.Card>
+          <:footer :if={props.empty_footer} />
+          <:item><li><:title /></li></:item>
+        </Filament.TagEngine.SlotProviderTest.Card>
+        """
+      end
+    end
+  end
+
+  describe "slots, as in HEEx" do
+    defp render_page(props) do
+      title = %Entry{render_fn: fn -> {:text, "page title"} end}
+      Page |> Filament.Test.mount!(Map.put(props, :title, [title])) |> Filament.Test.render_text()
+    end
+
+    test "a render site in an entry's content renders the slot of the template's own component" do
+      assert render_page(%{}) =~ "page title"
+    end
+
+    test "a slot's declared default renders when no entry is given" do
+      assert render_page(%{}) =~ "fallback"
+    end
+
+    test "a self-closing entry inside a component tag is an entry with no content" do
+      text = render_page(%{empty_footer: true})
+      assert text =~ "footers=1 children=false"
+      refute text =~ "fallback"
+    end
+  end
+
   defp compile(source, env \\ __ENV__) do
     TagEngine.compile(source,
       caller: env,
