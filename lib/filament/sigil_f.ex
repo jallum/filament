@@ -2,9 +2,16 @@ defmodule Filament.SigilF do
   @moduledoc """
   Implements the ~F sigil for compiling HEEx-style templates into VNode IR.
 
-  Templates interpolate Elixir expressions with `{...}`. `@foo` reads
-  `assigns[:foo]` from an `assigns` variable in scope, as in
-  `def render(assigns)`.
+  Templates interpolate Elixir expressions with `{...}`. `@foo` is the
+  module attribute, as anywhere in Elixir; there are no assigns as in `~H`.
+  A template that reads an attribute its module doesn't have fails to
+  compile:
+
+      @pick "pick rounded border"
+
+      def render(%{label: label}) do
+        ~F"<button class={@pick}>{label}</button>"
+      end
   """
 
   @doc """
@@ -21,7 +28,6 @@ defmodule Filament.SigilF do
   @doc type: :macro
   defmacro sigil_F({:<<>>, _meta, [source]}, modifiers)
            when modifiers == [] or modifiers == ~c"noformat" do
-    # @foo becomes assigns[:foo]
     Filament.VNodeCompiler.compile(source, __CALLER__)
   end
 end

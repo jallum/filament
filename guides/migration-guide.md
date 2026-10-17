@@ -371,7 +371,9 @@ Several transformations follow a mechanical pattern that could be automated:
 
 - `assign(socket, key: value)` in `handle_event` → `use_state` in the component
 - `socket.assigns.key` in render → bind the variable in `render/1` pattern match
-- `socket.assigns.key` in templates → `{variable}` or `{@key}` in `~F` templates
+- `@key` in `~H` templates → `{key}` in `~F`, bound in `render/1`'s pattern
+  match. In `~F`, `@key` is the module attribute, and a template that reads
+  one the module doesn't have fails to compile
 - `handle_event("name", params, socket)` → `on_*` closure in the template; state
   updates via captured `use_state` setters, side effects via captured server refs
 

@@ -11,23 +11,31 @@ defmodule Filament.VNodeCompiler do
       indentation: 0,
       tag_handler: Filament.HTMLEngine
     )
-    |> rewrite_at_assigns()
+    |> check_attributes!(caller)
     |> Filament.TemplateCompiler.compile()
   end
 
-  # `Phoenix.LiveView.Engine` intercepts `@foo` in `~H` templates and rewrites
-  # it to `assigns[:foo]`. `VNodeEngine` bypasses PLV.Engine, so we do the
-  # rewrite here on the compiled AST — bare map access via the lexical
-  # `assigns` var bound by the component function head. Components that
-  # destructure props in the function head don't go through this path.
-  defp rewrite_at_assigns(ast) do
-    Macro.postwalk(ast, fn
-      {:@, _meta, [{name, _, ctx}]} when is_atom(name) and is_atom(ctx) ->
-        assigns_var = Macro.var(:assigns, nil)
-        quote(do: unquote(assigns_var)[unquote(name)])
+  # `@foo` is the module attribute, as anywhere in Elixir, not an assign as
+  # in `~H`. Filament has no assigns to track, and a template pasted from
+  # HEEx fails here rather than reading an attribute it doesn't mean.
+  defp check_attributes!(ast, %Macro.Env{module: module} = caller) when is_atom(module) and module != nil do
+    Macro.prewalk(ast, fn
+      {:@, meta, [{name, _, ctx}]} = attribute when is_atom(name) and is_atom(ctx) ->
+        if Module.open?(module) and not Module.has_attribute?(module, name) do
+          raise CompileError,
+            file: caller.file,
+            line: meta[:line] || caller.line,
+            description:
+              "@#{name} is a module attribute in ~F, and #{inspect(module)} has none; " <>
+                "read a prop as props.#{name}"
+        end
+
+        attribute
 
       other ->
         other
     end)
   end
+
+  defp check_attributes!(ast, _caller), do: ast
 end

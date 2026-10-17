@@ -13,9 +13,9 @@ defmodule Filament do
       defcomponent MyApp.Greeting do
         prop :name, :string, required: true
 
-        def render(assigns) do
+        def render(%{name: name}) do
           ~F\"""
-          <h1>Hello, {@name}!</h1>
+          <h1>Hello, {name}!</h1>
           \"""
         end
       end

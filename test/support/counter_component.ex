@@ -7,9 +7,9 @@ defmodule Filament.Fixtures.CounterComponent do
   defcomponent do
     prop(:count, :integer, required: true)
 
-    def render(assigns) do
+    def render(%{count: count}) do
       ~F"""
-      <p>{@count}</p>
+      <p>{count}</p>
       """
     end
   end
