@@ -190,7 +190,7 @@ defmodule Filament.Bench.Workloads do
   end
 
   def cleanup(result) do
-    Reconciler.unmount(result.tree, owner_pid: self())
+    Reconciler.unmount(result.tree)
 
     if result.input.server do
       # This synchronous call also fences main's asynchronous unsubscribe casts.
