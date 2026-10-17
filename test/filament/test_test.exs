@@ -137,6 +137,21 @@ defmodule Filament.TestTest do
     end
   end
 
+  defmodule ChainComp do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent Chain do
+      prop(:forever, :boolean, default: false)
+
+      def render(%{forever: forever}) do
+        {step, set_step} = use_state(0)
+        use_effect(fn -> if step < 3 or forever, do: set_step.(step + 1) end, [step])
+        ~F"<p>step {step}</p>"
+      end
+    end
+  end
+
   defmodule KeyModalComp do
     @moduledoc false
     use Filament.Component
@@ -273,6 +288,39 @@ defmodule Filament.TestTest do
     :sys.get_state(server)
     {:dictionary, dictionary} = Process.info(server, :dictionary)
     Keyword.get(dictionary, :__filament_cell_subscribers__, %{})
+  end
+
+  test "update/1 renders until effects stop setting state" do
+    view = mount!(ChainComp.Chain, %{})
+    assert render_text(view) == "step 0"
+    assert view |> update() |> render_text() == "step 3"
+  end
+
+  test "update/1 raises for a view that never stops setting its own state" do
+    view = mount!(ChainComp.Chain, %{forever: true})
+    assert_raise RuntimeError, ~r/kept sending itself messages/, fn -> update(view) end
+  end
+
+  test "await/3 returns the view once its condition holds, waking on messages sent later" do
+    {:ok, stub} = Stub.start(fn _req -> 0 end)
+    view = mount!(ObservableComp.Observable, %{server: stub})
+
+    spawn(fn ->
+      Process.sleep(20)
+      Stub.push(stub, 7)
+    end)
+
+    view = await(view, &(render_text(&1) == "7"), interval: 5_000)
+    assert render_text(view) == "7"
+  end
+
+  test "await/3 raises with the view's text when its condition doesn't hold in time" do
+    {:ok, stub} = Stub.start(fn _req -> 0 end)
+    view = mount!(ObservableComp.Observable, %{server: stub})
+
+    error = assert_raise ExUnit.AssertionError, fn -> await(view, &(render_text(&1) == "7"), timeout: 30) end
+    assert error.message =~ "timed out after 30ms"
+    assert error.message =~ "0"
   end
 
   test "click on nonexistent selector" do

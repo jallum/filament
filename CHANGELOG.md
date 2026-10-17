@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Filament.Test.await/3` returns the view once a condition holds, applying
+  Filament messages as they arrive, and raises with the view's text on
+  timeout. Tests no longer loop over `update/1` or match Filament's
+  message tuples to wait for a page:
+
+  ```elixir
+  view = await(view, &(render_text(&1) =~ "3 results"))
+  ```
+
 - `use_value/3` takes `disconnected: value`, returned while the source is
   `nil`, disconnected or unreachable, so the projection handles only the
   source's values:
@@ -22,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ```
 
 ### Changed
+
+- `Filament.Test.update/1`, and events such as `click/2`, render until no
+  Filament message is left, so state an effect sets shows in the view they
+  return; one render could leave its effects' messages in the mailbox.
 
 - **Breaking:** `handle_subscribe/2` returns `{:ok, new_state}` to accept,
   without a value; a subscriber starts from `handle_current/1`'s value, as

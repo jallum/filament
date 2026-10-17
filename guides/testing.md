@@ -190,7 +190,10 @@ of the view, subscribes to the stub, and `Stub.push/2` updates them.
 
 `Filament.Test.Stub.push/2` sends a new value to a stub, simulating a
 server's `notify_observers/1` call. Call `Filament.Test.update/1`
-afterward to drain the resulting `:cell_update` message and re-render:
+afterward to drain the resulting `:cell_update` message and re-render.
+`update/1` renders until nothing is left to apply, so state set by the
+render's effects shows too; events such as `click!/2` do the same. Keep the
+view it returns: its messages are gone from the mailbox.
 
 ```elixir
 test "re-renders when server state changes" do
@@ -207,11 +210,11 @@ test "re-renders when server state changes" do
 end
 ```
 
-## Async assertions with eventually/2
+## Waiting for the view with await/3
 
 Some state changes happen asynchronously — a spawned process, a delayed
-`notify_observers`, an effect with a timer. `eventually/2` retries an
-assertion until it passes or a timeout is reached:
+`notify_observers`, an effect with a timer. `await/3` applies Filament
+messages as they arrive and returns the view once its condition holds:
 
 ```elixir
 test "count updates after async server push" do
@@ -223,15 +226,17 @@ test "count updates after async server push" do
     Stub.push(stub, Cart.State.add_item(%Cart.State{}, %Cart.Item{id: "a"}))
   end)
 
-  Filament.Test.eventually(fn ->
-    view = Filament.Test.update(view)
-    view.rendered_html =~ ~s(data-count="1")
-  end, timeout: 500)
+  view = await(view, &(&1.rendered_html =~ ~s(data-count="1")), timeout: 500)
+  assert render_text(view) =~ "1 item"
 end
 ```
 
-Options: `timeout:` (ms, default 1000), `interval:` (retry interval ms,
-default 50).
+It wakes on each message, and every `interval:` ms (default 50) for a view
+whose render reads something messages don't announce. On timeout
+(`timeout:`, default 1000 ms) it raises with the view's text.
+
+`eventually/2` retries any zero-arity assertion the same way, for
+conditions that aren't about a view.
 
 ## Putting it together — a complete example
 
