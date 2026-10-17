@@ -26,10 +26,10 @@ defmodule Filament.LiveViewTest do
     defcomponent do
       prop(:count, :integer, required: true)
 
-      def render(assigns) do
+      def render(%{count: count}) do
         ~F"""
         <div class="counter">
-          <h1>Counter: {@count}</h1>
+          <h1>Counter: {count}</h1>
         </div>
         """
       end

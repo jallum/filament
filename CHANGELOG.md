@@ -20,6 +20,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** `@name` in `~F` is the module attribute, as anywhere in
+  Elixir, not `assigns[:name]`. Filament has no assigns: `@name` worked
+  only in a `render(assigns)`, read `nil` for a missing prop, and kept a
+  template from reading the module's attributes, which had to be copied
+  into variables first. A template that reads an attribute its module
+  doesn't have fails to compile, naming the prop to read instead:
+
+  ```elixir
+  # Before
+  def render(assigns), do: ~F"<h1>{@name}</h1>"
+
+  # After
+  def render(%{name: name}), do: ~F"<h1>{name}</h1>"
+
+  # And module attributes read directly
+  @pick "pick rounded border"
+  def render(%{label: label}), do: ~F"<button class={@pick}>{label}</button>"
+  ```
+
 - `Filament.Test.eventually/2` retries a function whose `assert` fails,
   and on timeout raises that assertion's error, with its diff. It stopped
   at the first failing `assert`. A falsy return still retries, and on
