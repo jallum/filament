@@ -9,7 +9,7 @@ defmodule Filament.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
-      dialyzer: [plt_add_apps: [:mix]],
+      dialyzer: [plt_add_apps: [:mix, :ex_unit]],
       docs: docs(),
       package: package(),
       elixirc_paths: elixirc_paths(Mix.env()),

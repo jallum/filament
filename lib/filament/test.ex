@@ -23,6 +23,8 @@ defmodule Filament.Test do
 
   @compile {:no_warn_undefined, [Floki]}
 
+  @host_messages [:filament_set_state, :cell_update, :cell_updates, :cell_resubscribe]
+
   defstruct [
     :component,
     :props,
@@ -322,8 +324,13 @@ defmodule Filament.Test do
   end
 
   @doc """
-  Drain pending filament messages and re-render the view.
-  Useful after pushing to an observable stub from outside the component.
+  Apply the Filament messages waiting in the test process's mailbox and
+  render, until none are left: state set by effects and cell updates sent
+  in the meantime show too. Use it after pushing to a stub, or to let a
+  mounted view's effects take hold. Events (`click/2` and the rest) do the
+  same after running their handler.
+
+  It doesn't wait for messages not yet sent; see `await/3`.
   """
   @spec update(t()) :: t()
   def update(%__MODULE__{} = view) do
@@ -331,8 +338,51 @@ defmodule Filament.Test do
   end
 
   @doc """
+  Return the view once `fun.(view)` is truthy, applying Filament messages
+  as they arrive. Raises `ExUnit.AssertionError` with the view's text if
+  `fun` is still falsy after `:timeout` ms (default 1000).
+
+      view = await(view, &(render_text(&1) =~ "3 results"))
+
+  It wakes on each Filament message, and every `:interval` ms (default 50)
+  for a view whose render reads something else.
+  """
+  @spec await(t(), (t() -> as_boolean(term())), keyword()) :: t()
+  def await(%__MODULE__{} = view, fun, opts \\ []) when is_function(fun, 1) do
+    opts = Keyword.validate!(opts, timeout: 1_000, interval: 50)
+    do_await(update(view), fun, System.monotonic_time(:millisecond) + opts[:timeout], opts)
+  end
+
+  defp do_await(view, fun, deadline, opts) do
+    remaining = deadline - System.monotonic_time(:millisecond)
+
+    cond do
+      fun.(view) ->
+        view
+
+      remaining <= 0 ->
+        raise ExUnit.AssertionError,
+          message: "Filament.Test.await/3 timed out after #{opts[:timeout]}ms. The view renders:\n\n" <> text(view)
+
+      true ->
+        receive do
+          message when elem(message, 0) in @host_messages ->
+            {_status, tree} = Filament.LiveView.apply_message(view.fiber_tree, message)
+            do_await(flush_messages(%{view | fiber_tree: tree}), fun, deadline, opts)
+        after
+          min(opts[:interval], remaining) -> do_await(flush_messages(view), fun, deadline, opts)
+        end
+    end
+  end
+
+  defp text(%__MODULE__{rendered_html: html} = view) do
+    if Code.ensure_loaded?(Floki), do: render_text(view), else: html
+  end
+
+  @doc """
   Assert that `assertion_fn.()` returns a truthy value within `timeout` milliseconds.
   Retries every `interval` ms. Raises `ExUnit.AssertionError` on timeout.
+  To wait for a view and get it back, use `await/3`.
 
   The assertion function must be a zero-arity function. For assertions that need
   to first call `update/1`, include that call inside the fn and use the returned
@@ -449,13 +499,32 @@ defmodule Filament.Test do
   defp run_handler(_handler, tree, {fiber_id, index}, params),
     do: Filament.Core.dispatch_event(tree, fiber_id, index, params)
 
-  defp flush_messages(view) do
+  @max_passes 100
+
+  # Applies waiting messages and renders, again while the render's effects
+  # leave more, as the LiveView would across its own messages.
+  defp flush_messages(view, pass \\ 1)
+
+  defp flush_messages(_view, pass) when pass > @max_passes do
+    raise "Filament.Test: the view kept sending itself messages after #{@max_passes} renders; " <>
+            "an effect may set state on every run"
+  end
+
+  defp flush_messages(view, pass) do
+    case apply_waiting(view, false) do
+      {view, true} -> view |> rerender() |> flush_messages(pass + 1)
+      {view, false} when pass == 1 -> rerender(view)
+      {view, false} -> view
+    end
+  end
+
+  defp apply_waiting(view, applied?) do
     receive do
-      message when elem(message, 0) in [:filament_set_state, :cell_update, :cell_updates, :cell_resubscribe] ->
+      message when elem(message, 0) in @host_messages ->
         {_status, tree} = Filament.LiveView.apply_message(view.fiber_tree, message)
-        flush_messages(%{view | fiber_tree: tree})
+        apply_waiting(%{view | fiber_tree: tree}, true)
     after
-      0 -> rerender(view)
+      0 -> {view, applied?}
     end
   end
 
