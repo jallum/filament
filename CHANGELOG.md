@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.6.0-rc.5] - 2026-10-17
+
+### Added
+
 - `Filament.Test.put_props/2` merges props into a mounted view's root and
   renders it again, keeping the components' state, as
   `Filament.LiveView.put_props/2` does in a view. A test of how a component
@@ -47,14 +61,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ```elixir
   eventually(fn -> assert ReadModel.lookup(:toy, 2) == {"two", 1} end)
   ```
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
 
 ## [0.6.0-rc.4] - 2026-10-17
 
