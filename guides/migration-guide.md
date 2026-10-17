@@ -282,15 +282,21 @@ form are both gone — pass a two-clause function to `use_value/2` instead.
 ### `handle_subscribe/3` → `handle_subscribe/2`
 
 The `request` argument has been removed from the `handle_subscribe`
-callback. Drop the first parameter:
+callback, and it no longer returns the subscriber's first value: that is
+always `handle_current/1`'s, which refreshes and `Filament.Cell.current/2`
+read too. Most servers drop `handle_subscribe` altogether. One that published
+part of its state from it moves that into `handle_current/1`:
 
 ```elixir
 # Before
-def handle_subscribe(_request, _subscriber, state), do: {:ok, state, state}
+def handle_subscribe(_request, _subscriber, state), do: {:ok, state.items, state}
 
 # After
-def handle_subscribe(_subscriber, state), do: {:ok, state, state}
+def handle_current(state), do: {:ok, state.items, state}
 ```
+
+Keep `handle_subscribe/2` only to track or reject subscribers; it returns
+`{:ok, new_state}` or `{:error, reason, new_state}`.
 
 ### Subscriber identity: `%Subscriber{}` → tuple
 

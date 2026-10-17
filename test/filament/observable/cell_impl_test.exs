@@ -38,9 +38,8 @@ defmodule Filament.Observable.CellImplTest do
     @moduledoc false
     use Filament.Observable.GenServer
 
-    def start_link(_opts), do: GenServer.start_link(__MODULE__, 0)
+    def start_link(_opts), do: GenServer.start_link(__MODULE__, -1)
     def init(state), do: {:ok, state}
-    def handle_subscribe(_subscriber, state), do: {:ok, -1, state}
 
     def handle_call({:set, value}, _from, _state) do
       notify_observers(value)
@@ -59,7 +58,7 @@ defmodule Filament.Observable.CellImplTest do
 
     @impl Filament.Observable
     def handle_subscribe(_subscriber, state) do
-      {:ok, state.value, %{state | subscriptions: state.subscriptions + 1}}
+      {:ok, %{state | subscriptions: state.subscriptions + 1}}
     end
 
     @impl Filament.Observable
@@ -243,7 +242,31 @@ defmodule Filament.Observable.CellImplTest do
     refute_receive {:cell_updates, _}
   end
 
-  test "callback-derived initial values and refreshes receive unchanged raw state" do
+  # A 0.6.0-rc.3 server: handle_subscribe/2 still returns the value.
+  defmodule ValuedSubscribe do
+    @moduledoc false
+    use Filament.Observable.GenServer
+
+    def init(state), do: {:ok, state}
+    def handle_subscribe(_subscriber, state), do: {:ok, :value, state}
+  end
+
+  test "handle_subscribe/2 returning a value raises, pointing at handle_current/1" do
+    Process.flag(:trap_exit, true)
+    {:ok, server} = GenServer.start_link(ValuedSubscribe, :state)
+
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert :disconnected = Cell.subscribe(ValuedSubscribe.cell(server), {self(), :old, 0, make_ref()}, & &1)
+        assert_receive {:EXIT, ^server, {%ArgumentError{message: message}, _}}
+        assert message =~ "returns {:ok, state}"
+        assert message =~ "handle_current/1"
+      end)
+
+    assert log =~ "ValuedSubscribe.handle_subscribe/2 returned {:ok, value, state}"
+  end
+
+  test "subscribes and refreshes start from handle_current/1 and receive unchanged raw state" do
     server = start_supervised!(SeededCounter)
     source = SeededCounter.cell(server)
     subscriber = {self(), :seeded, 0, make_ref()}
@@ -261,7 +284,7 @@ defmodule Filament.Observable.CellImplTest do
     GenServer.call(server, {:set, 1})
     assert_receive {:cell_update, ^subscriber, 1}
     Cell.unsubscribe(source, subscriber)
-    assert {:ok, -1} = Cell.subscribe(source, subscriber, &Function.identity/1)
+    assert {:ok, 1} = Cell.subscribe(source, subscriber, &Function.identity/1)
     GenServer.call(server, {:set, 0})
     assert_receive {:cell_update, ^subscriber, 0}
   end
@@ -278,7 +301,7 @@ defmodule Filament.Observable.CellImplTest do
 
     def handle_subscribe(subscriber, state) do
       send(state.test, {:acquire, subscriber})
-      {:ok, state.value, %{state | held: state.held + 1}}
+      {:ok, %{state | held: state.held + 1}}
     end
 
     def handle_unsubscribe(subscriber, state) do
