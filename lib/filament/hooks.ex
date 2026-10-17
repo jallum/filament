@@ -64,9 +64,19 @@ defmodule Filament.Hooks do
   Calling the setter sends a message to the owning LiveView process, which re-renders
   the affected fiber.
 
+  Pass the setter a 1-arity function to compute the new value from the
+  current one. A handler sees the value of the render that made it, and
+  events can arrive before that render's update is applied, so a new value
+  built from the old one belongs in a function:
+
+      on_click={fn -> set_count.(&(&1 + 1)) end}
+
+  A function passed to the setter is always applied, so to keep a function
+  as the state, wrap it: `set_callback.(fn _old -> callback end)`.
+
   Rules: call only at the top level of render/1. Do not call inside conditionals.
   """
-  @spec use_state(initial :: term()) :: {value :: term(), setter :: (term() -> :ok)}
+  @spec use_state(initial :: term()) :: {value :: term(), setter :: (term() | (term() -> term()) -> :ok)}
   def use_state(initial) do
     {index, previous, ctx} = use_slot(:uninitialized)
 

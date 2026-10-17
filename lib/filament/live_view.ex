@@ -378,7 +378,7 @@ defmodule Filament.LiveView do
   Apply a Filament host message to the fiber tree without rendering.
 
   A host process receives `{:filament_set_state, fiber_id, slot_index, token,
-  value}` from `use_state` setters, and `{:cell_update, subscriber, value}`,
+  value_or_update}` from `use_state` setters, and `{:cell_update, subscriber, value}`,
   `{:cell_updates, [{subscriber, value}]}` and `{:cell_resubscribe, subscriber}`
   from cell transports, and `{:cell_resubscribe, ref, :process, pid, reason}`
   when a source's monitored process exits or `use_value` retries a source it
@@ -391,9 +391,11 @@ defmodule Filament.LiveView do
   value changed, or the message isn't Filament's.
   """
   @spec apply_message(map(), term()) :: {:rerender | :ok, map()}
-  def apply_message(tree, {:filament_set_state, fiber_id, slot_index, token, new_value}) do
+  def apply_message(tree, {:filament_set_state, fiber_id, slot_index, token, update}) do
     with %{hook_slots: slots} = fiber <- Map.get(tree, fiber_id),
-         {:state, old_value, setter, ^token} when old_value !== new_value <- Map.get(slots, slot_index) do
+         {:state, old_value, setter, ^token} <- Map.get(slots, slot_index),
+         new_value = if(is_function(update, 1), do: update.(old_value), else: update),
+         false <- old_value === new_value do
       tree = put_slot(tree, fiber, slot_index, {:state, new_value, setter, token})
       {:rerender, Reconciler.mark_dirty(tree, fiber_id)}
     else
