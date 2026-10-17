@@ -22,7 +22,8 @@ Then `import Filament.Test` in your test module and you have the full API.
 view = mount!(MyComponent, %{some_prop: "value"})
 ```
 
-`mount!/3` renders the component, runs any mount effects, and returns a `view`
+`mount!/3` renders the component, runs any mount effects, renders again
+for state they set, and returns a `view`
 struct containing `rendered_html`, a live `fiber_tree`, and stubs. `mount/3`
 returns `{:ok, view}`. Both raise if the component does, as for a missing
 required prop:

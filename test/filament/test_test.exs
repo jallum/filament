@@ -152,6 +152,21 @@ defmodule Filament.TestTest do
     end
   end
 
+  defmodule EchoComp do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent Echo do
+      prop(:n, :integer, required: true)
+
+      def render(%{n: n}) do
+        {seen, set_seen} = use_state(nil)
+        use_effect(fn -> set_seen.(n) end, [n])
+        ~F"<p>seen {seen}</p>"
+      end
+    end
+  end
+
   defmodule KeyModalComp do
     @moduledoc false
     use Filament.Component
@@ -306,15 +321,19 @@ defmodule Filament.TestTest do
     Keyword.get(dictionary, :__filament_cell_subscribers__, %{})
   end
 
-  test "update/1 renders until effects stop setting state" do
-    view = mount!(ChainComp.Chain, %{})
-    assert render_text(view) == "step 0"
-    assert view |> update() |> render_text() == "step 3"
+  test "mount/3 renders until effects stop setting state" do
+    assert ChainComp.Chain |> mount!(%{}) |> render_text() == "step 3"
   end
 
-  test "update/1 raises for a view that never stops setting its own state" do
-    view = mount!(ChainComp.Chain, %{forever: true})
-    assert_raise RuntimeError, ~r/kept sending itself messages/, fn -> update(view) end
+  test "mount/3 raises for a view that never stops setting its own state" do
+    assert_raise RuntimeError, ~r/kept sending itself messages/, fn -> mount(ChainComp.Chain, %{forever: true}) end
+  end
+
+  test "update/1 and put_props/2 show the state their render's effects set" do
+    view = mount!(EchoComp.Echo, %{n: 1})
+    assert render_text(view) == "seen 1"
+    assert view |> put_props(n: 2) |> render_text() == "seen 2"
+    assert view |> update() |> render_text() == "seen 1"
   end
 
   test "await/3 returns the view once its condition holds, waking on messages sent later" do
