@@ -635,6 +635,11 @@ defmodule Filament.TagEngine do
     end
 
     slot_atom = String.to_atom(slot_name)
+
+    for {":" <> special_name, _value, attr_meta} <- attrs, special_name not in ~w(if for) do
+      raise_syntax_error!(":#{special_name} is not supported on slot entries", attr_meta, state)
+    end
+
     {has_special?, special, attrs} = pop_special_attrs!(attrs, tag_meta, state)
     slot_attrs_ast = parse_slot_attrs(attrs, state)
 
@@ -691,46 +696,12 @@ defmodule Filament.TagEngine do
     |> continue(tokens)
   end
 
-  # Local function component (self close)
+  # Local function component: `<.name />` is HEEx's call of `name/1`, which a
+  # Filament template has no equivalent for.
 
-  defp handle_token([{:local_component, name, attrs, %{closing: :self} = tag_meta} | tokens], state) do
-    fun = String.to_atom(name)
-    %{line: line, column: column} = tag_meta
-    attrs = postprocess_attrs(attrs, state)
-
-    {assigns, attr_info} =
-      build_self_close_component_assigns({"local component", fun}, attrs, line, state)
-
-    mod = actual_component_module(state.caller, fun)
-    store_component_call({mod, fun}, attr_info, [], line, state)
-    meta = [line: line, column: column]
-    # `mod_ast` for local components: a literal module atom resolved from the
-    # caller env (rather than an `__aliases__` AST). This is necessary because
-    # the unstructured path's call AST embeds `fun` (the local function name);
-    # for the structured vnode emission we want the resolved module.
-    mod_ast = mod
-    call = {fun, meta, __MODULE__}
-
-    ast =
-      case pop_special_attrs!(attrs, tag_meta, state) do
-        {false, _tag_meta, _attrs} ->
-          build_filament_local_component_ast(state, mod_ast, fun, call, assigns, nil, line)
-
-        {true, new_meta, _new_attrs} ->
-          build_self_close_component_with_special(state, new_meta, tag_meta, fn key_ast ->
-            build_filament_local_component_ast(state, mod_ast, fun, call, assigns, key_ast, line)
-          end)
-      end
-
-    emit_self_close_component(state, ast, tokens)
-  end
-
-  # Local function component (with inner content)
-
-  defp handle_token([{:local_component, _name, _attrs, tag_meta} | _tokens], state) do
+  defp handle_token([{:local_component, name, _attrs, tag_meta} | _tokens], state) do
     raise_syntax_error!(
-      "components with inner content (`<Component>...</Component>`) are not supported. " <>
-        "Use a self-closing form (`<Component ... />`) and pass children as props.",
+      "local function components (`<.#{name}>`) are not supported; render a component module with `<Module />`",
       tag_meta,
       state
     )
@@ -743,6 +714,14 @@ defmodule Filament.TagEngine do
     attrs = postprocess_attrs(attrs, state)
     validate_phx_attrs!(attrs, tag_meta, state)
     validate_tag_attrs!(attrs, tag_meta, state)
+
+    with {":type", _value, attr_meta} <- List.keyfind(attrs, ":type", 0) do
+      raise_syntax_error!(
+        "a macro component (:type) needs a closing tag: <#{name} :type={...}></#{name}>",
+        attr_meta,
+        state
+      )
+    end
 
     case pop_special_attrs!(attrs, tag_meta, state) do
       {false, tag_meta, attrs} ->
@@ -872,9 +851,8 @@ defmodule Filament.TagEngine do
   # HTML tags to finalize them too, since children must already be in tree
   # form.
   #
-  # Self-closing/void macro-component tags never reach `handle_macro_component/3`
-  # (they're handled by the self-close clause of `handle_token/2` before the
-  # `:type` attribute is ever inspected), so only the block form is built here.
+  # The self-close clause of `handle_token/2` rejects a self-closing
+  # macro-component tag, so only the block form is built here.
   defp build_macro_component_tree(name, attrs, tag_meta, tokens, state) do
     {children, close_meta, rest} = take_macro_component_children(tokens, name, tag_meta, [], state)
     {{:block, :tag, name, attrs, children, tag_meta, close_meta}, rest}
@@ -920,7 +898,7 @@ defmodule Filament.TagEngine do
   end
 
   defp take_macro_component_children([{type, _tag_name, _attrs, meta} | _rest], _name, _open_meta, _acc, state)
-       when type in [:remote_component, :local_component] do
+       when type == :remote_component do
     raise_syntax_error!("function components cannot be nested inside a macro component", meta, state)
   end
 
@@ -1066,10 +1044,6 @@ defmodule Filament.TagEngine do
     {:{}, [line: line], [:component, mod_ast, assigns, key_ast]}
   end
 
-  defp build_filament_local_component_ast(_state, mod_ast, _fun, _call, assigns, key_ast, line) do
-    {:{}, [line: line], [:component, mod_ast, assigns, key_ast]}
-  end
-
   # Build a self-close component AST when special attrs (`:if`, `:for`, `:key`)
   # are present. Builds the base via the caller-supplied fn, then wraps with
   # `:for` and/or `:if` if requested.
@@ -1104,6 +1078,11 @@ defmodule Filament.TagEngine do
   end
 
   defp collect_structured_attrs(attrs, state) do
+    # on_key sets the element's id (phx-hook, which needs an id, is rejected already).
+    with {"id", _value, attr_meta} <- List.keyfind(attrs, "id", 0), true <- List.keymember?(attrs, "on_key", 0) do
+      raise_syntax_error!("id can't be set on an element with on_key, which sets it", attr_meta, state)
+    end
+
     attrs
     |> Enum.flat_map(fn
       {:root, {:expr, _, _} = expr, _attr_meta} ->
@@ -1278,7 +1257,7 @@ defmodule Filament.TagEngine do
 
   defp parse_slot_attrs(attrs, state) do
     pairs =
-      for {name, value, _attr_meta} <- attrs, not String.starts_with?(name, ":") do
+      for {name, value, _attr_meta} <- attrs do
         value_ast =
           case value do
             {:expr, _, _} = expr -> parse_expr!(expr, state.file)
@@ -1356,11 +1335,6 @@ defmodule Filament.TagEngine do
   end
 
   @special_attrs ~w(:let :if :for :key)
-  defp split_component_attr({":key", _expr, attr_meta}, _, state, {"slot", slot_name}) do
-    message = ":key is not supported on slots: #{slot_name}"
-    raise_syntax_error!(message, attr_meta, state)
-  end
-
   defp split_component_attr(
          {attr, {:expr, value, %{line: line, column: col} = meta}, attr_meta},
          {special, r, a, locs},
@@ -1468,7 +1442,7 @@ defmodule Filament.TagEngine do
 
   defp raise_if_let!(let, file) do
     with {_pattern, %{line: line}} <- let do
-      message = "cannot use :let on a component without inner content"
+      message = ":let is not supported in ~F templates"
       raise CompileError, line: line, file: file, description: message
     end
   end
@@ -1553,13 +1527,6 @@ defmodule Filament.TagEngine do
   ## Helpers
 
   defp to_location(%{line: line, column: column}), do: [line: line, column: column]
-
-  defp actual_component_module(env, fun) do
-    case Macro.Env.lookup_import(env, {fun, 1}) do
-      [{_, module} | _] -> module
-      _ -> env.module
-    end
-  end
 
   # removes phx-no-format, etc. and maps phx-hook=".name" to the fully qualified name
   defp postprocess_attrs(attrs, state) do

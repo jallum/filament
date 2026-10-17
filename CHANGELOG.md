@@ -90,6 +90,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `~F` rejects HEEx syntax it has no meaning for, at compile time, where it
+  used to reinterpret or drop it:
+  - `<.name />` raised nothing and rendered the module's own `render/1`;
+    render a component module with `<Module />`.
+  - `:key`, `:let` and other `:`-attributes on a slot entry were dropped;
+    `:if` and `:for` remain.
+  - A self-closing `<script :type={...} />` emitted a literal `:type`
+    attribute; a macro component needs a closing tag.
+  - An `id` beside `on_key`, which sets the id, produced two `id`
+    attributes.
+  - `on_key` in an attribute spread rendered LiveView's `phx-key` filter
+    and never fired; it now raises at render.
+
 - `Filament.LiveView.put_props/2` called from `handle_params/3` on a
   connected mount no longer drops the mount's effects. Phoenix calls
   `handle_params/3` before the first render, and the props' render replaced
