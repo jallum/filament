@@ -128,7 +128,7 @@ defmodule Filament.UseEffectTest do
     # Second render — same deps, effect should NOT be queued
     fiber2 = %{tree1["root"] | hook_slots: %{0 => {[], nil}}}
 
-    {effects2, fiber2} =
+    {effects2, _fiber2} =
       render(fiber2, fn ->
         Hooks.use_effect(
           fn ->

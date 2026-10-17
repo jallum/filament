@@ -90,7 +90,7 @@ defmodule Filament.SubscriptionGenerationTest do
     {:rerender, tree} = LiveView.apply_message(stable, {:cell_updates, [{old, 11}, {current, 21}, {old, 12}]})
     {tree, walked, _} = Reconciler.update(tree, "root", %{source: ctx.source_b}, owner_pid: self())
     assert html(walked) == "<p>21</p>"
-    Reconciler.unmount(tree, owner_pid: self())
+    Reconciler.unmount(tree)
     assert GenServer.call(ctx.b, :subscribers) == []
   end
 
@@ -104,14 +104,14 @@ defmodule Filament.SubscriptionGenerationTest do
     refreshed = subscriber(tree)
     assert refreshed == old
     assert GenServer.call(ctx.a, :subscribers) == [refreshed]
-    Reconciler.unmount(tree, owner_pid: self())
+    Reconciler.unmount(tree)
     {tree, _, _} = Reconciler.mount(Value, props, owner_pid: self())
     remounted = subscriber(tree)
     refute remounted == refreshed
     assert {:ok, ^tree} = LiveView.apply_message(tree, {:cell_update, refreshed, 100})
     assert GenServer.call(ctx.a, :subscribers) == [remounted]
     {:rerender, tree} = LiveView.apply_message(tree, {:cell_resubscribe, remounted})
-    Reconciler.unmount(tree, owner_pid: self())
+    Reconciler.unmount(tree)
     assert GenServer.call(ctx.a, :subscribers) == []
   end
 
@@ -154,7 +154,7 @@ defmodule Filament.SubscriptionGenerationTest do
     {tree, walked, _} = Reconciler.update(tree, "root", %{source: source}, owner_pid: self())
     assert html(walked) == "<p>7</p>"
     refute_receive {:subscribed, _}
-    Reconciler.unmount(tree, owner_pid: self())
+    Reconciler.unmount(tree)
     assert_receive {:unsubscribed, ^identity}
     refute_receive {:unsubscribed, _}
   end

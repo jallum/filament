@@ -475,7 +475,7 @@ defmodule Filament.Test do
   end
 
   defp dispatch_event(view, "filament:" <> ref, params) do
-    with {:ok, fiber_id, index} <- Filament.Hooks.parse_event_ref(ref),
+    with {:ok, fiber_id, index} <- Filament.FiberTree.parse_event_ref(ref),
          handler when handler != nil <- Filament.FiberTree.get_event_handler(view.fiber_tree, fiber_id, index) do
       run_handler(handler, view.fiber_tree, {fiber_id, index}, params)
       {:ok, flush_messages(view)}

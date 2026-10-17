@@ -43,22 +43,8 @@ defmodule Filament.TagEngine do
         engine: Filament.TagEngine,
         source: source
       )
-      |> sanitize_caller()
 
     EEx.compile_string(source, options)
-  end
-
-  # Strip versioned_vars so Phoenix.LiveView.Engine's taint warnings don't fire
-  # for lexically-scoped variables. Filament uses lexical scoping intentionally;
-  # LiveView's __changed__ change-tracking is irrelevant to Filament's fiber model.
-  defp sanitize_caller(options) do
-    case Keyword.fetch(options, :caller) do
-      {:ok, %Macro.Env{} = caller} ->
-        Keyword.put(options, :caller, %{caller | versioned_vars: %{}})
-
-      _ ->
-        options
-    end
   end
 
   @doc """
@@ -120,17 +106,11 @@ defmodule Filament.TagEngine do
 
     if token_state.render_sites? do
       quote do
-        require Filament.TagEngine
-
         unquote(@props_var) = Filament.Renderer.current_props()
         unquote(ast)
       end
     else
-      quote do
-        require Filament.TagEngine
-
-        unquote(ast)
-      end
+      ast
     end
   end
 
@@ -592,7 +572,7 @@ defmodule Filament.TagEngine do
           build_filament_component_ast(state, mod_ast, fun, assigns, nil, line)
 
         {true, new_meta, _new_attrs} ->
-          build_self_close_component_with_special(state, new_meta, tag_meta, fn key_ast ->
+          build_self_close_component_with_special(new_meta, fn key_ast ->
             build_filament_component_ast(state, mod_ast, fun, assigns, key_ast, line)
           end)
       end
@@ -710,7 +690,7 @@ defmodule Filament.TagEngine do
 
     vnode_ast =
       if has_special? do
-        build_self_close_component_with_special(state, special, open_meta, fn key_ast ->
+        build_self_close_component_with_special(special, fn key_ast ->
           build_filament_component_ast(state, mod_ast, fun, full_assigns, key_ast, open_meta.line)
         end)
       else
@@ -735,8 +715,7 @@ defmodule Filament.TagEngine do
 
   # HTML element (self close)
 
-  defp handle_token([{:tag, name, attrs, %{closing: closing} = tag_meta} | tokens], state) do
-    suffix = if closing == :void, do: ">", else: "></#{name}>"
+  defp handle_token([{:tag, name, attrs, %{closing: _} = tag_meta} | tokens], state) do
     attrs = postprocess_attrs(attrs, state)
     validate_phx_attrs!(attrs, tag_meta, state)
     validate_tag_attrs!(attrs, tag_meta, state)
@@ -752,14 +731,14 @@ defmodule Filament.TagEngine do
     case pop_special_attrs!(attrs, tag_meta, state) do
       {false, tag_meta, attrs} ->
         state
-        |> handle_tag_and_attrs(name, attrs, suffix, to_location(tag_meta), true)
+        |> handle_tag_and_attrs(name, attrs, to_location(tag_meta), true)
         |> continue(tokens)
 
       {true, new_meta, new_attrs} ->
         state
         |> push_substate_to_stack()
         |> update_subengine(:handle_begin, [])
-        |> handle_tag_and_attrs(name, new_attrs, suffix, to_location(new_meta), true)
+        |> handle_tag_and_attrs(name, new_attrs, to_location(new_meta), true)
         |> handle_special_expr(new_meta)
         |> continue(tokens)
     end
@@ -782,7 +761,7 @@ defmodule Filament.TagEngine do
           {false, tag_meta, attrs} ->
             state
             |> push_tag(token)
-            |> handle_tag_and_attrs(name, attrs, ">", to_location(tag_meta))
+            |> handle_tag_and_attrs(name, attrs, to_location(tag_meta))
             |> continue(tokens)
 
           {true, new_meta, new_attrs} ->
@@ -790,7 +769,7 @@ defmodule Filament.TagEngine do
             |> push_substate_to_stack()
             |> update_subengine(:handle_begin, [])
             |> push_tag({:tag, name, new_attrs, new_meta})
-            |> handle_tag_and_attrs(name, new_attrs, ">", to_location(new_meta))
+            |> handle_tag_and_attrs(name, new_attrs, to_location(new_meta))
             |> continue(tokens)
         end
     end
@@ -1048,9 +1027,7 @@ defmodule Filament.TagEngine do
 
   # `terminal?` distinguishes "no separate close coming" (void `<br>`,
   # self-closing `<br/>`) from "open tag whose close is a separate token".
-  # Suffix alone can't tell us — both `<br>` and `<div>` carry `">"` — so
-  # call sites pass it explicitly.
-  defp handle_tag_and_attrs(state, name, attrs, _suffix, meta, terminal? \\ false) do
+  defp handle_tag_and_attrs(state, name, attrs, meta, terminal? \\ false) do
     structured_attrs = collect_structured_attrs(attrs, state)
     update_subengine(state, :handle_tag, [{:open, name, structured_attrs, terminal?}, meta])
   end
@@ -1073,7 +1050,7 @@ defmodule Filament.TagEngine do
   # Build a self-close component AST when special attrs (`:if`, `:for`, `:key`)
   # are present. Builds the base via the caller-supplied fn, then wraps with
   # `:for` and/or `:if` if requested.
-  defp build_self_close_component_with_special(_state, new_meta, _tag_meta, base_ast_fn) do
+  defp build_self_close_component_with_special(new_meta, base_ast_fn) do
     key_ast = Map.get(new_meta, :key, nil)
 
     key_ast
@@ -1468,23 +1445,6 @@ defmodule Filament.TagEngine do
         message = "invalid tag <#{tag_meta.tag_name}>"
         raise_syntax_error!(message, tag_meta, state)
     end
-  end
-
-  @doc false
-  def __unmatched_let__!(pattern, value) do
-    message = """
-    cannot match arguments sent from render_slot/2 against the pattern in :let.
-
-    Expected a value matching `#{pattern}`, got: #{inspect(value)}\
-    """
-
-    stacktrace =
-      self()
-      |> Process.info(:current_stacktrace)
-      |> elem(1)
-      |> Enum.drop(2)
-
-    reraise(message, stacktrace)
   end
 
   defp raise_if_let!(let, file) do

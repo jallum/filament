@@ -21,13 +21,7 @@ defmodule Filament.SigilF do
   @doc type: :macro
   defmacro sigil_F({:<<>>, _meta, [source]}, modifiers)
            when modifiers == [] or modifiers == ~c"noformat" do
-    # Use VNodeCompiler to transform the template
     # @foo becomes assigns[:foo]
-    quoted = Filament.VNodeCompiler.compile(source, __CALLER__)
-
-    # Wrap and return the quoted expression
-    quote do
-      unquote(quoted)
-    end
+    Filament.VNodeCompiler.compile(source, __CALLER__)
   end
 end

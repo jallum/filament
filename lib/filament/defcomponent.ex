@@ -42,17 +42,6 @@ defmodule Filament.Defcomponent do
   Components are accessed as `MyComponents.Button` and `MyComponents.Input`.
   """
 
-  defmacro __using__(_opts) do
-    quote do
-      import Filament.Defcomponent
-
-      # Track whether this module has an inferred-name component
-      Module.put_attribute(__MODULE__, :__filament_inferred__, false)
-      # Track explicit-name submodules
-      Module.register_attribute(__MODULE__, :__filament_explicit__, accumulate: true)
-    end
-  end
-
   # Inferred name form: defcomponent do: block
   defmacro defcomponent(do: block) do
     quote do
@@ -70,8 +59,6 @@ defmodule Filament.Defcomponent do
   # Explicit name form: defcomponent Name do: block
   defmacro defcomponent(name, do: block) do
     quote do
-      @__filament_explicit__ unquote(name)
-
       defmodule unquote(name) do
         @behaviour Filament.Component
 
@@ -134,7 +121,7 @@ defmodule Filament.Defcomponent do
     props = Module.get_attribute(module, :filament_props)
     slots = module |> Module.get_attribute(:filament_slots) |> Enum.reverse()
     check_slot_prop_collisions!(module, props, slots)
-    build_component_module_ast(module, props, slots)
+    build_component_module_ast(props, slots)
   end
 
   defp check_slot_prop_collisions!(module, props, slots) do
@@ -146,12 +133,10 @@ defmodule Filament.Defcomponent do
     end
   end
 
-  defp build_component_module_ast(module, props, slots) do
+  defp build_component_module_ast(props, slots) do
     quote do
       @props unquote(Macro.escape(build_props_metadata(props)))
       @slots unquote(Macro.escape(build_slots_metadata(slots)))
-
-      def __filament_component_name__, do: unquote(module)
 
       def __filament_component__?, do: true
 
@@ -163,8 +148,6 @@ defmodule Filament.Defcomponent do
         unquote(build_validation_code(props, slots))
         :ok
       end
-
-      unquote(build_typespec(props))
 
       if !Module.defines?(__MODULE__, {:render, 1}) do
         raise CompileError,
@@ -228,12 +211,5 @@ defmodule Filament.Defcomponent do
       end)
 
     prop_checks ++ slot_checks
-  end
-
-  defp build_typespec(_props) do
-    # Simplified typespec - in production would generate proper field types
-    quote do
-      @type props() :: map()
-    end
   end
 end

@@ -2,7 +2,7 @@ defmodule Filament.Template do
   @moduledoc false
 
   # Plans are compile-time literals. Only bindings and child renders are rebuilt.
-  defstruct [:static, :bindings, :fingerprint, :vnode, :values]
+  defstruct [:static, :bindings, :fingerprint, :root?, :values]
 
   def web_target? do
     case Process.get(:filament_render_context) do
