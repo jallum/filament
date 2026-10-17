@@ -72,7 +72,12 @@ connects.
 `use_value/2` subscribes this fiber's hook slot to the source and
 returns the projected value. The projection function receives
 `:disconnected` when the source is `nil`, unavailable, or subscriptions are disabled,
-letting it return a safe default.
+letting it return a safe default. `use_value/3` takes that default as an
+option, so the projection sees only the source's values:
+
+```elixir
+value = use_value(source, &project/1, disconnected: default_value)
+```
 
 The argument to `use_source/1` is either:
 

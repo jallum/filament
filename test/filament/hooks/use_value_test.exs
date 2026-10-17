@@ -177,6 +177,59 @@ defmodule Filament.Hooks.UseValueTest do
     end
   end
 
+  defmodule DefaultComp do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      prop(:cell, :any)
+
+      def render(%{cell: cell}) do
+        doubled = use_value(cell, &(&1 * 2), disconnected: :none)
+        ~F"<p>{doubled}</p>"
+      end
+    end
+  end
+
+  describe "use_value/3 with disconnected:" do
+    defp html(walked), do: walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
+
+    test "projects the source's values" do
+      {:ok, server} = Counter.start_link(5)
+      cell = Counter.cell(server)
+
+      {tree, walked, _} = Reconciler.mount(DefaultComp, %{cell: cell}, owner_pid: self())
+      assert html(walked) =~ "<p>10</p>"
+
+      Counter.increment(server)
+      assert_receive {:cell_update, _, 6} = message
+      {:rerender, tree} = Filament.LiveView.apply_message(tree, message)
+      {_tree, walked, _} = Reconciler.update(tree, "root", %{cell: cell}, owner_pid: self())
+      assert html(walked) =~ "<p>12</p>"
+    end
+
+    test "returns the default for no source, disconnected sources and one it can't reach" do
+      {:ok, server} = Counter.start_link(5)
+      unreachable = Counter.cell(:nonexistent_counter)
+
+      for {props, opts} <- [
+            {%{cell: nil}, []},
+            {%{cell: Counter.cell(server)}, [sources: :disconnected]},
+            {%{cell: unreachable}, [sources: :current]},
+            {%{cell: unreachable}, []}
+          ] do
+        {_tree, walked, _} = Reconciler.mount(DefaultComp, props, [owner_pid: self()] ++ opts)
+        assert html(walked) =~ "<p>none</p>"
+      end
+    end
+
+    test "rejects unknown options" do
+      assert_raise ArgumentError, ~r/unknown keys \[:default\]/, fn ->
+        Filament.Hooks.use_value(nil, & &1, default: 0)
+      end
+    end
+  end
+
   describe "use_value + Reconciler.update reflect cell changes" do
     test "re-render after cell update reads the latest value via fiber slot" do
       {:ok, server} = Counter.start_link(0)

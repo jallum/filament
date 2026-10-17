@@ -297,6 +297,11 @@ defmodule Filament.Hooks do
         ~F"<p>{count}</p>"
       end
 
+  `use_value/3` with `disconnected: value` returns `value` instead, and the
+  projection sees only the source's values:
+
+      count = use_value(source, & &1.count, disconnected: 0)
+
   Must be called at the top level of `render/1` in consistent order.
   """
   @spec use_value(Filament.Source.t() | nil, (term() | :disconnected -> term())) :: term()
@@ -310,6 +315,21 @@ defmodule Filament.Hooks do
       projection.(if cell && ctx.sources == :current, do: Filament.Cell.current(cell, & &1), else: :disconnected)
     else
       observable_subscribed(cell, projection, slot_index, previous, ctx)
+    end
+  end
+
+  @doc "Like `use_value/2`, with `disconnected: value` returned for `:disconnected`."
+  @spec use_value(Filament.Source.t() | nil, (term() -> term()), keyword()) :: term()
+  def use_value(cell, projection, opts) when is_function(projection, 1) and is_list(opts) do
+    case Keyword.validate!(opts, [:disconnected]) do
+      [disconnected: value] ->
+        use_value(cell, fn
+          :disconnected -> value
+          raw -> projection.(raw)
+        end)
+
+      [] ->
+        use_value(cell, projection)
     end
   end
 
