@@ -90,6 +90,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A hook a render stops calling, such as a `use_effect` or `use_value`
+  under an `if`, is cleaned up by that render: the effect's cleanup runs
+  and the subscription ends. Both lasted until the view exited, and an
+  effect queued before it was dropped still ran.
+
 - `~F` rejects HEEx syntax it has no meaning for, at compile time, where it
   used to reinterpret or drop it:
   - `<.name />` raised nothing and rendered the module's own `render/1`;
