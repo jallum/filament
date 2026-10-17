@@ -411,9 +411,14 @@ defmodule Filament.Hooks do
   A handler takes no arguments or the event's params. The LiveView adapter
   also accepts `fn params, push -> ... end` for a bubble handler, which
   `Filament.Core.dispatch_event/4` doesn't run.
+
+  A bubble handler returns the wire ref an element's `phx-*` attribute
+  names. A capture handler runs for its descendants' events and has no ref
+  of its own, so it returns `:ok`.
   """
   @spec register_event_handler(function()) :: String.t()
-  @spec register_event_handler(function(), :bubble | :capture) :: String.t()
+  @spec register_event_handler(function(), :bubble) :: String.t()
+  @spec register_event_handler(function(), :capture) :: :ok
   def register_event_handler(handler, phase \\ :bubble)
       when (is_function(handler, 0) or is_function(handler, 1) or is_function(handler, 2)) and
              phase in [:bubble, :capture] do
@@ -424,7 +429,7 @@ defmodule Filament.Hooks do
     fiber_id_str = to_string(ctx.fiber_id)
     {idx, new_ctx} = advance_handler_index(ctx, phase, handler)
     Process.put(:filament_render_context, new_ctx)
-    "#{fiber_id_str}:#{idx}"
+    if phase == :bubble, do: "#{fiber_id_str}:#{idx}", else: :ok
   end
 
   defp advance_handler_index(ctx, :bubble, handler) do

@@ -89,8 +89,38 @@ defmodule Filament.Defcomponent do
 
   defmacro prop(name, type, opts \\ []) do
     quote do
-      @filament_props {unquote(name), unquote(type), unquote(opts)}
+      @filament_props {unquote(name), unquote(type), Filament.Defcomponent.__prop_opts__!(unquote(opts), __ENV__)}
     end
+  end
+
+  # The component module stores a prop's default, so it must be a term a
+  # module can hold: no anonymous function, pid, port or reference.
+  @doc false
+  def __prop_opts__!(opts, env) do
+    with {:ok, default} <- Keyword.fetch(opts, :default) do
+      escaped =
+        try do
+          Macro.escape(default)
+        rescue
+          ArgumentError -> raise_bad_default!(default, env)
+        end
+
+      Macro.prewalk(escaped, fn
+        term when is_pid(term) or is_port(term) or is_reference(term) -> raise_bad_default!(default, env)
+        node -> node
+      end)
+    end
+
+    opts
+  end
+
+  defp raise_bad_default!(default, env) do
+    raise CompileError,
+      file: env.file,
+      line: env.line,
+      description:
+        "a prop's default is stored in the component module and can't be #{inspect(default)}; " <>
+          "compute it in render/1 instead"
   end
 
   defmacro slot(name, opts \\ []) do

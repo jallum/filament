@@ -107,6 +107,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A prop default a module can't store, such as an anonymous function or a
+  pid, fails to compile at its `prop` line, naming the default. A function
+  failed without a location; a pid compiled into the module as the
+  compiler's own.
+
+- `register_event_handler(handler, :capture)` returns `:ok`. It returned a
+  ref that named the bubble handler at the same index, so using it in a
+  `phx-*` attribute ran that handler.
+
 - A `use_value` that couldn't subscribe waits for its backoff (100 ms,
   doubling to 5 s) before subscribing again, as documented. Any render of
   its component subscribed again at once, and against a server that was
