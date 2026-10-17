@@ -205,11 +205,14 @@ def handle_info(msg, socket)
 end
 ```
 
-This is a Phase 1 limitation described in `Filament.LiveComponent`. You only need
-this forwarding while the component is hosted inside a regular LiveView.
+You only need this forwarding while the component is hosted inside a regular
+LiveView. `use_state` setters send to the same process, so components that use
+only `use_state` need this forwarding too.
 
-`use_state` setters send to the same process, so components that use only
-`use_state` need this forwarding too.
+LiveView doesn't tell a LiveComponent when the parent stops rendering it, so a
+removed `Filament.LiveComponent` is never unmounted: its subscriptions last
+until the parent exits and its effect cleanups don't run. Keep it rendered and
+change what it shows through its props; see `Filament.LiveComponent`.
 
 ## Phase 6: Full migration (optional)
 

@@ -26,11 +26,11 @@ defmodule Filament.Test.Stub do
 
   @doc """
   Start a stub observable backed by `stub_fn`.
-  `stub_fn` receives the subscription request and returns the initial value.
+  `stub_fn` receives `nil` and returns the initial value.
 
   Returns `{:ok, pid}`.
   """
-  @spec start(stub_fn :: (request :: term() -> initial_value :: term()), opts :: keyword()) ::
+  @spec start(stub_fn :: (nil -> initial_value :: term()), opts :: keyword()) ::
           {:ok, pid()}
   def start(stub_fn, opts \\ []) do
     StubObservable.start_link([stub_fn: stub_fn] ++ opts)

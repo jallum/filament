@@ -171,7 +171,8 @@ defmodule Filament.Observable.GenServer do
       @max_mailbox_depth Application.compile_env(:filament, :observable_max_mailbox_depth, 100)
 
       @doc """
-      Notify all subscribers of a new state value.
+      Notify all subscribers of a new value: the one `handle_current/1`
+      publishes for the new state, which is the whole state by default.
 
       For each cell subscriber, applies the subscriber's projection and sends a
       `{:cell_update, subscriber, projected}` message to its pid only when the

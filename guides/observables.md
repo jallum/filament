@@ -72,7 +72,9 @@ What the macro injects:
 Subscribes, `Filament.Cell.current/2` and refreshes all read
 `handle_current/1`, which defaults to `{:ok, state, state}`. Override it to
 publish a different value, and `handle_subscribe/2` only to track or reject
-subscribers.
+subscribers. A server that overrides `handle_current/1` passes
+`notify_observers/1` the value it publishes, not the whole state, so a
+subscriber's first value and its updates have the same shape.
 
 ## Subscribing through a domain hook
 
@@ -340,9 +342,9 @@ end
 
 Key test helpers:
 
-- `Filament.Test.update(view)` — drains one pending observable update message and
-  re-renders the affected fiber. Returns an updated view struct.
-- `Filament.Test.Stub.start(fn -> initial_state end)` — creates an in-process
+- `Filament.Test.update(view)` — applies the waiting Filament messages and
+  renders until none are left. Returns an updated view struct.
+- `Filament.Test.Stub.start(fn _ -> initial_state end)` — creates an in-process
   observable stub for rung-2 isolation tests.
 - `Filament.Test.Stub.push(stub, new_state)` — pushes a raw state update through
   the stub.

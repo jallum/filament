@@ -344,8 +344,8 @@ defmodule Filament.Test do
 
       view = await(view, &(render_text(&1) =~ "3 results"))
 
-  It wakes on each Filament message, and every `:interval` ms (default 50)
-  for a view whose render reads something else.
+  It checks `fun` again on each Filament message, and every `:interval` ms
+  (default 50) for a condition on something other than the view.
   """
   @spec await(t(), (t() -> as_boolean(term())), keyword()) :: t()
   def await(%__MODULE__{} = view, fun, opts \\ []) when is_function(fun, 1) do
@@ -381,7 +381,7 @@ defmodule Filament.Test do
 
   @doc """
   Assert that `assertion_fn.()` returns a truthy value within `timeout` milliseconds.
-  Retries every `interval` ms. Raises `ExUnit.AssertionError` on timeout.
+  Retries every `interval` ms. Raises `RuntimeError` on timeout.
   To wait for a view and get it back, use `await/3`.
 
   The assertion function must be a zero-arity function. For assertions that need
