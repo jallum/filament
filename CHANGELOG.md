@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `use_value/3` takes `disconnected: value`, returned while the source is
+  `nil`, disconnected or unreachable, so the projection handles only the
+  source's values:
+
+  ```elixir
+  # Before
+  count = use_value(source, fn :disconnected -> 0; s -> s.count end)
+
+  # After
+  count = use_value(source, & &1.count, disconnected: 0)
+  ```
+
 ### Changed
 
 - **Breaking:** `handle_subscribe/2` returns `{:ok, new_state}` to accept,
