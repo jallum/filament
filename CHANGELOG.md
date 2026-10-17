@@ -83,6 +83,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `Filament.Test.LiveView` and `Filament.Test.LiveView.Helpers`. Its
+  `use Phoenix.LiveViewTest` doesn't compile under LiveView 1.2, and its
+  helpers wrapped single `Phoenix.LiveViewTest` calls; use
+  `Phoenix.LiveViewTest` directly.
+
 ### Fixed
 
 - `Filament.LiveView.put_props/2` called from `handle_params/3` on a
