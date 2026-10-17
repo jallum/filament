@@ -262,6 +262,18 @@ defmodule Filament.Test do
   end
 
   @doc """
+  Merges `props` into the root component's props and renders it again, as
+  `Filament.LiveView.put_props/2` does in a view. Components keep their
+  state, and children whose props are unchanged are reused:
+
+      view = mount!(Exclude, %{id: 13})
+      view = put_props(view, excluded: true)
+  """
+  @spec put_props(t(), map() | keyword()) :: t()
+  def put_props(%__MODULE__{} = view, props) when is_map(props) or is_list(props),
+    do: flush_messages(%{view | props: Enum.into(props, view.props)})
+
+  @doc """
   Unmount the view's components: run their effect cleanups and end their
   subscriptions.
   """
@@ -380,18 +392,16 @@ defmodule Filament.Test do
   end
 
   @doc """
-  Assert that `assertion_fn.()` returns a truthy value within `timeout` milliseconds.
-  Retries every `interval` ms. Raises `RuntimeError` on timeout.
+  Calls `assertion_fn` every `:interval` ms (default 50) until it returns a
+  truthy value without raising `ExUnit.AssertionError`, and returns `:ok`.
+  After `:timeout` ms (default 1000) it raises the last assertion's error,
+  or an `ExUnit.AssertionError` if the function returned a falsy value.
+
+  Use it to wait for something other than a view, such as a server:
+
+      eventually(fn -> assert ReadModel.lookup(:toy, 2) == {"two", 1} end)
+
   To wait for a view and get it back, use `await/3`.
-
-  The assertion function must be a zero-arity function. For assertions that need
-  to first call `update/1`, include that call inside the fn and use the returned
-  view for the assertion:
-
-      Filament.Test.eventually(fn ->
-        view = Filament.Test.update(view)
-        render_text(view) =~ "Count: 5"
-      end, timeout: 500)
   """
   @spec eventually(assertion_fn :: (-> term()), opts :: keyword()) :: :ok
   def eventually(assertion_fn, opts \\ []) do
@@ -403,18 +413,29 @@ defmodule Filament.Test do
   end
 
   defp do_eventually(fun, deadline, interval, original_timeout) do
-    if fun.() do
-      :ok
-    else
-      remaining = deadline - System.monotonic_time(:millisecond)
+    failure =
+      try do
+        if fun.(), do: :ok, else: :falsy
+      rescue
+        error in ExUnit.AssertionError -> {error, __STACKTRACE__}
+      end
 
-      if remaining <= 0 do
-        raise RuntimeError,
-          message: "Filament.Test.eventually/2 timed out after #{original_timeout}ms"
-      else
+    remaining = deadline - System.monotonic_time(:millisecond)
+
+    case failure do
+      :ok ->
+        :ok
+
+      _ when remaining > 0 ->
         Process.sleep(min(interval, remaining))
         do_eventually(fun, deadline, interval, original_timeout)
-      end
+
+      :falsy ->
+        raise ExUnit.AssertionError,
+          message: "Filament.Test.eventually/2 timed out after #{original_timeout}ms"
+
+      {error, stacktrace} ->
+        reraise error, stacktrace
     end
   end
 

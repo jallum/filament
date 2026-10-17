@@ -76,6 +76,21 @@ assert click(view, "#nonexistent") == {:error, {:no_element, "#nonexistent"}}
 argument: a keyword list routes to the window-level `on_key` handler; a string
 routes to the element-scoped `on_keydown` handler.
 
+## Changing props
+
+`put_props/2` merges new props into the mounted component's and renders it
+again, as `Filament.LiveView.put_props/2` does in a view. Components keep
+their state, so a test can check how a component takes a prop change
+without a wrapper component to drive it:
+
+```elixir
+view =
+  mount!(Exclude, %{id: 13})
+  |> put_props(excluded: true)
+
+assert render_text(view) =~ "Excluded"
+```
+
 ## Asserting on output
 
 ```elixir
@@ -236,8 +251,14 @@ renders only for Filament messages, so a value a render reads from
 elsewhere shows once something it subscribes to changes. On timeout
 (`timeout:`, default 1000 ms) it raises with the view's text.
 
-`eventually/2` retries any zero-arity assertion the same way, for
-conditions that aren't about a view.
+`eventually/2` waits the same way for conditions that aren't about a
+view, such as a server's state. It retries a function until it returns a
+truthy value without a failing `assert`, and on timeout raises the last
+assertion's error:
+
+```elixir
+eventually(fn -> assert ReadModel.lookup(:toy, 2) == {"two", 1} end)
+```
 
 ## Putting it together — a complete example
 

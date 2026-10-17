@@ -86,7 +86,7 @@ defmodule Filament.Test.Rung3Test do
     counter = start_supervised!({TestCounter, 0})
     {:ok, view} = mount(CountingComp.Counter, %{server: counter})
 
-    assert_raise RuntimeError, ~r/timed out after 100ms/, fn ->
+    assert_raise ExUnit.AssertionError, ~r/timed out after 100ms/, fn ->
       Filament.Test.eventually(
         fn ->
           view = Filament.Test.update(view)
@@ -95,6 +95,19 @@ defmodule Filament.Test.Rung3Test do
         timeout: 100
       )
     end
+  end
+
+  test "eventually/2 retries a failing assertion and raises its error on timeout" do
+    counter = start_supervised!({TestCounter, 0})
+    spawn(fn -> Process.sleep(50) && TestCounter.increment(counter) end)
+    assert :ok = Filament.Test.eventually(fn -> assert :sys.get_state(counter) == 1 end)
+
+    error =
+      assert_raise ExUnit.AssertionError, fn ->
+        Filament.Test.eventually(fn -> assert :sys.get_state(counter) == 2 end, timeout: 100)
+      end
+
+    assert error.right == 2
   end
 
   test "5. multiple increments before update" do
