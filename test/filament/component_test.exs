@@ -186,6 +186,41 @@ defmodule Filament.ComponentTest do
         Code.compile_string(code)
       end
     end
+
+    for {label, default} <- [{"a function", "fn -> 1 end"}, {"a pid inside a map", "%{owner: [self()]}"}] do
+      test "a prop default of #{label} fails at its declaration" do
+        code = """
+        defmodule BadDefault do
+          use Filament.Component
+
+          defcomponent do
+            prop :value, :any, default: #{unquote(default)}
+            def render(_props), do: nil
+          end
+        end
+        """
+
+        assert_raise CompileError, ~r/^bad_default\.ex:5: a prop's default is stored in the component module/, fn ->
+          Code.compile_string(code, "bad_default.ex")
+        end
+      end
+    end
+
+    test "a prop default may be a remote capture" do
+      code = """
+      defmodule CaptureDefault do
+        use Filament.Component
+
+        defcomponent do
+          prop :format, :any, default: &String.upcase/1
+          def render(_props), do: nil
+        end
+      end
+      """
+
+      [{module, _}] = Code.compile_string(code)
+      assert module.__props__()[:format].default == (&String.upcase/1)
+    end
   end
 
   describe "non-component module" do

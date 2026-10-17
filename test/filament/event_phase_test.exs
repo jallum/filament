@@ -48,7 +48,7 @@ defmodule Filament.EventPhaseTest do
     test ":capture phase uses an independent slot space" do
       Hooks.register_event_handler(fn -> :bubble_0 end)
       Hooks.register_event_handler(fn -> :bubble_1 end)
-      Hooks.register_event_handler(fn -> :capture_0 end, :capture)
+      assert Hooks.register_event_handler(fn -> :capture_0 end, :capture) == :ok
 
       ctx = Process.get(:filament_render_context)
       # Bubble counter advanced twice
