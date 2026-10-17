@@ -69,10 +69,10 @@ What the macro injects:
   `{:cell_update, subscriber, projected_value}` message *only* when the
   projected value differs from the previously delivered one.
 
-The default `handle_subscribe/2`, `Filament.Cell.current/2` and refreshes
-all read `handle_current/1`, which defaults to `{:ok, state, state}`. Override
-it to publish a different value, and `handle_subscribe/2` only to track or
-reject subscribers.
+Subscribes, `Filament.Cell.current/2` and refreshes all read
+`handle_current/1`, which defaults to `{:ok, state, state}`. Override it to
+publish a different value, and `handle_subscribe/2` only to track or reject
+subscribers.
 
 ## Subscribing through a domain hook
 
@@ -235,9 +235,9 @@ end
 
 ## handle_subscribe return values
 
-- `{:ok, initial_value, new_state}` — accept the subscription; `initial_value` is
-  the raw state the client receives immediately (used as the seed for change-or-bust
-  tracking and passed through the projection fn for the first render).
+- `{:ok, new_state}` — accept the subscription. The subscriber receives
+  `handle_current/1`'s value in `new_state` immediately: the seed for
+  change-or-bust tracking, passed through the projection fn for the first render.
 - `{:error, reason, new_state}` — reject the subscription; the component's
   `use_value` reads `:disconnected` and, as for a server it can't reach,
   subscribes again with backoff (100 ms doubling to 5 s) while it's mounted.
@@ -247,9 +247,8 @@ end
 once when that subscription ends — on unsubscribe or when the owner exits. When an
 owner's mailbox fills, the server stops sending it updates until it resubscribes;
 that resubscribe is a refresh under the same identity, so it calls neither callback
-and the resources a subscription holds survive it. The refresh reads the value from
-`handle_current/1`, so a server that overrides `handle_subscribe/2`'s value must
-override `handle_current/1` to match.
+and the resources a subscription holds survive it. Like a first subscribe, the
+refresh replies with `handle_current/1`'s value.
 
 ## Static rendering and static_subscribe
 

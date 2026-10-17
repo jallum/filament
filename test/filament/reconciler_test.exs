@@ -317,7 +317,7 @@ defmodule Filament.ReconcilerTest do
     def subscriber_count(srv), do: GenServer.call(srv, :cell_subscriber_count)
 
     @impl Filament.Observable
-    def handle_subscribe(_sub, state), do: {:ok, state, state}
+    def handle_subscribe(_sub, state), do: {:ok, state}
 
     @impl GenServer
     def handle_call(:cell_subscriber_count, _from, state) do

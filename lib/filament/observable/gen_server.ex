@@ -33,11 +33,6 @@ defmodule Filament.Observable.GenServer do
         @impl GenServer
         def init(initial), do: {:ok, initial}
 
-        @impl Filament.Observable
-        def handle_subscribe(_subscriber, state) do
-          {:ok, state, state}
-        end
-
         @impl GenServer
         def handle_call(:increment, _from, count) do
           new_count = count + 1
@@ -99,7 +94,7 @@ defmodule Filament.Observable.GenServer do
       # ── Default Observable callbacks (overridable) ───────────────────────
 
       @impl Filament.Observable
-      def handle_subscribe(_subscriber, state), do: handle_current(state)
+      def handle_subscribe(_subscriber, state), do: {:ok, state}
 
       @impl Filament.Observable
       def handle_unsubscribe(_subscriber, state), do: {:ok, state}
@@ -264,8 +259,20 @@ defmodule Filament.Observable.GenServer do
 
       :error ->
         case mod.handle_subscribe(subscriber, state) do
-          {:ok, raw, new_state} -> add_cell_subscriber(subscriber, projection, from, raw, new_state)
-          {:error, _reason, new_state} -> {:reply, :disconnected, new_state}
+          {:ok, new_state} ->
+            {:ok, raw, new_state} = mod.handle_current(new_state)
+            add_cell_subscriber(subscriber, projection, from, raw, new_state)
+
+          {:error, _reason, new_state} ->
+            {:reply, :disconnected, new_state}
+
+          {:ok, _value, _state} ->
+            raise ArgumentError, """
+            #{inspect(mod)}.handle_subscribe/2 returned {:ok, value, state}. Since \
+            0.6.0-rc.4 it returns {:ok, state} and subscribers start from \
+            handle_current/1's value, which a refresh and Filament.Cell.current/2 \
+            also read. Move the value into handle_current/1.
+            """
         end
     end
   end

@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** `handle_subscribe/2` returns `{:ok, new_state}` to accept,
+  without a value; a subscriber starts from `handle_current/1`'s value, as
+  refreshes and `Filament.Cell.current/2` do. With the value in two
+  callbacks, a server that overrode only `handle_subscribe/2` published one
+  value on subscribe and its whole state on a refresh. A server returning
+  the old `{:ok, value, state}` raises, naming `handle_current/1`:
+
+  ```elixir
+  # Before (0.6.0-rc.3)
+  def handle_subscribe(_subscriber, state), do: {:ok, state.held, state}
+
+  # After
+  def handle_current(state), do: {:ok, state.held, state}
+  ```
+
 ### Deprecated
 
 ### Removed

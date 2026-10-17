@@ -170,17 +170,17 @@ client-side each render to derive the value the component actually uses.
 ### handle_current/1 and handle_subscribe/2
 
 An observable server publishes its whole state by default. Implement
-`handle_current/1` to publish something else; the default
-`handle_subscribe/2`, `Cell.current/2` and refreshes all read it:
+`handle_current/1` to publish something else; subscribes, `Cell.current/2`
+and refreshes all read it:
 
 ```elixir
 @impl Filament.Observable
 def handle_current(state), do: {:ok, state.items, state}
 ```
 
-Implement `handle_subscribe/2` only to track subscribers or reject them with
-`{:error, reason, new_state}`; the default accepts with `handle_current/1`'s
-value.
+Implement `handle_subscribe/2` only to track subscribers, returning
+`{:ok, new_state}`, or to reject them with `{:error, reason, new_state}`. The
+value a subscriber starts from is always `handle_current/1`'s.
 
 See the [Observables guide](observables.html) for the change-or-bust mechanism
 and projection patterns.

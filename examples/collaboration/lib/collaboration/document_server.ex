@@ -48,12 +48,11 @@ defmodule Collaboration.DocumentServer do
     pid = subscriber_owner(subscriber)
     owners = Map.update(state.owners, pid, 1, &(&1 + 1))
     new_state = %{state | owners: owners, presence: map_size(owners)}
-    initial_view = observable_view(new_state)
-    if new_state.presence != state.presence, do: notify_observers(initial_view)
-    {:ok, initial_view, new_state}
+    if new_state.presence != state.presence, do: notify_observers(observable_view(new_state))
+    {:ok, new_state}
   end
 
-  # The same value subscribers receive, for Cell.current and refreshes.
+  # The value subscribers start from, Cell.current reads and refreshes reply with.
   @impl Filament.Observable
   def handle_current(state), do: {:ok, observable_view(state), state}
 
