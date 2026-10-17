@@ -195,4 +195,31 @@ defmodule Filament.UseStateTest do
       Process.delete(:filament_render_context)
     end
   end
+
+  defmodule Counter do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      def render(_props) do
+        {n, set} = use_state(0)
+        ~F|<button on_click={fn -> set.(&(&1 + 1)) end}>{n}</button>|
+      end
+    end
+  end
+
+  test "an update function applies to the value when its message is, not when its handler ran" do
+    {tree, rendered, _} = Filament.Reconciler.mount(Counter, %{}, owner_pid: self(), target: Filament.Web)
+    socket = %Phoenix.LiveView.Socket{assigns: %{__changed__: %{}, _filament_tree: tree, _filament_rendered: rendered}}
+
+    # Two events reach the view before the first one's update: both handlers
+    # come from the render where the count was 0.
+    {:noreply, socket} = Filament.LiveView.dispatch_filament_event("root:0", %{}, socket)
+    {:noreply, socket} = Filament.LiveView.dispatch_filament_event("root:0", %{}, socket)
+    assert_received {:filament_set_state, _, _, _, _} = first
+    assert_received {:filament_set_state, _, _, _, _} = second
+    socket = socket |> Filament.LiveView.apply_to_socket(first) |> Filament.LiveView.apply_to_socket(second)
+
+    assert {:state, 2, _setter, _token} = socket.assigns._filament_tree["root"].hook_slots[0]
+  end
 end

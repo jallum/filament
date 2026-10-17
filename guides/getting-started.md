@@ -90,6 +90,9 @@ end
   is whatever was last passed to `setter.(new_value)`.
 - Calling `setter.(new_value)` sends a message to the owning LiveView, which
   triggers a re-render of only the affected fiber.
+- When the new value depends on the old one, pass a function:
+  `set_count.(&(&1 + 1))`. It is applied to the current value, where a
+  handler's `count` is the value of the render that made it.
 - **Rules of hooks**: call `use_state` (and all hooks) at the top level of
   `render/1`, never inside `if`, `case`, or comprehensions. Hook identity
   depends on call order.

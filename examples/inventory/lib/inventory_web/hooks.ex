@@ -43,14 +43,14 @@ defmodule InventoryWeb.Hooks do
 
       hold = fn qty ->
         case GenServer.call(server, {:filament_hold, item_id, qty, holder}) do
-          :ok -> set_held_qty.(held_qty + qty)
+          :ok -> set_held_qty.(&(&1 + qty))
           {:error, reason} -> raise "hold denied for #{inspect(item_id)}: #{inspect(reason)}"
         end
       end
 
       release = fn qty ->
         GenServer.cast(server, {:filament_release_qty, item_id, qty, holder})
-        set_held_qty.(max(0, held_qty - qty))
+        set_held_qty.(&max(0, &1 - qty))
       end
 
       {held_qty, item, hold, release}

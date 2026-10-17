@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A `use_state` setter takes a function of the current value. A handler
+  sees the value of the render that made it, and when two events reach the
+  view before the first one's update is applied, both handlers saw the same
+  value and one update was lost. A function applies to the value as it is
+  when the update lands:
+
+  ```elixir
+  # Before: two quick clicks could count once
+  on_click={fn -> set_count.(count + 1) end}
+
+  # After
+  on_click={fn -> set_count.(&(&1 + 1)) end}
+  ```
+
+  A function passed to a setter is always applied; to keep a function as
+  the state, wrap it: `set_callback.(fn _old -> callback end)`.
+
 - `Filament.Test.await/3` returns the view once a condition holds, applying
   Filament messages as they arrive, and raises with the view's text on
   timeout. Tests no longer loop over `update/1` or match Filament's
