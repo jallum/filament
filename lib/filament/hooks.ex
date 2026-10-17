@@ -148,7 +148,7 @@ defmodule Filament.Hooks do
     {index, previous, _ctx} = use_slot(:__unset__)
 
     if effect_deps_changed?(previous, deps) do
-      enqueue_effect(index, effect_fn, deps, previous)
+      enqueue_effect(index, effect_fn, deps)
     end
 
     current_cleanup = extract_cleanup(previous)
@@ -161,17 +161,13 @@ defmodule Filament.Hooks do
   defp effect_deps_changed?({prev_deps, _}, deps), do: prev_deps != deps
   defp effect_deps_changed?(_, _), do: true
 
-  defp enqueue_effect(index, effect_fn, deps, previous) do
-    old_cleanup = extract_fn_cleanup(previous)
+  defp enqueue_effect(index, effect_fn, deps) do
     ctx = Process.get(:filament_render_context)
-    effect_entry = {index, ctx.fiber_id, effect_fn, deps, old_cleanup}
+    effect_entry = {index, ctx.fiber_id, effect_fn, deps}
 
     # Declaration order; a child's effects sit where the child rendered.
     Process.put(:filament_render_context, %{ctx | pending_effects: [effect_entry | ctx.pending_effects]})
   end
-
-  defp extract_fn_cleanup({_prev_deps, cleanup}) when is_function(cleanup, 0), do: cleanup
-  defp extract_fn_cleanup(_), do: nil
 
   defp extract_cleanup({_prev_deps, cleanup}), do: cleanup
   defp extract_cleanup(_), do: nil
