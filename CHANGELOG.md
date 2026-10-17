@@ -107,6 +107,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A `use_value` that couldn't subscribe waits for its backoff (100 ms,
+  doubling to 5 s) before subscribing again, as documented. Any render of
+  its component subscribed again at once, and against a server that was
+  alive but stuck, each such render blocked the view for the call's 5 s
+  timeout.
+
 - Slots behave as in HEEx in three more places:
   - A self-closing `<:name />` directly inside a component tag is an entry
     with no content. It was a render site, passing the enclosing

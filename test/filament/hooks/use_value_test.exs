@@ -505,7 +505,7 @@ defmodule Filament.Hooks.UseValueTest do
     # broadcast before the transport's unsubscribe reaches it.
     test "ignores an update for a subscribe that failed", %{name: name} do
       view = Filament.Test.mount!(CellComp.CellComp, %{cell: named_cell(name)})
-      {:cell_retry, _cell, subscriber, _attempts} = view.fiber_tree["root"].hook_slots[0]
+      {:cell_waiting, _cell, subscriber, _attempts} = view.fiber_tree["root"].hook_slots[0]
 
       send(self(), {:cell_update, subscriber, 9})
       assert view |> Filament.Test.update() |> Filament.Test.render_text() == "disconnected"
@@ -526,6 +526,55 @@ defmodule Filament.Hooks.UseValueTest do
 
       # The first attempt, then retries at 100 ms and 300 ms.
       assert :counters.get(counter, 1) <= 3
+    end
+
+    defmodule Rejecting do
+      @moduledoc false
+      use Filament.Observable.GenServer
+
+      def init(test), do: {:ok, test}
+
+      @impl Filament.Observable
+      def handle_subscribe(_subscriber, test) do
+        send(test, :subscribe)
+        {:error, :nope, test}
+      end
+    end
+
+    defmodule Rerendering do
+      @moduledoc false
+      use Filament.Component
+
+      defcomponent do
+        prop(:cell, :any)
+
+        def render(%{cell: cell}) do
+          {n, set} = use_state(0)
+          value = use_value(cell, & &1, disconnected: "disconnected")
+          ~F|<button on_click={fn -> set.(n + 1) end}>{n} {value}</button>|
+        end
+      end
+    end
+
+    test "a rejected subscriber waits for its retry, however often it renders" do
+      {:ok, server} = GenServer.start_link(Rejecting, self())
+      view = Filament.Test.mount!(Rerendering, %{cell: Filament.Observable.GenServer.cell(server)})
+      assert_received :subscribe
+
+      view = Enum.reduce(1..5, view, fn _, view -> Filament.Test.click!(view, "button") end)
+      assert Filament.Test.render_text(view) == "5 disconnected"
+      refute_received :subscribe
+
+      # The retry, due after 100 ms, subscribes again.
+      Filament.Test.eventually(fn ->
+        Filament.Test.update(view)
+
+        receive do
+          :subscribe -> true
+        after
+          0 -> false
+        end
+      end)
     end
 
     test "unmounting stops reconnecting", %{name: name} do
