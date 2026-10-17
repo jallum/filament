@@ -77,7 +77,9 @@ defmodule Filament.TagEngine.SlotProviderTest do
     end
   end
 
-  defp compile(source, env \\ __ENV__) do
+  # No caller module: ExUnit can run an async test while its module is
+  # still finishing compilation, so its attributes may vanish mid-read.
+  defp compile(source, env \\ %{__ENV__ | module: nil}) do
     TagEngine.compile(source,
       caller: env,
       file: env.file,
