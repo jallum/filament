@@ -342,12 +342,20 @@ defmodule Filament.Hooks do
         {:cell_resubscribe, ^cell, subscriber} ->
           observable_subscribe(cell, subscriber)
 
+        # The retry timer owns the next attempt.
+        {:cell_waiting, ^cell, _subscriber, _attempts} ->
+          :waiting
+
         _ ->
           Filament.HookSlot.cleanup(previous)
           observable_subscribe(cell, {ctx.owner_pid, ctx.fiber_id, slot_index, monitor_source(cell)})
       end
 
     case subscription do
+      :waiting ->
+        commit_slot(slot_index, previous)
+        projection.(:disconnected)
+
       {:ok, raw, subscriber} ->
         value = projection.(raw)
         commit_slot(slot_index, {:cell_subscribed, cell, raw, subscriber, projection, value})
@@ -357,18 +365,15 @@ defmodule Filament.Hooks do
       # name not registered on a remote node, would skip the backoff.
       {:disconnected, {_owner, _fiber_id, _slot, ref} = subscriber} ->
         Process.demonitor(ref, [:flush])
-
-        attempts =
-          case previous do
-            {:cell_retry, ^cell, _subscriber, n} -> n
-            _ -> 0
-          end
-
+        attempts = failed_attempts(previous, cell)
         retry_subscribe(ctx.owner_pid, subscriber, attempts)
-        commit_slot(slot_index, {:cell_retry, cell, subscriber, attempts + 1})
+        commit_slot(slot_index, {:cell_waiting, cell, subscriber, attempts + 1})
         projection.(:disconnected)
     end
   end
+
+  defp failed_attempts({:cell_retry, cell, _subscriber, attempts}, cell), do: attempts
+  defp failed_attempts(_previous, _cell), do: 0
 
   defp observable_subscribe(cell, subscriber) do
     case Filament.Cell.subscribe(cell, subscriber, &Function.identity/1) do

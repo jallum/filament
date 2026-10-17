@@ -14,9 +14,11 @@ defmodule Filament.HookSlot do
       subscriber includes a generation token; `projection` and `value` are
       from the last render, so an update can tell whether the value changed.
     * `{:cell_resubscribe, cell, subscriber}` — refresh pending; retains cleanup identity.
-    * `{:cell_retry, cell, subscriber, attempts}` — `use_value` couldn't reach
-      the source; it subscribes afresh on the next render, which a timer or
-      the source's process exiting triggers.
+    * `{:cell_waiting, cell, subscriber, attempts}` — `use_value` couldn't
+      reach the source and waits for its retry timer; renders until then
+      read `:disconnected` without subscribing.
+    * `{:cell_retry, cell, subscriber, attempts}` — a retry is due, or the
+      source's process exited: the next render subscribes afresh.
     * `:uninitialized` — slot never committed, or disabled mid-render.
 
   A `use_value` subscriber is `{owner_pid, fiber_id, slot_index, ref}`, where
@@ -44,6 +46,7 @@ defmodule Filament.HookSlot do
 
   def cleanup({:cell_resubscribe, source, subscriber}), do: end_subscription(source, subscriber)
   def cleanup({:cell_retry, source, subscriber, _attempts}), do: end_subscription(source, subscriber)
+  def cleanup({:cell_waiting, source, subscriber, _attempts}), do: end_subscription(source, subscriber)
 
   def cleanup(_other), do: :ok
 
@@ -81,8 +84,8 @@ defmodule Filament.HookSlot do
   end
 
   @doc """
-  The slot whose subscription `ref` monitors, made to subscribe afresh: its
-  source's process exited.
+  The slot whose subscription `ref` names, made to subscribe afresh: its
+  source's process exited, or its retry is due.
   """
   @spec source_down(slot :: term(), reference()) :: {:ok, term()} | :error
   def source_down({:cell_subscribed, source, _raw, {_, _, _, ref} = subscriber, _projection, _value}, ref),
@@ -90,6 +93,9 @@ defmodule Filament.HookSlot do
 
   def source_down({:cell_resubscribe, source, {_, _, _, ref} = subscriber}, ref),
     do: {:ok, {:cell_retry, source, subscriber, 0}}
+
+  def source_down({:cell_waiting, source, {_, _, _, ref} = subscriber, attempts}, ref),
+    do: {:ok, {:cell_retry, source, subscriber, attempts}}
 
   def source_down({:cell_retry, _source, {_, _, _, ref}, _attempts} = slot, ref), do: {:ok, slot}
   def source_down(_slot, _ref), do: :error
