@@ -9,7 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Filament.Test.put_props/2` merges props into a mounted view's root and
+  renders it again, keeping the components' state, as
+  `Filament.LiveView.put_props/2` does in a view. A test of how a component
+  takes a prop change no longer needs a wrapper component to drive it:
+
+  ```elixir
+  view = mount!(Exclude, %{id: 13}) |> put_props(excluded: true)
+  ```
+
 ### Changed
+
+- `Filament.Test.eventually/2` retries a function whose `assert` fails,
+  and on timeout raises that assertion's error, with its diff. It stopped
+  at the first failing `assert`. A falsy return still retries, and on
+  timeout raises `ExUnit.AssertionError` instead of `RuntimeError`:
+
+  ```elixir
+  eventually(fn -> assert ReadModel.lookup(:toy, 2) == {"two", 1} end)
+  ```
 
 ### Deprecated
 

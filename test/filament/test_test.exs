@@ -227,6 +227,22 @@ defmodule Filament.TestTest do
     assert render_text(view) =~ "Count: 2"
   end
 
+  test "put_props/2 renders the root again with the props merged in" do
+    view = ClassComp.Class |> mount!(%{}) |> put_props(active: true)
+    assert has_class?(view, "div", "active")
+    assert view |> put_props(%{active: false}) |> has_class?("div", "inactive")
+  end
+
+  test "put_props/2 keeps the components' state" do
+    view =
+      KeyedComp.Rows
+      |> mount!(%{keys: ["a", "b"]})
+      |> click!(~s(button[data-key="a"]))
+      |> put_props(keys: ["b", "a", "c"])
+
+    assert render_text(view) == "ba clickedc"
+  end
+
   test "has_class? true" do
     view = mount!(ClassComp.Class, %{active: true})
     assert has_class?(view, "div", "active") == true
