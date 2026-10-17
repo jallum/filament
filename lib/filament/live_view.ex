@@ -120,31 +120,24 @@ defmodule Filament.LiveView do
   end
 
   @doc false
-  def apply_effects(pending_effects, fiber_tree) do
-    Enum.reduce(pending_effects, {fiber_tree, 0}, fn
-      {_slot_index, fiber_id, _effect_fn, _deps}, {acc_tree, count}
-      when not is_map_key(acc_tree, fiber_id) ->
-        {acc_tree, count}
+  def apply_effects(pending_effects, fiber_tree), do: Enum.reduce(pending_effects, {fiber_tree, 0}, &apply_effect/2)
 
-      {slot_index, fiber_id, effect_fn, deps}, {acc_tree, count} ->
-        fiber = acc_tree[fiber_id]
-
-        # The slot holds the cleanup of the effect's last run. Two renders
-        # can queue the same effect before either runs, so this, not the
-        # cleanup at render time, is the one to call.
-        case fiber.hook_slots do
-          %{^slot_index => {_deps, cleanup}} when is_function(cleanup, 0) -> cleanup.()
-          _ -> :ok
-        end
-
+  defp apply_effect({slot_index, fiber_id, effect_fn, deps}, {tree, count}) do
+    case tree do
+      # The slot holds the cleanup of the effect's last run. Two renders
+      # can queue the same effect before either runs, so this, not the
+      # cleanup at render time, is the one to call.
+      %{^fiber_id => %{hook_slots: %{^slot_index => {_deps, cleanup}}} = fiber} ->
+        if is_function(cleanup, 0), do: cleanup.()
         new_cleanup = effect_fn.()
         new_cleanup = if is_function(new_cleanup, 0), do: new_cleanup
-
         new_slots = Map.put(fiber.hook_slots, slot_index, {deps, new_cleanup})
-        new_tree = Map.put(acc_tree, fiber_id, %{fiber | hook_slots: new_slots})
+        {Map.put(tree, fiber_id, %{fiber | hook_slots: new_slots}), count + 1}
 
-        {new_tree, count + 1}
-    end)
+      # The fiber unmounted, or a later render stopped calling the effect.
+      _ ->
+        {tree, count}
+    end
   end
 
   @doc """

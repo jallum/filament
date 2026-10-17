@@ -35,6 +35,39 @@ defmodule Filament.UseEffectTest do
     end
   end
 
+  defmodule Conditional do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      def render(%{on: on, test: test}) do
+        effect = fn -> fn -> send(test, :cleanup) end end
+        if on, do: use_effect(effect, [])
+        ~F"<i />"
+      end
+    end
+  end
+
+  describe "an effect a render stops calling" do
+    test "is cleaned up then" do
+      {tree, _, effects} = Reconciler.mount(Conditional, %{on: true, test: self()})
+      {tree, _} = LiveView.apply_effects(effects, tree)
+
+      {tree, _, []} = Reconciler.update(tree, "root", %{on: false, test: self()})
+      assert_received :cleanup
+
+      Reconciler.unmount(tree)
+      refute_received :cleanup
+    end
+
+    test "doesn't run when it was queued before" do
+      {tree, _, effects} = Reconciler.mount(Conditional, %{on: true, test: self()})
+      {tree, _, []} = Reconciler.update(tree, "root", %{on: false, test: self()})
+
+      assert {_tree, 0} = LiveView.apply_effects(effects, tree)
+    end
+  end
+
   test "effects run in declaration order, a parent's before its children's" do
     {tree, _, effects} = Reconciler.mount(OrderRoot, %{test: self()})
     LiveView.apply_effects(effects, tree)
@@ -48,8 +81,8 @@ defmodule Filament.UseEffectTest do
     tracker = start_tracker()
     fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
-    pending_effects =
-      with_render_ctx("root", %{"root" => fiber}, nil, fn ->
+    {pending_effects, fiber} =
+      render(fiber, fn ->
         Hooks.use_effect(
           fn ->
             append(tracker, :effect)
@@ -57,8 +90,6 @@ defmodule Filament.UseEffectTest do
           end,
           []
         )
-
-        Slots.current_context().pending_effects
       end)
 
     assert length(pending_effects) == 1
@@ -80,8 +111,8 @@ defmodule Filament.UseEffectTest do
     # First render
     fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
-    effects1 =
-      with_render_ctx("root", %{"root" => fiber1}, nil, fn ->
+    {effects1, fiber1} =
+      render(fiber1, fn ->
         Hooks.use_effect(
           fn ->
             append(tracker, :effect)
@@ -89,8 +120,6 @@ defmodule Filament.UseEffectTest do
           end,
           []
         )
-
-        Slots.current_context().pending_effects
       end)
 
     {tree1, _ran} = LiveView.apply_effects(effects1, %{"root" => fiber1})
@@ -99,8 +128,8 @@ defmodule Filament.UseEffectTest do
     # Second render — same deps, effect should NOT be queued
     fiber2 = %{tree1["root"] | hook_slots: %{0 => {[], nil}}}
 
-    effects2 =
-      with_render_ctx("root", %{"root" => fiber2}, nil, fn ->
+    {effects2, fiber2} =
+      render(fiber2, fn ->
         Hooks.use_effect(
           fn ->
             append(tracker, :effect)
@@ -108,8 +137,6 @@ defmodule Filament.UseEffectTest do
           end,
           []
         )
-
-        Slots.current_context().pending_effects
       end)
 
     assert effects2 == []
@@ -122,8 +149,8 @@ defmodule Filament.UseEffectTest do
     # First render
     fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
-    effects1 =
-      with_render_ctx("root", %{"root" => fiber1}, nil, fn ->
+    {effects1, fiber1} =
+      render(fiber1, fn ->
         Hooks.use_effect(
           fn ->
             append(tracker, :effect)
@@ -131,8 +158,6 @@ defmodule Filament.UseEffectTest do
           end,
           [false]
         )
-
-        Slots.current_context().pending_effects
       end)
 
     {tree1, _} = LiveView.apply_effects(effects1, %{"root" => fiber1})
@@ -141,8 +166,8 @@ defmodule Filament.UseEffectTest do
     # Second render with changed deps
     fiber2 = %{tree1["root"] | hook_slots: %{0 => {[false], nil}}}
 
-    effects2 =
-      with_render_ctx("root", %{"root" => fiber2}, nil, fn ->
+    {effects2, fiber2} =
+      render(fiber2, fn ->
         Hooks.use_effect(
           fn ->
             append(tracker, :effect)
@@ -150,8 +175,6 @@ defmodule Filament.UseEffectTest do
           end,
           [true]
         )
-
-        Slots.current_context().pending_effects
       end)
 
     assert length(effects2) == 1
@@ -167,8 +190,8 @@ defmodule Filament.UseEffectTest do
 
     fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
-    effects1 =
-      with_render_ctx("root", %{"root" => fiber1}, nil, fn ->
+    {effects1, fiber1} =
+      render(fiber1, fn ->
         Hooks.use_effect(
           fn ->
             append(tracker, :effect)
@@ -176,8 +199,6 @@ defmodule Filament.UseEffectTest do
           end,
           [[:a]]
         )
-
-        Slots.current_context().pending_effects
       end)
 
     {tree1, _} = LiveView.apply_effects(effects1, %{"root" => fiber1})
@@ -187,8 +208,8 @@ defmodule Filament.UseEffectTest do
     # The cleanup_fn is stored in hook_slots after first apply_effects
     fiber2 = %{tree1["root"] | hook_slots: %{0 => {[:a], cleanup_fn}}}
 
-    effects2 =
-      with_render_ctx("root", %{"root" => fiber2}, nil, fn ->
+    {effects2, fiber2} =
+      render(fiber2, fn ->
         Hooks.use_effect(
           fn ->
             append(tracker, :effect)
@@ -196,8 +217,6 @@ defmodule Filament.UseEffectTest do
           end,
           [[:b]]
         )
-
-        Slots.current_context().pending_effects
       end)
 
     LiveView.apply_effects(effects2, %{"root" => fiber2})
@@ -214,8 +233,8 @@ defmodule Filament.UseEffectTest do
 
     fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
-    effects =
-      with_render_ctx("root", %{"root" => fiber1}, nil, fn ->
+    {effects, fiber1} =
+      render(fiber1, fn ->
         Hooks.use_effect(
           fn ->
             append(tracker, :effect)
@@ -223,8 +242,6 @@ defmodule Filament.UseEffectTest do
           end,
           []
         )
-
-        Slots.current_context().pending_effects
       end)
 
     {tree, _} = LiveView.apply_effects(effects, %{"root" => fiber1})
@@ -243,8 +260,8 @@ defmodule Filament.UseEffectTest do
     # First render
     fiber1 = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
-    effects1 =
-      with_render_ctx("root", %{"root" => fiber1}, nil, fn ->
+    {effects1, fiber1} =
+      render(fiber1, fn ->
         Hooks.use_effect(
           fn ->
             append(tracker, :ran)
@@ -252,8 +269,6 @@ defmodule Filament.UseEffectTest do
           end,
           :always
         )
-
-        Slots.current_context().pending_effects
       end)
 
     {tree1, _} = LiveView.apply_effects(effects1, %{"root" => fiber1})
@@ -262,8 +277,8 @@ defmodule Filament.UseEffectTest do
     # Second render — :always re-runs
     fiber2 = %{tree1["root"] | hook_slots: %{0 => {:always, nil}}}
 
-    effects2 =
-      with_render_ctx("root", %{"root" => fiber2}, nil, fn ->
+    {effects2, fiber2} =
+      render(fiber2, fn ->
         Hooks.use_effect(
           fn ->
             append(tracker, :ran)
@@ -271,8 +286,6 @@ defmodule Filament.UseEffectTest do
           end,
           :always
         )
-
-        Slots.current_context().pending_effects
       end)
 
     assert length(effects2) == 1
@@ -283,10 +296,9 @@ defmodule Filament.UseEffectTest do
   test "7. effect fn returns nil — no crash, no cleanup stored" do
     fiber = Fiber.new(id: "root", component: nil, hook_slots: %{})
 
-    effects =
-      with_render_ctx("root", %{"root" => fiber}, nil, fn ->
+    {effects, fiber} =
+      render(fiber, fn ->
         Hooks.use_effect(fn -> nil end, [])
-        Slots.current_context().pending_effects
       end)
 
     {tree, _} = LiveView.apply_effects(effects, %{"root" => fiber})
@@ -324,6 +336,18 @@ defmodule Filament.UseEffectTest do
 
   defp calls(tracker) do
     Agent.get(tracker, & &1)
+  end
+
+  # Renders `fun` as `fiber`'s render; returns the effects it queued and the
+  # fiber as the render leaves it, holding the slots the render committed.
+  defp render(fiber, fun) do
+    ctx =
+      with_render_ctx(fiber.id, %{fiber.id => fiber}, nil, fn ->
+        fun.()
+        Slots.current_context()
+      end)
+
+    {ctx.pending_effects, %{fiber | hook_slots: ctx.new_hook_slots}}
   end
 
   defp with_render_ctx(fiber_id, fiber_tree, owner_pid, fun) do

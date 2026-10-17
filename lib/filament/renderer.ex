@@ -18,6 +18,8 @@ defmodule Filament.Renderer do
     cond do
       not reusable?(fiber, props) ->
         {rendered, ctx} = render(fiber.component, props, %{context | hook_slots: fiber.hook_slots})
+        # A hook this render didn't call ends here, as on unmount.
+        fiber.hook_slots |> Map.drop(Map.keys(ctx.new_hook_slots)) |> Filament.HookSlot.cleanup_all()
 
         {%{
            fiber
