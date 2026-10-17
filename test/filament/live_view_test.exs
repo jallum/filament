@@ -337,7 +337,55 @@ defmodule Filament.LiveViewTest do
     end
   end
 
+  defmodule EffectComponent do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      prop(:test, :any, required: true)
+      prop(:page, :any, default: 1)
+
+      def render(%{test: test, page: page}) do
+        use_effect(fn -> send(test, :mounted) end, [])
+
+        use_effect(
+          fn ->
+            send(test, {:page, page})
+            fn -> send(test, {:left, page}) end
+          end,
+          [page]
+        )
+
+        ~F"<p>{page}</p>"
+      end
+    end
+  end
+
+  defmodule EffectLiveView do
+    use Filament.LiveView
+
+    def root_component, do: EffectComponent
+  end
+
   describe "put_props/2" do
+    test "before the first render keeps the mount's effects, and runs the cleanup of each run" do
+      {:ok, socket} = EffectLiveView.mount(%{}, %{}, test_socket(%{test: self()}))
+      socket = Filament.LiveView.put_props(socket, page: 2)
+      socket = Filament.LiveView.run_pending_effects(socket)
+
+      assert_received :mounted
+      assert_received {:page, 1}
+      assert_received {:left, 1}
+      assert_received {:page, 2}
+      refute_received {:left, 2}
+      assert socket.assigns._filament_pending_effects == []
+    end
+
+    test "with unchanged props leaves the socket as it was" do
+      {:ok, socket} = CounterLiveView.mount(%{}, %{}, test_socket(%{count: 3}))
+      assert Filament.LiveView.put_props(socket, count: 3) == socket
+    end
+
     test "merges props into the root's and renders it again" do
       {:ok, socket} = CounterLiveView.mount(%{}, %{}, test_socket(%{count: 0}))
 

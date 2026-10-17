@@ -20,7 +20,7 @@ defmodule Filament.RenderContext do
     owner_pid: nil,
     # %{non_neg_integer() => term()} - accumulates new slot values written during render
     new_hook_slots: %{},
-    # [{index, fiber_id, effect_fn, deps, old_cleanup}] - effects accumulated
+    # [{index, fiber_id, effect_fn, deps}] - effects accumulated
     # during the pass, newest first
     pending_effects: [],
     # non_neg_integer() - current event handler index
@@ -58,7 +58,7 @@ defmodule Filament.RenderContext do
           children: [String.t()],
           owner_pid: pid() | nil,
           new_hook_slots: %{non_neg_integer() => term()},
-          pending_effects: [{non_neg_integer(), String.t(), (-> term()), term(), (-> term()) | nil}],
+          pending_effects: [{non_neg_integer(), String.t(), (-> term()), term()}],
           event_handler_index: non_neg_integer(),
           new_event_handlers: %{non_neg_integer() => function()},
           capture_handler_index: non_neg_integer(),

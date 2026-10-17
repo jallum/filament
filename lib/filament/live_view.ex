@@ -122,20 +122,23 @@ defmodule Filament.LiveView do
   @doc false
   def apply_effects(pending_effects, fiber_tree) do
     Enum.reduce(pending_effects, {fiber_tree, 0}, fn
-      {_slot_index, fiber_id, _effect_fn, _deps, _old_cleanup}, {acc_tree, count}
+      {_slot_index, fiber_id, _effect_fn, _deps}, {acc_tree, count}
       when not is_map_key(acc_tree, fiber_id) ->
         {acc_tree, count}
 
-      {slot_index, fiber_id, effect_fn, deps, old_cleanup}, {acc_tree, count} ->
-        # Run old cleanup if present
-        if is_function(old_cleanup, 0), do: old_cleanup.()
+      {slot_index, fiber_id, effect_fn, deps}, {acc_tree, count} ->
+        fiber = acc_tree[fiber_id]
 
-        # Run the new effect
+        # The slot holds the cleanup of the effect's last run. Two renders
+        # can queue the same effect before either runs, so this, not the
+        # cleanup at render time, is the one to call.
+        case fiber.hook_slots do
+          %{^slot_index => {_deps, cleanup}} when is_function(cleanup, 0) -> cleanup.()
+          _ -> :ok
+        end
+
         new_cleanup = effect_fn.()
         new_cleanup = if is_function(new_cleanup, 0), do: new_cleanup
-
-        # Store {deps, new_cleanup} back into the fiber's hook_slots
-        fiber = acc_tree[fiber_id]
 
         new_slots = Map.put(fiber.hook_slots, slot_index, {deps, new_cleanup})
         new_tree = Map.put(acc_tree, fiber_id, %{fiber | hook_slots: new_slots})
@@ -364,7 +367,12 @@ defmodule Filament.LiveView do
   @spec put_props(Socket.t(), map() | keyword()) :: Socket.t()
   def put_props(socket, props) when is_map(props) or is_list(props) do
     tree = socket.assigns._filament_tree
-    render_root(socket, tree, Enum.into(props, tree["root"].props))
+    old_props = tree["root"].props
+
+    case Enum.into(props, old_props) do
+      ^old_props -> socket
+      new_props -> render_root(socket, tree, new_props)
+    end
   end
 
   @doc false
@@ -488,12 +496,16 @@ defmodule Filament.LiveView do
     assign_render(socket, tree, rendered, pending_effects)
   end
 
+  # Effects run after LiveView renders, so several renders before one, as a
+  # mount and `handle_params/3` are, each add theirs.
   @doc false
   def assign_render(socket, tree, rendered, pending_effects) do
+    queued = Map.get(socket.assigns, :_filament_pending_effects, [])
+
     socket
     |> Phoenix.Component.assign(:_filament_tree, tree)
     |> Phoenix.Component.assign(:_filament_rendered, rendered)
-    |> Phoenix.Component.assign(:_filament_pending_effects, pending_effects)
+    |> Phoenix.Component.assign(:_filament_pending_effects, queued ++ pending_effects)
   end
 
   @doc false

@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `Filament.LiveView.put_props/2` called from `handle_params/3` on a
+  connected mount no longer drops the mount's effects. Phoenix calls
+  `handle_params/3` before the first render, and the props' render replaced
+  the effects the mount had queued. Effects queued by several renders
+  before one now all run, each calling the cleanup of the run before it,
+  and `put_props/2` with unchanged props doesn't render.
+
 ### Security
 
 ## [0.6.0-rc.3] - 2026-10-14
