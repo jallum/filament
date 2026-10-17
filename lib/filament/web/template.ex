@@ -14,7 +14,7 @@ defmodule Filament.Web.Template do
       static: template.static,
       fingerprint: template.fingerprint,
       dynamic: fn _track -> dynamic end,
-      root: Filament.Web.root?(template.vnode),
+      root: template.root?,
       caller: :not_available
     }
   end

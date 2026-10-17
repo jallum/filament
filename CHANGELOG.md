@@ -105,6 +105,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   helpers wrapped single `Phoenix.LiveViewTest` calls; use
   `Phoenix.LiveViewTest` directly.
 
+- The `props()` type `defcomponent` generated in each component. It was
+  always `map()`; write `map()` in specs instead.
+
 ### Fixed
 
 - A prop default a module can't store, such as an anonymous function or a

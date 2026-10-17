@@ -19,6 +19,26 @@ defmodule Filament.FiberTree do
   defp handler_map_for(fiber, :bubble), do: fiber.event_handlers
   defp handler_map_for(fiber, :capture), do: fiber.capture_handlers
 
+  # A wire ref's fiber id and handler index (`Filament.Hooks.register_event_handler/1`).
+  # The index is digits only, so the last colon is the separator, whatever
+  # the fiber id holds: a keyed child's key may have colons of its own.
+  @spec parse_event_ref(String.t()) :: {:ok, String.t(), non_neg_integer()} | :error
+  def parse_event_ref(ref) when is_binary(ref) do
+    case :binary.matches(ref, ":") do
+      [] ->
+        :error
+
+      matches ->
+        {at, 1} = List.last(matches)
+        index = binary_part(ref, at + 1, byte_size(ref) - at - 1)
+
+        case Integer.parse(index) do
+          {idx, ""} when idx >= 0 -> {:ok, binary_part(ref, 0, at), idx}
+          _ -> :error
+        end
+    end
+  end
+
   @doc """
   Returns all fiber IDs present in the tree.
   """

@@ -282,7 +282,7 @@ defmodule Filament.LiveView do
 
   @doc false
   def dispatch_filament_event(ref, params, socket) do
-    case Filament.Hooks.parse_event_ref(ref) do
+    case Filament.FiberTree.parse_event_ref(ref) do
       {:ok, fiber_id_str, handler_index} ->
         tree = socket.assigns._filament_tree
         target_handler = Filament.FiberTree.get_event_handler(tree, fiber_id_str, handler_index)

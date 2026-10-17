@@ -35,7 +35,7 @@ defmodule Filament.TemplateCompiler do
         static: static,
         bindings: Enum.reverse(state.bindings),
         fingerprint: :erlang.md5(:erlang.term_to_binary(static)),
-        vnode: vnode
+        root?: Filament.Web.root?(vnode)
       }
 
       {:ok, plan, Enum.reverse(state.expressions)}

@@ -102,10 +102,9 @@ defmodule Filament.Reconciler do
 
   @doc """
   Runs every fiber's cleanup functions and observable unsubscriptions.
-  Options are accepted for symmetry with `mount/3` and ignored.
   """
-  @spec unmount(fiber_tree(), keyword()) :: :ok
-  def unmount(tree, _opts \\ []) do
+  @spec unmount(fiber_tree()) :: :ok
+  def unmount(tree) do
     Enum.each(tree, fn {_id, fiber} -> HookSlot.cleanup_all(fiber.hook_slots) end)
   end
 
