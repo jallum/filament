@@ -19,7 +19,7 @@ defmodule CartWeb.Hooks do
 
   def use_cart_count(cart_ref) do
     cart = use_cart(cart_ref)
-    source = if cart, do: Filament.Source.new(Filament.Observable.GenServer, cart)
+    source = if cart, do: Filament.Observable.GenServer.cell(cart)
 
     use_value(source, fn
       :disconnected -> 0

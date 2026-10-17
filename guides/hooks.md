@@ -114,7 +114,7 @@ end
 
 def use_cart_count(session_id) do
   cart = use_cart(session_id)
-  source = if cart, do: Filament.Source.new(Filament.Observable.GenServer, cart)
+  source = if cart, do: Filament.Observable.GenServer.cell(cart)
   use_value(source, fn
     :disconnected -> 0
     state -> Cart.State.item_count(state)
@@ -279,17 +279,17 @@ defmodule InventoryWeb.Hooks do
     if item == sentinel do
       disconnected_val
     else
-      owner_pid = current_context().owner_pid
+      holder = use_identity()
 
       hold = fn qty ->
-        case GenServer.call(server, {:filament_hold, item_id, qty, owner_pid}) do
+        case GenServer.call(server, {:filament_hold, item_id, qty, holder}) do
           :ok -> set_held_qty.(held_qty + qty)
           {:error, reason} -> raise "hold denied for #{inspect(item_id)}: #{inspect(reason)}"
         end
       end
 
       release = fn qty ->
-        GenServer.cast(server, {:filament_release_qty, item_id, qty, owner_pid})
+        GenServer.cast(server, {:filament_release_qty, item_id, qty, holder})
         set_held_qty.(max(0, held_qty - qty))
       end
 
@@ -309,9 +309,10 @@ Key points about this implementation:
 - **`:disconnected` sentinel** — a private atom distinct from `nil` or `false`
   lets the hook distinguish "not yet connected" from "item not found", and
   return the caller's `disconnected:` value cleanly.
-- **`current_context().owner_pid`** — the LiveView process pid, used as the
-  hold owner so the server can release all holds when that process terminates
-  (via `handle_unsubscribe/2`).
+- **`use_identity/0`** — `{owner_pid, fiber_id}` for this component, used as
+  the hold owner. The subscriber term `handle_unsubscribe/2` receives starts
+  with the same pair, so the server releases a component's holds when it
+  unmounts or its LiveView goes away.
 
 The hook is used from `InventoryItem` by importing the hooks module and
 calling it at the top of `render/1`:

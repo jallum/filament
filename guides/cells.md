@@ -132,7 +132,7 @@ defmodule Cart.Server do
   use Filament.Observable.GenServer
 
   def cell(session_id) when is_binary(session_id) do
-    Filament.Source.new(Filament.Observable.GenServer, ensure_started(session_id))
+    Filament.Observable.GenServer.cell(ensure_started(session_id))
   end
 end
 ```

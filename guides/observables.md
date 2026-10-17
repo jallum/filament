@@ -212,7 +212,7 @@ directly:
 test "projection suppresses update when count is unchanged" do
   {:ok, stub} = Filament.Test.Stub.start(fn _req -> %Cart.State{} end)
 
-  source = Filament.Source.new(Filament.Observable.GenServer, stub)
+  source = Filament.Observable.GenServer.cell(stub)
   subscriber = {self(), :badge_test_fiber, 0}
 
   {:ok, _initial} = Filament.Cell.subscribe(source, subscriber, &Function.identity/1)
@@ -291,7 +291,7 @@ drain the observable update message and re-render:
 describe "CartItems (rung-3, real Cart.Server)" do
   setup do
     server = start_supervised!(%{id: Cart.Server, start: {Cart.Server, :start_link, [[name: nil]]}})
-    source = Filament.Source.new(Filament.Observable.GenServer, server)
+    source = Filament.Observable.GenServer.cell(server)
     view = mount!(CartWeb.Components.CartItems, %{source: source})
     %{server: server, view: view}
   end

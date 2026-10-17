@@ -117,8 +117,27 @@ defmodule Filament.MixProject do
         "guides/module-organization.md",
         "guides/migration-guide.md"
       ],
+      # The changelog names APIs that have since been removed or hidden.
+      skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
+      # Internal modules the module-organization guide describes by name.
+      skip_code_autolink_to: [
+        "Filament.Fiber",
+        "Filament.FiberTree",
+        "Filament.FiberTree.t/0",
+        "Filament.HTMLEngine",
+        "Filament.Reconciler",
+        "Filament.RenderContext",
+        "Filament.Renderer",
+        "Filament.Renderer.walk_vnode/2",
+        "Filament.TagEngine",
+        "Filament.TagEngine.compile/2",
+        "Filament.VNode",
+        "Filament.VNode.t/0",
+        "Filament.VNodeCompiler",
+        "Filament.LiveView.dispatch_filament_event/3"
+      ],
       groups_for_modules: [
-        Components: [Filament.Component, Filament.Defcomponent, Filament.SigilF],
+        Components: [Filament.Component, Filament.Defcomponent, Filament.SigilF, Filament.KeyModifiers],
         Hooks: [Filament.Hooks],
         Observables: [Filament.Observable, Filament.Observable.GenServer],
         Cells: [Filament.Cell],

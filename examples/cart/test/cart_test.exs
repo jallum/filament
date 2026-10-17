@@ -88,7 +88,7 @@ defmodule Cart.Test do
 
     test "no update sent when projected value is unchanged (change-or-bust)" do
       {:ok, stub} = Stub.start(fn _req -> %Cart.State{} end)
-      cell = Filament.Source.new(Filament.Observable.GenServer, stub)
+      cell = Filament.Observable.GenServer.cell(stub)
       subscriber = {self(), :badge_test_fiber, 0}
 
       {:ok, _initial} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)

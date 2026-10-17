@@ -68,14 +68,14 @@ defmodule Filament.Observable.CellImplTest do
   describe "Cell.subscribe/3 against a GenServer-backed observable" do
     test "delivers the current projected value on subscribe" do
       {:ok, server} = Counter.start_link()
-      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+      cell = Filament.Observable.GenServer.cell(server)
 
       assert {:ok, 0} = Cell.subscribe(cell, self(), & &1)
     end
 
     test "applies a projection on subscribe" do
       {:ok, server} = Counter.start_link()
-      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+      cell = Filament.Observable.GenServer.cell(server)
 
       assert {:ok, "0"} = Cell.subscribe(cell, self(), &Integer.to_string/1)
     end
@@ -87,7 +87,7 @@ defmodule Filament.Observable.CellImplTest do
 
     test "does not invoke the subscription callback" do
       {:ok, server} = ReadOnlyCounter.start_link()
-      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+      cell = Filament.Observable.GenServer.cell(server)
 
       assert Cell.current(cell, & &1) == 7
       assert :sys.get_state(server).subscriptions == 0
@@ -97,7 +97,7 @@ defmodule Filament.Observable.CellImplTest do
   describe "Cell.current/2" do
     test "reads the current projected value without subscribing" do
       {:ok, server} = Counter.start_link()
-      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+      cell = Filament.Observable.GenServer.cell(server)
 
       assert Cell.current(cell, & &1) == 0
       GenServer.call(server, :increment)
@@ -105,7 +105,7 @@ defmodule Filament.Observable.CellImplTest do
     end
 
     test "returns :disconnected when the server isn't running" do
-      cell = Filament.Source.new(Filament.Observable.GenServer, :nonexistent_server)
+      cell = Filament.Observable.GenServer.cell(:nonexistent_server)
       assert Cell.current(cell, & &1) == :disconnected
     end
   end
@@ -113,13 +113,13 @@ defmodule Filament.Observable.CellImplTest do
   describe "Cell.unsubscribe/2" do
     test "is idempotent on unknown subscribers" do
       {:ok, server} = Counter.start_link()
-      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+      cell = Filament.Observable.GenServer.cell(server)
 
       assert :ok = Cell.unsubscribe(cell, :never_subscribed)
     end
 
     test "is idempotent when the server isn't running" do
-      cell = Filament.Source.new(Filament.Observable.GenServer, :nonexistent_server)
+      cell = Filament.Observable.GenServer.cell(:nonexistent_server)
       assert :ok = Cell.unsubscribe(cell, :anything)
     end
   end
@@ -127,7 +127,7 @@ defmodule Filament.Observable.CellImplTest do
   describe "change-or-bust delivery" do
     test "subscriber receives an update when the projection changes" do
       {:ok, server} = Counter.start_link()
-      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+      cell = Filament.Observable.GenServer.cell(server)
 
       Cell.subscribe(cell, {self(), :counter}, & &1)
       GenServer.call(server, :increment)
@@ -138,7 +138,7 @@ defmodule Filament.Observable.CellImplTest do
 
     test "subscriber does NOT receive an update when projection unchanged" do
       {:ok, server} = Counter.start_link()
-      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+      cell = Filament.Observable.GenServer.cell(server)
 
       # Project to a constant — every state-change event projects to the same
       # value, so the change-or-bust filter must suppress updates.
@@ -151,7 +151,7 @@ defmodule Filament.Observable.CellImplTest do
 
     test "unsubscribed subscriber stops receiving updates" do
       {:ok, server} = Counter.start_link()
-      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+      cell = Filament.Observable.GenServer.cell(server)
 
       Cell.subscribe(cell, {self(), :unsub_test}, & &1)
       Cell.unsubscribe(cell, {self(), :unsub_test})
@@ -162,7 +162,7 @@ defmodule Filament.Observable.CellImplTest do
 
     test "batches updates for one owner" do
       {:ok, server} = Counter.start_link()
-      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+      cell = Filament.Observable.GenServer.cell(server)
 
       Cell.subscribe(cell, {self(), :first}, & &1)
       Cell.subscribe(cell, {self(), :second}, & &1)

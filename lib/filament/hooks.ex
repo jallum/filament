@@ -34,50 +34,25 @@ defmodule Filament.Hooks do
   3. Hook identity is determined by call order (slot index). Conditional hooks corrupt state.
   """
 
-  alias Filament.RenderContext
+  import Filament.Hooks.Slots
 
-  @doc false
-  @spec use_slot(default :: term()) ::
-          {slot_index :: non_neg_integer(), previous_value :: term(), context :: RenderContext.t()}
-  def use_slot(default) do
+  @doc """
+  Identifies the calling component instance as `{owner_pid, fiber_id}`.
+
+  `owner_pid` is the process that hosts the render (the LiveView); `fiber_id`
+  names the component within it and is stable across renders. The pair is the
+  start of the subscriber term a `Filament.Observable` server receives, so a
+  server can key per-component state by it and clear that state in
+  `c:Filament.Observable.handle_unsubscribe/2`.
+  """
+  @spec use_identity() :: {pid() | nil, String.t()}
+  def use_identity do
     ctx =
-      Process.get(:filament_render_context) ||
-        raise ArgumentError,
-              "hook called outside a render pass — hooks may only be called from render/1"
+      current_context() ||
+        raise ArgumentError, "hook called outside a render pass — hooks may only be called from render/1"
 
-    index = ctx.hook_index
-
-    # Look up previous value: first from ctx.hook_slots (for new child fibers),
-    # then from fiber_tree for existing fibers being re-rendered
-    previous =
-      case Map.get(ctx.hook_slots, index) do
-        nil ->
-          fiber = Map.get(ctx.fiber_tree, ctx.fiber_id)
-          if fiber, do: Map.get(fiber.hook_slots, index, default), else: default
-
-        value ->
-          value
-      end
-
-    Process.put(:filament_render_context, %{ctx | hook_index: index + 1})
-    {index, previous, ctx}
+    {ctx.owner_pid, ctx.fiber_id}
   end
-
-  @doc false
-  @spec commit_slot(slot_index :: non_neg_integer(), value :: term()) :: :ok
-  def commit_slot(index, value) do
-    ctx =
-      Process.get(:filament_render_context) ||
-        raise ArgumentError, "commit_slot called outside a render pass"
-
-    updated = Map.put(ctx.new_hook_slots, index, value)
-    Process.put(:filament_render_context, %{ctx | new_hook_slots: updated})
-    :ok
-  end
-
-  @doc false
-  @spec current_context() :: RenderContext.t() | nil
-  def current_context, do: Process.get(:filament_render_context)
 
   @doc """
   Returns the current state value and a setter function.
