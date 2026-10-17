@@ -3,6 +3,7 @@ defmodule Filament.HooksTest do
 
   alias Filament.Fiber
   alias Filament.Hooks
+  alias Filament.Hooks.Slots
   alias Filament.RenderContext
 
   describe "use_slot/1" do
@@ -10,7 +11,7 @@ defmodule Filament.HooksTest do
       assert_raise ArgumentError,
                    "hook called outside a render pass — hooks may only be called from render/1",
                    fn ->
-                     Hooks.use_slot(:default)
+                     Slots.use_slot(:default)
                    end
     end
 
@@ -19,7 +20,7 @@ defmodule Filament.HooksTest do
 
       {index, value, ctx} =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
-          Hooks.use_slot(:default)
+          Slots.use_slot(:default)
         end)
 
       assert index == 0
@@ -32,15 +33,15 @@ defmodule Filament.HooksTest do
 
       {index0, _value, _ctx} =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
-          Hooks.use_slot(:first)
+          Slots.use_slot(:first)
         end)
 
       assert index0 == 0
 
       {index1, _value, _ctx} =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
-          Hooks.use_slot(:first)
-          Hooks.use_slot(:second)
+          Slots.use_slot(:first)
+          Slots.use_slot(:second)
         end)
 
       # Each render pass starts fresh, so second call returns index 1
@@ -52,7 +53,7 @@ defmodule Filament.HooksTest do
 
       {_index, value, _ctx} =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
-          Hooks.use_slot(:default)
+          Slots.use_slot(:default)
         end)
 
       assert value == :stored
@@ -64,13 +65,13 @@ defmodule Filament.HooksTest do
       # First render: commit a value
       new_slots =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
-          {index, value, _ctx} = Hooks.use_slot(:default)
+          {index, value, _ctx} = Slots.use_slot(:default)
           assert index == 0
           assert value == :default
-          Hooks.commit_slot(index, :committed)
+          Slots.commit_slot(index, :committed)
 
           # Read back the new_hook_slots from context
-          ctx = Hooks.current_context()
+          ctx = Slots.current_context()
           ctx.new_hook_slots
         end)
 
@@ -81,7 +82,7 @@ defmodule Filament.HooksTest do
 
       {_index, value, _ctx} =
         with_render_ctx("root", %{"root" => fiber_after}, nil, fn ->
-          Hooks.use_slot(:default)
+          Slots.use_slot(:default)
         end)
 
       assert value == :committed
@@ -91,7 +92,7 @@ defmodule Filament.HooksTest do
   describe "commit_slot/2" do
     test "raises ArgumentError when called outside render pass" do
       assert_raise ArgumentError, "commit_slot called outside a render pass", fn ->
-        Hooks.commit_slot(0, :value)
+        Slots.commit_slot(0, :value)
       end
     end
 
@@ -100,10 +101,10 @@ defmodule Filament.HooksTest do
 
       new_slots =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
-          Hooks.commit_slot(0, :alpha)
-          Hooks.commit_slot(1, :beta)
+          Slots.commit_slot(0, :alpha)
+          Slots.commit_slot(1, :beta)
 
-          ctx = Hooks.current_context()
+          ctx = Slots.current_context()
           ctx.new_hook_slots
         end)
 
@@ -111,9 +112,21 @@ defmodule Filament.HooksTest do
     end
   end
 
+  describe "use_identity/0" do
+    test "raises outside a render pass" do
+      assert_raise ArgumentError, ~r/outside a render pass/, fn -> Hooks.use_identity() end
+    end
+
+    test "returns the owner pid and fiber id" do
+      fiber = Fiber.new(id: "root", component: nil)
+      owner = self()
+      assert with_render_ctx("root", %{"root" => fiber}, owner, &Hooks.use_identity/0) == {owner, "root"}
+    end
+  end
+
   describe "current_context/0" do
     test "returns nil when called outside render pass" do
-      assert Hooks.current_context() == nil
+      assert Slots.current_context() == nil
     end
 
     test "returns the current context struct when inside render" do
@@ -121,7 +134,7 @@ defmodule Filament.HooksTest do
 
       ctx =
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
-          Hooks.current_context()
+          Slots.current_context()
         end)
 
       assert %RenderContext{} = ctx
@@ -145,7 +158,7 @@ defmodule Filament.HooksTest do
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
           r0 = Hooks.register_event_handler(h0)
           r1 = Hooks.register_event_handler(h1)
-          {r0, r1, Hooks.current_context().new_event_handlers, Hooks.current_context().event_handler_index}
+          {r0, r1, Slots.current_context().new_event_handlers, Slots.current_context().event_handler_index}
         end)
 
       assert ref0 == "root:0"

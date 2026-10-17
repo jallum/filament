@@ -16,7 +16,7 @@ defmodule Cart.Server do
   # server through the registry, so its readers follow it across a restart.
   def cell(session_id) when is_binary(session_id) do
     ensure_started(session_id)
-    Filament.Source.new(Filament.Observable.GenServer, via_registry(session_id))
+    Filament.Observable.GenServer.cell(via_registry(session_id))
   end
 
   # Public API

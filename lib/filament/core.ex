@@ -9,9 +9,8 @@ defmodule Filament.Core do
   (ancestor walk, propagation control) live here.
   """
 
-  alias Filament.FiberTree
-
-  @type tree :: FiberTree.t()
+  @typedoc "A mounted component tree, keyed by fiber id."
+  @type tree :: %{fiber_id() => term()}
   @type fiber_id :: String.t()
   @type slot :: non_neg_integer()
   @type params :: map()

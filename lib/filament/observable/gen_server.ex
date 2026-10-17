@@ -46,6 +46,18 @@ defmodule Filament.Observable.GenServer do
 
   @notification_cache :__filament_cell_notification_cache__
 
+  @doc """
+  A `%Filament.Source{}` for `server`, a pid, name or `{:via, ...}` tuple of
+  any process that uses `Filament.Observable.GenServer`.
+
+  The same source `MyServer.cell/1` builds by default, for code that doesn't
+  know which server module it holds:
+
+      use_value(Filament.Observable.GenServer.cell(server), & &1)
+  """
+  @spec cell(GenServer.server()) :: Filament.Source.t()
+  def cell(server), do: Filament.Source.new(__MODULE__, server)
+
   # ── Cell behaviour: GenServer transport ─────────────────────────────────────
 
   @impl Filament.Cell
@@ -123,14 +135,11 @@ defmodule Filament.Observable.GenServer do
       Override if you want a different default (e.g. ensure-started lookup):
 
           def cell(session_id) do
-            Filament.Source.new(Filament.Observable.GenServer,
-                                ensure_started(session_id))
+            Filament.Observable.GenServer.cell(ensure_started(session_id))
           end
       """
       @spec cell(term()) :: Filament.Source.t()
-      def cell(server) do
-        Filament.Source.new(Filament.Observable.GenServer, server)
-      end
+      def cell(server), do: Filament.Observable.GenServer.cell(server)
 
       defoverridable cell: 1
 

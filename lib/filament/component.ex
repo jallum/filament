@@ -16,7 +16,7 @@ defmodule Filament.Component do
   (e.g. `~F"{count}"`) evaluate to whatever scalar the expression
   produces. The renderer accepts any of these.
   """
-  @type rendered() :: Filament.VNode.t() | Phoenix.LiveView.Rendered.t() | term()
+  @type rendered() :: term()
 
   @callback render(props()) :: rendered()
 
@@ -30,6 +30,21 @@ defmodule Filament.Component do
   @callback __validate_props__!(props()) :: :ok | no_return()
 
   @optional_callbacks [__validate_props__!: 1, __props__: 0]
+
+  @doc """
+  The names of the props `component` declares; `[]` for a module that
+  declares none.
+
+      :params in Filament.Component.props(MyApp.Page)
+      #=> true
+  """
+  @spec props(module()) :: [atom()]
+  def props(component) when is_atom(component) do
+    # Route modules may not be loaded yet, and function_exported?/3 doesn't load.
+    if Code.ensure_loaded?(component) and function_exported?(component, :__props__, 0),
+      do: Enum.map(component.__props__(), fn {name, _meta} -> name end),
+      else: []
+  end
 
   defmacro __using__(_opts) do
     quote do

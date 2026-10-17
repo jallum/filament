@@ -3,6 +3,7 @@ defmodule Filament.UseStateTest do
 
   alias Filament.Fiber
   alias Filament.Hooks
+  alias Filament.Hooks.Slots
   alias Filament.RenderContext
 
   describe "use_state/1" do
@@ -59,7 +60,7 @@ defmodule Filament.UseStateTest do
         with_render_ctx("root", %{"root" => fiber}, nil, fn ->
           {a, _setter_a} = Hooks.use_state(:a)
           {b, _setter_b} = Hooks.use_state(:b)
-          {[a, b], Hooks.current_context()}
+          {[a, b], Slots.current_context()}
         end)
 
       assert values == [:a, :b]
@@ -81,7 +82,7 @@ defmodule Filament.UseStateTest do
         with_render_ctx("root", %{"root" => fiber2}, nil, fn ->
           {a, _setter_a} = Hooks.use_state(:a)
           {b, _setter_b} = Hooks.use_state(:b)
-          {[a, b], Hooks.current_context()}
+          {[a, b], Slots.current_context()}
         end)
 
       # First slot has stored value, second slot is empty (gets default)

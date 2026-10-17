@@ -270,29 +270,21 @@ defmodule Filament.LiveView do
   @doc """
   Build the prop map for `component` from a LiveView socket's assigns.
 
-  Selects only assigns whose keys appear in `component.__props__()`. This
+  Selects only assigns whose keys are among `Filament.Component.props/1`. This
   is an allowlist — assigns Phoenix LiveView injects (`:flash`,
   `:live_action`, `:__changed__`, etc.) are not props and never reach
   the component, regardless of what new internal assigns Phoenix adds
   in future releases.
 
-  Components without a `__props__/0` (i.e. not defined via `defcomponent`)
+  Components that declare no props (i.e. not defined via `defcomponent`)
   receive an empty prop map.
   """
   @spec extract_props(map(), module()) :: map()
   def extract_props(assigns, component) when is_atom(component) do
-    # Phoenix doesn't pre-load route modules on mount, so the component
-    # module may not be loaded yet — function_exported?/3 would return
-    # false and we'd silently drop every prop. ensure_loaded?/1 forces
-    # the load before we ask.
-    if Code.ensure_loaded?(component) and function_exported?(component, :__props__, 0) do
-      props = Enum.map(component.__props__(), fn {name, _meta} -> name end)
-      slots = if function_exported?(component, :__slots__, 0), do: Enum.map(component.__slots__(), & &1.name), else: []
-      allowed = props ++ slots
-      Map.take(assigns, allowed)
-    else
-      %{}
-    end
+    # props/1 loads the module, which function_exported?/3 below doesn't.
+    props = Filament.Component.props(component)
+    slots = if function_exported?(component, :__slots__, 0), do: Enum.map(component.__slots__(), & &1.name), else: []
+    Map.take(assigns, props ++ slots)
   end
 
   @doc false

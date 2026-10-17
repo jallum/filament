@@ -30,6 +30,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   count = use_value(source, & &1.count, disconnected: 0)
   ```
 
+- `Filament.Hooks.use_identity/0` returns `{owner_pid, fiber_id}` for the
+  calling component, the pair a server's subscriber terms start with, so a
+  server can key per-component state by it and clear it in
+  `handle_unsubscribe/2`. It replaces reading the undocumented
+  `current_context()`, which `import Filament.Hooks` no longer brings in:
+
+  ```elixir
+  # Before
+  holder = {current_context().owner_pid, current_context().fiber_id}
+
+  # After
+  holder = use_identity()
+  ```
+
+- `Filament.Observable.GenServer.cell/1` builds the source for any server
+  using `Filament.Observable.GenServer`, for code that doesn't know which
+  server module it holds. `MyServer.cell/1` still builds the same source.
+
+- `Filament.Component.props/1` names the props a component declares, in
+  place of calling the generated `__props__/0`.
+
+- `Filament.KeyModifiers`, the struct an `on_key` handler receives, is
+  documented.
+
 ### Changed
 
 - `Filament.Test.update/1`, and events such as `click/2`, render until no
@@ -50,6 +74,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   # After
   def handle_current(state), do: {:ok, state.held, state}
   ```
+
+- `import Filament.Hooks` (and `use Filament.Component`) no longer imports
+  the undocumented `use_slot/1`, `commit_slot/2` and `current_context/0`,
+  which the hooks are built from. See `use_identity/0` above.
 
 ### Deprecated
 

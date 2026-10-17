@@ -39,8 +39,7 @@ defmodule InventoryWeb.Hooks do
     if item == sentinel do
       disconnected_val
     else
-      context = current_context()
-      holder = {context.owner_pid, context.fiber_id}
+      holder = use_identity()
 
       hold = fn qty ->
         case GenServer.call(server, {:filament_hold, item_id, qty, holder}) do

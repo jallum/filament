@@ -84,6 +84,17 @@ defmodule Filament.ComponentTest do
     end
   end
 
+  describe "props/1" do
+    test "names the declared props" do
+      assert Enum.sort(Filament.Component.props(TestComponents.ComponentWithDefaults)) ==
+               [:another_optional, :optional_prop, :required_prop]
+    end
+
+    test "is empty for a module that declares none" do
+      assert Filament.Component.props(TestComponents.NotAComponent) == []
+    end
+  end
+
   describe "__validate_props__!/1" do
     test "accepts props with all required fields present" do
       assert :ok = TestComponents.MinimalComponent.__validate_props__!(%{value: "test"})

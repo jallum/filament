@@ -3,6 +3,7 @@ defmodule Filament.UseEffectTest do
 
   alias Filament.Fiber
   alias Filament.Hooks
+  alias Filament.Hooks.Slots
   alias Filament.LiveView
   alias Filament.Reconciler
   alias Filament.RenderContext
@@ -57,7 +58,7 @@ defmodule Filament.UseEffectTest do
           []
         )
 
-        Hooks.current_context().pending_effects
+        Slots.current_context().pending_effects
       end)
 
     assert length(pending_effects) == 1
@@ -89,7 +90,7 @@ defmodule Filament.UseEffectTest do
           []
         )
 
-        Hooks.current_context().pending_effects
+        Slots.current_context().pending_effects
       end)
 
     {tree1, _ran} = LiveView.apply_effects(effects1, %{"root" => fiber1})
@@ -108,7 +109,7 @@ defmodule Filament.UseEffectTest do
           []
         )
 
-        Hooks.current_context().pending_effects
+        Slots.current_context().pending_effects
       end)
 
     assert effects2 == []
@@ -131,7 +132,7 @@ defmodule Filament.UseEffectTest do
           [false]
         )
 
-        Hooks.current_context().pending_effects
+        Slots.current_context().pending_effects
       end)
 
     {tree1, _} = LiveView.apply_effects(effects1, %{"root" => fiber1})
@@ -150,7 +151,7 @@ defmodule Filament.UseEffectTest do
           [true]
         )
 
-        Hooks.current_context().pending_effects
+        Slots.current_context().pending_effects
       end)
 
     assert length(effects2) == 1
@@ -176,7 +177,7 @@ defmodule Filament.UseEffectTest do
           [[:a]]
         )
 
-        Hooks.current_context().pending_effects
+        Slots.current_context().pending_effects
       end)
 
     {tree1, _} = LiveView.apply_effects(effects1, %{"root" => fiber1})
@@ -196,7 +197,7 @@ defmodule Filament.UseEffectTest do
           [[:b]]
         )
 
-        Hooks.current_context().pending_effects
+        Slots.current_context().pending_effects
       end)
 
     LiveView.apply_effects(effects2, %{"root" => fiber2})
@@ -223,7 +224,7 @@ defmodule Filament.UseEffectTest do
           []
         )
 
-        Hooks.current_context().pending_effects
+        Slots.current_context().pending_effects
       end)
 
     {tree, _} = LiveView.apply_effects(effects, %{"root" => fiber1})
@@ -252,7 +253,7 @@ defmodule Filament.UseEffectTest do
           :always
         )
 
-        Hooks.current_context().pending_effects
+        Slots.current_context().pending_effects
       end)
 
     {tree1, _} = LiveView.apply_effects(effects1, %{"root" => fiber1})
@@ -271,7 +272,7 @@ defmodule Filament.UseEffectTest do
           :always
         )
 
-        Hooks.current_context().pending_effects
+        Slots.current_context().pending_effects
       end)
 
     assert length(effects2) == 1
@@ -285,7 +286,7 @@ defmodule Filament.UseEffectTest do
     effects =
       with_render_ctx("root", %{"root" => fiber}, nil, fn ->
         Hooks.use_effect(fn -> nil end, [])
-        Hooks.current_context().pending_effects
+        Slots.current_context().pending_effects
       end)
 
     {tree, _} = LiveView.apply_effects(effects, %{"root" => fiber})
@@ -299,7 +300,7 @@ defmodule Filament.UseEffectTest do
     effects =
       with_render_ctx("root", %{"root" => fiber}, nil, fn ->
         Hooks.use_effect(fn -> raise "should not run" end, [])
-        Hooks.current_context().pending_effects
+        Slots.current_context().pending_effects
       end)
 
     # Tree doesn't contain "root" — simulating unmounted fiber

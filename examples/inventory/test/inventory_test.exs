@@ -43,7 +43,7 @@ defmodule Inventory.Test do
 
       holder =
         spawn(fn ->
-          cell = Filament.Source.new(Filament.Observable.GenServer, server)
+          cell = Filament.Observable.GenServer.cell(server)
           subscriber = {self(), :holder_fiber, 0, make_ref()}
           {:ok, _} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
           :ok = GenServer.call(server, {:filament_hold, "item-a", 1, {self(), :holder_fiber}})
@@ -61,7 +61,7 @@ defmodule Inventory.Test do
     end
 
     test "unsubscribing one component preserves another component's hold", %{server: server} do
-      cell = Filament.Source.new(Filament.Observable.GenServer, server)
+      cell = Filament.Observable.GenServer.cell(server)
       first = {self(), :first_item, 0, make_ref()}
       second = {self(), :second_item, 0, make_ref()}
 
@@ -83,7 +83,7 @@ defmodule Inventory.Test do
 
       for i <- [1, 2] do
         spawn(fn ->
-          cell = Filament.Source.new(Filament.Observable.GenServer, server)
+          cell = Filament.Observable.GenServer.cell(server)
           subscriber = {self(), :"holder_#{i}", 0, make_ref()}
           {:ok, _} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
           :ok = GenServer.call(server, {:filament_hold, "item-a", 1, {self(), :"holder_#{i}"}})
@@ -158,7 +158,7 @@ defmodule Inventory.Test do
       # Spawn a subscriber that acquires the hold, then waits
       holder =
         spawn(fn ->
-          cell = Filament.Source.new(Filament.Observable.GenServer, server)
+          cell = Filament.Observable.GenServer.cell(server)
           subscriber = {self(), :holder, 0, make_ref()}
           {:ok, _} = Filament.Cell.subscribe(cell, subscriber, &Function.identity/1)
           :ok = GenServer.call(server, {:filament_hold, "last", 1, {self(), :holder}})

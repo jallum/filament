@@ -8,7 +8,7 @@ defmodule Filament.Test.Stub do
       view = Filament.Test.mount!(CartBadge, %{cart: stub})
 
   The hook constructs `MyServer.cell(stub)` (or
-  `Filament.Source.new(Filament.Observable.GenServer, stub)`) and reads it
+  `Filament.Observable.GenServer.cell(stub)`) and reads it
   with `use_value/2`.
 
   When the component also calls the server it subscribes to, keep the real

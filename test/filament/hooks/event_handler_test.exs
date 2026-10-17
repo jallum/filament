@@ -4,6 +4,7 @@ defmodule Filament.Hooks.EventHandlerTest do
   alias Filament.Fiber
   alias Filament.FiberTree
   alias Filament.Hooks
+  alias Filament.Hooks.Slots
   alias Filament.RenderContext
   alias Phoenix.LiveView.Lifecycle
 
@@ -36,7 +37,7 @@ defmodule Filament.Hooks.EventHandlerTest do
       with_render_ctx("root", %{"root" => fiber}, self(), fn ->
         Hooks.register_event_handler(fn -> :a end)
         Hooks.register_event_handler(fn -> :b end)
-        Hooks.current_context().new_event_handlers
+        Slots.current_context().new_event_handlers
       end)
 
     assert map_size(handlers) == 2
@@ -116,7 +117,7 @@ defmodule Filament.Hooks.EventHandlerTest do
     Hooks.register_event_handler(fn -> :click end)
     Hooks.register_event_handler(fn -> :submit end)
 
-    final_ctx = Hooks.current_context()
+    final_ctx = Slots.current_context()
     Process.delete(:filament_render_context)
 
     # Apply the new_event_handlers to the fiber (as reconciler would)
