@@ -65,9 +65,9 @@ Key points:
 - `prop(:name, :type, opts)` declares a typed attribute. Pass `required: true`
   to make the prop mandatory or `default: value` to make it optional.
 - `render/1` receives a plain map of props — pattern-match directly.
-- Inside `~F""" ... """`, use `{expression}` for interpolation and `@prop_name`
-  as a shorthand for the same — both resolve to local variables, not an assigns
-  map.
+- Inside `~F""" ... """`, use `{expression}` for interpolation. `@prop_name`
+  reads `assigns[:prop_name]`, so it needs `render(assigns)`; a `render/1`
+  that pattern-matches its props uses the bound variables instead.
 - Event attributes like `on_click={handler}` accept zero-arity or one-arity
   functions; Filament wires them to `phx-click` automatically.
 

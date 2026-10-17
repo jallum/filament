@@ -23,13 +23,12 @@ view = mount!(MyComponent, %{some_prop: "value"})
 ```
 
 `mount!/3` renders the component, runs any mount effects, and returns a `view`
-struct containing `rendered_html`, a live `fiber_tree`, and stubs. It raises if
-mounting fails.
-
-Use the non-bang `mount/3` when you need to assert on a failure:
+struct containing `rendered_html`, a live `fiber_tree`, and stubs. `mount/3`
+returns `{:ok, view}`. Both raise if the component does, as for a missing
+required prop:
 
 ```elixir
-assert {:error, reason} = mount(MyComponent, %{bad: :props})
+assert_raise ArgumentError, ~r/required prop/, fn -> mount(MyComponent, %{}) end
 ```
 
 ## Interacting with the view
@@ -157,8 +156,8 @@ test "shows item count" do
 end
 ```
 
-`Stub.start/1` takes a function that returns the initial state (the
-arg passed in is the subscription request, typically unused). It
+`Stub.start/1` takes a 1-arity function that returns the initial state
+(its argument is always `nil`). It
 returns `{:ok, pid}` where the pid implements the same
 `Filament.Cell` callbacks as `Filament.Observable.GenServer` — so any
 component that subscribes via `use_value/2` receives the stub's
@@ -231,8 +230,10 @@ test "count updates after async server push" do
 end
 ```
 
-It wakes on each message, and every `interval:` ms (default 50) for a view
-whose render reads something messages don't announce. On timeout
+It checks the condition again on each message, and every `interval:` ms
+(default 50) for a condition on something other than the view. A view
+renders only for Filament messages, so a value a render reads from
+elsewhere shows once something it subscribes to changes. On timeout
 (`timeout:`, default 1000 ms) it raises with the view's text.
 
 `eventually/2` retries any zero-arity assertion the same way, for

@@ -37,7 +37,9 @@ defmodule Filament.Observable do
   @doc """
   The current raw value, for subscribes, `Filament.Cell.current/2` and
   refreshes. Defaults to the whole state. Override it to publish part of
-  the state, or a value derived from it.
+  the state, or a value derived from it, and pass `notify_observers/1` that
+  same value, not the whole state: subscribers project whichever value
+  reaches them.
   """
   @callback handle_current(state :: term()) :: {:ok, value :: term(), new_state :: term()}
 

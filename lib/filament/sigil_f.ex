@@ -2,9 +2,9 @@ defmodule Filament.SigilF do
   @moduledoc """
   Implements the ~F sigil for compiling HEEx-style templates into VNode IR.
 
-  Templates use @foo to reference lexically-scoped variables (not an assigns map).
-  The template is compiled using a custom EEx engine that transforms @foo to bare
-  variable references.
+  Templates interpolate Elixir expressions with `{...}`. `@foo` reads
+  `assigns[:foo]` from an `assigns` variable in scope, as in
+  `def render(assigns)`.
   """
 
   @doc """
@@ -22,7 +22,7 @@ defmodule Filament.SigilF do
   defmacro sigil_F({:<<>>, _meta, [source]}, modifiers)
            when modifiers == [] or modifiers == ~c"noformat" do
     # Use VNodeCompiler to transform the template
-    # @foo becomes bare variable reference
+    # @foo becomes assigns[:foo]
     quoted = Filament.VNodeCompiler.compile(source, __CALLER__)
 
     # Wrap and return the quoted expression

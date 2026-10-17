@@ -29,8 +29,17 @@ defmodule Filament.LiveComponent do
         {:noreply, socket}
       end
 
-  This is a Phase 1 limitation. Phase 2 will add automatic forwarding via a
-  host LiveView helper.
+  Forwarding to every Filament LiveComponent on the page is safe: a message
+  that isn't a component's own is ignored by it.
+
+  ## Removing the component
+
+  LiveView tells a LiveComponent nothing when the parent stops rendering it,
+  so its tree is never unmounted: its `use_value` subscriptions last until
+  the parent LiveView exits, and its effect cleanups never run. Keep the
+  component rendered and switch what it shows through its props, or render
+  a component that comes and goes inside a `Filament.LiveView`, which
+  unmounts its tree when it terminates.
 
   ## `on_key`
 
