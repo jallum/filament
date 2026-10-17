@@ -229,6 +229,10 @@ defmodule Filament.Renderer do
   # closure as an event handler under the active fiber and replaces the
   # function value with a `{:wire_ref, ref_string}` marker. The web converter
   # consumes the marker and emits the corresponding `phx-*` attribute.
+  defp resolve_event_attr({key, value}) when key in [:on_key, "on_key"] and is_function(value) do
+    raise ArgumentError, "on_key must be written on the element as on_key={...}, not passed in an attribute spread"
+  end
+
   defp resolve_event_attr({key, value} = attr) do
     if is_function(value) and String.starts_with?(to_string(key), "on_") do
       wire_ref = Filament.Hooks.register_event_handler(value)
