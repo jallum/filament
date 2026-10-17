@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.6.0-rc.4] - 2026-10-17
+
+### Added
+
 - A `use_state` setter takes a function of the current value. A handler
   sees the value of the render that made it, and when two events reach the
   view before the first one's update is applied, both handlers saw the same
@@ -96,8 +110,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the undocumented `use_slot/1`, `commit_slot/2` and `current_context/0`,
   which the hooks are built from. See `use_identity/0` above.
 
-### Deprecated
-
 ### Removed
 
 - `Filament.Test.LiveView` and `Filament.Test.LiveView.Helpers`. Its
@@ -159,8 +171,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the effects the mount had queued. Effects queued by several renders
   before one now all run, each calling the cleanup of the run before it,
   and `put_props/2` with unchanged props doesn't render.
-
-### Security
 
 ## [0.6.0-rc.3] - 2026-10-14
 
