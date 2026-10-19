@@ -59,7 +59,9 @@ defmodule Filament.Test do
   # ── Public API ────────────────────────────────────────────────────────────
 
   @doc """
-  Mount `component` with `props`. Returns `{:ok, view}`.
+  Mount `component` with `props`. Returns `{:ok, view}`. As with `update/1`,
+  it renders until no Filament message is left, so state the mount's
+  effects set shows in the view.
 
   A view belongs to the process that mounts it: state and cell updates
   arrive in that process's mailbox, so mount one view per process.
@@ -100,7 +102,8 @@ defmodule Filament.Test do
       cells: cells
     }
 
-    {:ok, view}
+    # Rendered already: apply only what its effects sent.
+    {:ok, flush_messages(view, 2)}
   end
 
   @doc "Return the rendered HTML as a plain string (with HTML tags stripped)."
@@ -533,8 +536,7 @@ defmodule Filament.Test do
 
   defp flush_messages(view, pass) do
     case apply_waiting(view, false) do
-      {view, true} -> view |> rerender() |> flush_messages(pass + 1)
-      {view, false} when pass == 1 -> rerender(view)
+      {view, applied?} when applied? or pass == 1 -> view |> rerender() |> flush_messages(pass + 1)
       {view, false} -> view
     end
   end

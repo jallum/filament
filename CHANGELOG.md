@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `Filament.Test.put_props/2`, `update/1` and `mount/3` show the state the
+  render's effects set, as events already did. With no message waiting,
+  `put_props/2` and `update/1` rendered once and returned, leaving the
+  effects' updates in the mailbox, and `mount/3` returned before them; a
+  component that turns a prop into state with an effect showed the old
+  state until another `update/1` (#69).
+
 ### Security
 
 ## [0.6.0-rc.5] - 2026-10-17
