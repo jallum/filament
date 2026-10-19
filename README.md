@@ -177,7 +177,7 @@ refute render_text(view) =~ "Search commands"
 
 ```elixir
 # mix.exs
-{:filament, "~> 0.6.0-rc.5"}
+{:filament, "~> 0.6.0-rc.6"}
 ```
 
 Filament needs Elixir 1.18+, Erlang/OTP 27+ and Phoenix LiveView 1.2.

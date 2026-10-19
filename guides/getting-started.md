@@ -15,7 +15,7 @@ and a clear mental model of the Filament component lifecycle.
 
 ```elixir
 # mix.exs
-{:filament, "~> 0.6.0-rc.5"}
+{:filament, "~> 0.6.0-rc.6"}
 ```
 
 - Run `mix deps.get` and then `use Filament.Component` in any module where you
