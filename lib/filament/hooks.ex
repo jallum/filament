@@ -126,6 +126,9 @@ defmodule Filament.Hooks do
   - [dep1, dep2] — run when any dep changes (Kernel.== comparison), cleanup before re-run
   - :always — run on every render
 
+  A static (HTTP) render runs no effects: its tree is thrown away without
+  unmounting, so a cleanup would never run. The connected render runs them.
+
   Rules: call only at the top level of render/1.
   """
   @spec use_effect((-> (-> term()) | nil), deps :: [term()] | :always) :: :ok
@@ -167,7 +170,7 @@ defmodule Filament.Hooks do
   their own projections via `use_value/2`.
 
       # Parent
-      source = use_source(fn -> CartServer.cell(session_id) end)
+      source = use_source(fn -> CartServer.cell(CartServer.ensure_started(session_id)) end)
 
       <Child source={source} />
 

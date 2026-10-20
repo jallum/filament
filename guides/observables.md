@@ -117,10 +117,11 @@ end
 ```
 
 `use_cart_count/1` calls `use_cart/1`, which uses
-`use_source(fn -> Cart.Server.cell(session_id) end,
+`use_source(fn -> Cart.Server.cell(Cart.Server.ensure_started(session_id)) end,
 session_id)` internally. The key ensures a changed session does not reuse
-the previous cart. The hook returns `nil` when subscriptions are disabled;
-`use_cart_count/1` then supplies the disconnected value.
+the previous cart. The factory doesn't run on the static render, so the hook
+returns `nil` until the socket connects; `use_cart_count/1` then supplies the
+disconnected value.
 
 Components call the hook module's companion actions with the same session ID:
 

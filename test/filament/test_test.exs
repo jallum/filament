@@ -284,6 +284,56 @@ defmodule Filament.TestTest do
     assert render_text(view) =~ "42"
   end
 
+  defmodule StaticComp do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      prop(:server, :term, required: true)
+      prop(:test_pid, :any, required: true)
+
+      def render(%{server: server, test_pid: test_pid}) do
+        use_effect(fn -> send(test_pid, :effect_ran) end, [])
+
+        started =
+          use_source(fn ->
+            send(test_pid, :factory_called)
+            Filament.Source.new(Filament.Observable.GenServer, server)
+          end)
+
+        ready = Filament.Source.new(Filament.Observable.GenServer, server)
+
+        started_value =
+          use_value(started, fn
+            :disconnected -> :disconnected
+            s -> s
+          end)
+
+        ready_value =
+          use_value(ready, fn
+            :disconnected -> :disconnected
+            s -> s
+          end)
+
+        ~F"""
+        <p>{started_value} {ready_value}</p>
+        """
+      end
+    end
+  end
+
+  test "static: renders as an HTTP render does, starting nothing" do
+    {:ok, stub} = Stub.start(fn _req -> 42 end)
+    {:ok, view} = mount(StaticComp, %{server: stub, test_pid: self()}, static: true)
+
+    assert render_text(view) == "disconnected 42"
+    refute_received :factory_called
+    refute_received :effect_ran
+
+    Stub.push(stub, 99)
+    refute_receive {:cell_update, _, _}, 50
+  end
+
   test "stub push updates rendered output" do
     {:ok, stub} = Stub.start(fn _req -> 0 end)
     {:ok, view} = mount(ObservableComp.Observable, %{server: stub})

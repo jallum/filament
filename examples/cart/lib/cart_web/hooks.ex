@@ -45,7 +45,7 @@ defmodule CartWeb.Hooks do
     Server.remove_item(command_server(cart_ref), item_id)
   end
 
-  defp source_for(session_id) when is_binary(session_id), do: Server.cell(session_id)
+  defp source_for(session_id) when is_binary(session_id), do: Server.cell(Server.ensure_started(session_id))
   defp source_for(server), do: Source.new(Transport, server)
 
   defp source_for_value(nil), do: nil

@@ -109,6 +109,21 @@ assert view.rendered_html =~ ~s(data-id="42")
 `has_class?/3` raises if the selector matches no elements, which surfaces
 selector typos as loud failures rather than silent `false` returns.
 
+## The static render
+
+`mount/3` renders as a connected LiveView does. Pass `static: true` to render
+as the static (HTTP) render does instead: `use_value/2` reads each source's
+current value without subscribing, `use_source/1,2` factories aren't called
+and effects don't run. Use it to check what the first HTML shows and that
+the render starts nothing:
+
+```elixir
+{:ok, view} = mount(TodoList, %{}, static: true)
+assert view.rendered_html =~ "What needs to be done?"
+```
+
+The view holds that one render; there's no live process to send events to.
+
 ## Keyboard events
 
 `on_key` is Filament's window-level keyboard binding. Handlers receive the key

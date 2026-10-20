@@ -4,19 +4,15 @@ defmodule Cart.Server do
 
   def via_registry(session_id), do: {:via, Registry, {Cart.Registry, session_id}}
 
+  # Returns the registry name rather than the pid, so a source built from it
+  # follows the server across a restart.
   def ensure_started(session_id) do
-    case DynamicSupervisor.start_child(Cart.DynamicSupervisor, {__MODULE__, [name: via_registry(session_id)]}) do
-      {:ok, pid} -> pid
-      {:error, {:already_started, pid}} -> pid
-    end
-  end
+    name = via_registry(session_id)
 
-  # Override the default cell/1 from `use Filament.Observable.GenServer`
-  # so components can pass a session id directly. The source names the
-  # server through the registry, so its readers follow it across a restart.
-  def cell(session_id) when is_binary(session_id) do
-    ensure_started(session_id)
-    Filament.Observable.GenServer.cell(via_registry(session_id))
+    case DynamicSupervisor.start_child(Cart.DynamicSupervisor, {__MODULE__, [name: name]}) do
+      {:ok, _pid} -> name
+      {:error, {:already_started, _pid}} -> name
+    end
   end
 
   # Public API
