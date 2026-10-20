@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** a static (HTTP) render no longer calls `use_source/1,2`
+  factories, which could start a process per request that nothing stopped.
+  It returns `nil`, so that source's `use_value/2` gets `:disconnected`
+  until the socket connects; this applies to `Filament.LiveComponent` too.
+  `use_value/2` on a ready source still reads its current value, so
+  `static_subscribe: true` is safe with process-backed sources. A factory
+  that only looks up an existing source can pass the struct instead:
+  `use_source(MyServer.cell(name))` (#71).
+
 ### Deprecated
 
 ### Removed

@@ -177,11 +177,15 @@ defmodule Filament.Hooks do
         state         -> state.count
       end)
 
-  Returns `nil` when sources are disconnected (static HTTP renders with
-  `static_subscribe: false`). On subsequent
-  renders, reuses the cached handle if its underlying transport is still
-  reachable; calls the factory again otherwise (e.g. the GenServer behind
-  the source crashed).
+  A static HTTP render never calls the factory, since a factory may start a
+  process that nothing would stop once the render is thrown away: it returns
+  `nil`, and `use_value/2` gets `:disconnected`. A source passed directly is
+  returned, so its current value appears in the initial HTML. With
+  `static_subscribe: false`, `use_source/1` returns `nil` for either.
+
+  On subsequent renders, reuses the cached handle if its underlying transport
+  is still reachable; calls the factory again otherwise (e.g. the GenServer
+  behind the source crashed).
 
   The struct exposes the underlying transport data via `source.data` for
   components that need to invoke server actions in event handlers:
@@ -197,7 +201,7 @@ defmodule Filament.Hooks do
   def use_source(source_or_fn) when is_function(source_or_fn, 0) or is_struct(source_or_fn, Filament.Source) do
     {slot_index, previous, ctx} = use_slot(:uninitialized)
 
-    if ctx.sources == :disconnected do
+    if skip_source?(ctx, source_or_fn) do
       commit_slot(slot_index, :uninitialized)
       nil
     else
@@ -212,12 +216,14 @@ defmodule Filament.Hooks do
 
   When `key` changes, calls the factory again even if the previous source is
   reachable. Use this for factories that close over a changing resource ID.
+  Like `use_source/1`, a static HTTP render returns `nil` without calling the
+  factory.
   """
   @spec use_source((-> Filament.Source.t()), term()) :: Filament.Source.t() | nil
   def use_source(factory_fn, key) when is_function(factory_fn, 0) do
     {slot_index, previous, ctx} = use_slot(:uninitialized)
 
-    if ctx.sources == :disconnected do
+    if skip_source?(ctx, factory_fn) do
       commit_slot(slot_index, :uninitialized)
       nil
     else
@@ -226,6 +232,12 @@ defmodule Filament.Hooks do
       source
     end
   end
+
+  # A static render won't live, so it never calls a factory, which may start
+  # a process nothing would stop; a ready source still reads its current value.
+  defp skip_source?(%{sources: :subscribe}, _source_or_fn), do: false
+  defp skip_source?(%{sources: :current}, %Filament.Source{}), do: false
+  defp skip_source?(_ctx, _source_or_fn), do: true
 
   defp resolve_source_factory(factory_fn, {:cell_resolved, cached, key}, key) do
     if Filament.Cell.whereis(cached), do: cached, else: factory_fn.()

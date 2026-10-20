@@ -118,6 +118,40 @@ defmodule Filament.LiveComponentTest do
     end
   end
 
+  defmodule FactoryComp do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      prop(:test_pid, :any, required: true)
+
+      def render(%{test_pid: test_pid}) do
+        source =
+          use_source(fn ->
+            send(test_pid, :factory_called)
+            Filament.Source.new(Filament.Observable.GenServer, test_pid)
+          end)
+
+        ~F"""
+        <span>{inspect(source)}</span>
+        """
+      end
+    end
+  end
+
+  describe "update/2 — static render" do
+    test "a disconnected socket doesn't call use_source factories" do
+      socket = %{test_socket() | transport_pid: nil}
+      {:ok, socket} = Filament.LiveComponent.mount(socket)
+
+      assigns = %{id: "t", component: FactoryComp, test_pid: self()}
+      {:ok, socket} = Filament.LiveComponent.update(assigns, socket)
+
+      assert socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary() =~ "nil"
+      refute_received :factory_called
+    end
+  end
+
   describe "update/2 — re-render with new props" do
     test "reconciles with updated props" do
       {:ok, socket} = Filament.LiveComponent.mount(test_socket())

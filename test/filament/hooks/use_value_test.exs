@@ -472,6 +472,45 @@ defmodule Filament.Hooks.UseValueTest do
 
       assert walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary() =~ "<p>42</p>"
     end
+
+    test "a static render doesn't call a factory and reads a ready source's current value" do
+      {:ok, server} = Counter.start_link(42)
+      calls = :counters.new(1, [])
+
+      defmodule StaticSourcesComp do
+        @moduledoc false
+        use Filament.Component
+
+        defcomponent StaticSourcesComp do
+          prop(:server, :any, required: true)
+          prop(:calls, :any, required: true)
+
+          def render(%{server: server, calls: calls}) do
+            factory = fn ->
+              :counters.add(calls, 1, 1)
+              Filament.Source.new(Filament.Observable.GenServer, server)
+            end
+
+            started = use_source(factory)
+            keyed = use_source(factory, :key)
+            ready = use_source(Filament.Source.new(Filament.Observable.GenServer, server))
+            values = Enum.map([started, keyed, ready], &use_value(&1, fn v -> v end))
+            ~F"<p>{inspect({started, keyed, values})}</p>"
+          end
+        end
+      end
+
+      {_tree, walked, _} =
+        Reconciler.mount(StaticSourcesComp.StaticSourcesComp, %{server: server, calls: calls},
+          owner_pid: self(),
+          sources: :current
+        )
+
+      html = walked |> Filament.Web.to_iodata() |> IO.iodata_to_binary()
+      assert html =~ ~s|{nil, nil, [:disconnected, :disconnected, 42]}|
+      assert :counters.get(calls, 1) == 0
+      assert server |> cell_subscribers_in() |> map_size() == 0
+    end
   end
 
   describe "use_value/2 when the server behind a source restarts" do

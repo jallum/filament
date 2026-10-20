@@ -22,7 +22,9 @@ defmodule Filament.LiveView do
   which is beneficial for SEO and perceived performance. The static render
   doesn't subscribe: it calls `handle_current/1`, not `handle_subscribe/2`, and
   leaves no subscription behind on the HTTP connection's process. The
-  connected process subscribes on mount.
+  connected process subscribes on mount. It doesn't call `use_source/1,2`
+  factories either, so a factory that starts a process starts it only once
+  the socket connects; its `use_value` returns `:disconnected` until then.
 
   When `false`, all `use_value` calls return their `:disconnected`
   value during the static render; real data appears after the WebSocket connects.

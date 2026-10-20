@@ -77,9 +77,9 @@ end)
 
 `use_source/1` binds a reactive source for the calling fiber and returns
 a stable `%Filament.Source{}` struct. HTTP renders read each source's
-current value without subscribing; with `static_subscribe: false` they
-don't read sources, and `use_source/1` returns `nil` until the WebSocket
-connects.
+current value without subscribing, but don't call factories: a factory's
+`use_source/1` returns `nil` until the WebSocket connects. With
+`static_subscribe: false` they don't read sources at all.
 
 `use_value/2` subscribes this fiber's hook slot to the source and
 returns the projected value. The projection function receives

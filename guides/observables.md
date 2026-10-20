@@ -155,10 +155,10 @@ todos = use_value(source, fn
 end)
 ```
 
-The server starts on the first render that reads sources. The HTTP render
-reads sources by default, and a server it started would outlive the request,
-so a view whose factory starts a server per visitor sets
-`static_subscribe: false`. Resource teardown is a separate lifecycle choice;
+The server starts on the first connected render. The HTTP render never calls
+a factory, since a server it started would outlive the request: `use_source/1`
+returns `nil` there, and `use_value/2` calls the projection with
+`:disconnected`. Resource teardown is a separate lifecycle choice;
 unsubscribing a reader does not automatically stop the server.
 
 This eliminates the need to start the server in `mount/3` and thread it as a prop —
@@ -166,15 +166,15 @@ the LiveView reduces to:
 
 ```elixir
 defmodule TodoWeb.TodoLive do
-  use Filament.LiveView, static_subscribe: false
+  use Filament.LiveView
   def root_component, do: TodoWeb.Components.TodoList
 end
 ```
 
-By default the HTTP render reads each source's current value without
+By default the HTTP render reads each ready source's current value without
 subscribing, and the WebSocket process subscribes on mount. With
-`static_subscribe: false`, `use_source/1` returns `nil` during HTTP rendering
-and `use_value/2` calls the projection with `:disconnected`.
+`static_subscribe: false`, `use_value/2` calls the projection with
+`:disconnected` for every source during HTTP rendering.
 
 ## Projections and change-or-bust
 
@@ -258,7 +258,8 @@ Phoenix LiveView renders each page twice: once over HTTP, then again in the
 WebSocket process. `use Filament.LiveView` defaults to `static_subscribe: true`,
 under which the HTTP render reads each source's current value — the server's
 `handle_current/1` — so the page arrives with real data. It doesn't subscribe:
-`handle_subscribe/2` isn't called and nothing outlives the request. Under HTTP
+`handle_subscribe/2` isn't called, `use_source/1,2` factories aren't called,
+and nothing outlives the request. Under HTTP
 keep-alive the static render runs in the connection's process, which may live
 on serving other requests, so a subscription there would linger. A presence
 server therefore counts only WebSocket viewers.
@@ -267,7 +268,7 @@ With `static_subscribe: false`, the HTTP render doesn't read sources at all:
 `use_source/1` returns `nil` and `use_value/2` returns its `:disconnected`
 value (so you might show "Connecting…"), then the view re-renders with live data
 when the WebSocket connects. Use it when reading during the HTTP render is
-unwanted, for example a factory that starts a server per visitor.
+unwanted.
 
 ## Mutations from event closures
 
