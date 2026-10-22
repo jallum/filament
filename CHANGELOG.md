@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.6.0-rc.7] - 2026-10-22
+
+### Added
+
 - `use_navigate/0` returns a function a component calls from an event
   handler or effect to change the page's URL, with `<.link>`'s options:
   `patch:`, `navigate:` or `href:`, and `replace:`. `Filament.LiveView`
@@ -40,10 +54,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     rather than overriding `cell/1` to ensure-start it, as the guides used
     to suggest.
 
-### Deprecated
-
-### Removed
-
 ### Fixed
 
 - A `Filament.LiveComponent`'s events reach it. Its elements carried no
@@ -57,8 +67,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `Filament.LiveComponent`'s static render no longer runs its effects.
   Phoenix runs a component's `:after_render` hooks during the static render,
   and the cleanups never ran (#71).
-
-### Security
 
 ## [0.6.0-rc.6] - 2026-10-19
 
