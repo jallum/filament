@@ -230,14 +230,19 @@ defmodule Filament.LiveView do
       @doc """
       Phoenix LiveView info handler.
 
-      Applies Filament's own messages — `use_state` setters and cell transport
-      updates — and re-renders from the root when they change the tree. Other
-      messages are logged and ignored, as Phoenix does for a view without
-      `handle_info/2`. A view that handles its own messages ends with
+      Applies Filament's own messages — `use_state` setters, cell transport
+      updates and `Filament.Hooks.use_navigate/0`'s navigations — and
+      re-renders from the root when they change the tree. Other messages are
+      logged and ignored, as Phoenix does for a view without `handle_info/2`.
+      A view that handles its own messages ends with
       `def handle_info(msg, socket), do: super(msg, socket)`.
       """
       def handle_info(message, socket) when elem(message, 0) in unquote(@host_messages) do
         {:noreply, Filament.LiveView.apply_to_socket(socket, message)}
+      end
+
+      def handle_info({:filament_navigate, opts}, socket) do
+        {:noreply, Filament.LiveView.navigate(socket, opts)}
       end
 
       def handle_info(message, socket) do
@@ -336,6 +341,72 @@ defmodule Filament.LiveView do
     after
       Process.delete(key)
     end
+  end
+
+  @doc """
+  Navigates as `Filament.Hooks.use_navigate/0`'s function was asked to:
+  `patch:`, `navigate:` or `href:`, and `replace:`.
+
+  `Filament.LiveView` calls it for its components. A LiveView of your own
+  that hosts a `Filament.LiveComponent` calls it from `handle_info/2`:
+
+      def handle_info({:filament_navigate, opts}, socket),
+        do: {:noreply, Filament.LiveView.navigate(socket, opts)}
+
+  A `patch:` marks the next `handle_params/3` as the page's own; see
+  `own_patch?/1`.
+  """
+  @spec navigate(Socket.t(), keyword()) :: Socket.t()
+  def navigate(socket, opts) do
+    case Filament.Hooks.navigation!(opts) do
+      {:patch, to, replace} ->
+        socket
+        |> expect_own_patch()
+        |> Phoenix.LiveView.push_patch(to: to, replace: replace)
+
+      {:navigate, to, replace} ->
+        Phoenix.LiveView.push_navigate(socket, to: to, replace: replace)
+
+      {:href, "/" <> _ = to, false} ->
+        Phoenix.LiveView.redirect(socket, to: to)
+
+      {:href, url, false} ->
+        Phoenix.LiveView.redirect(socket, external: url)
+    end
+  end
+
+  @doc """
+  Whether the URL `handle_params/3` is handling is the page's own patch, from
+  `navigate/2` (a component's `use_navigate/0`), rather than the browser's:
+  Back, Forward, a link or the first load.
+
+  A page that keeps its state in both a process and the URL uses it to tell
+  the echo of its own change, which it already has, from one to apply:
+
+      def handle_params(params, _uri, socket) do
+        own = Filament.LiveView.own_patch?(socket)
+        {:noreply, Filament.LiveView.put_props(socket, params: params, own_patch: own)}
+      end
+  """
+  @spec own_patch?(Socket.t()) :: boolean()
+  def own_patch?(socket), do: socket.private[:filament_own_patch] == true
+
+  # Phoenix calls `handle_params/3` for a patch before anything else reaches
+  # the view, so the next one is the patch's. The hook is attached on the
+  # first patch, not at mount: any `handle_params` hook makes Phoenix require
+  # a view mounted at the router, and a patch already does.
+  defp expect_own_patch(socket) do
+    socket =
+      if Map.has_key?(socket.private, :filament_own_patch),
+        do: socket,
+        else: Phoenix.LiveView.attach_hook(socket, :filament_own_patch, :handle_params, &hear_patch/3)
+
+    Phoenix.LiveView.put_private(socket, :filament_own_patch, :expected)
+  end
+
+  defp hear_patch(_params, _uri, socket) do
+    own = socket.private.filament_own_patch == :expected
+    {:cont, Phoenix.LiveView.put_private(socket, :filament_own_patch, own)}
   end
 
   @doc """

@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `use_navigate/0` returns a function a component calls from an event
+  handler or effect to change the page's URL, with `<.link>`'s options:
+  `patch:`, `navigate:` or `href:`, and `replace:`. `Filament.LiveView`
+  applies it, so a component needs no `handle_info/2` of the view's to
+  navigate; a `Filament.LiveComponent`'s host applies it with
+  `Filament.LiveView.navigate/2`. `Filament.LiveView.own_patch?/1` tells
+  `handle_params/3` the page's own patch from the browser's Back, Forward
+  or a link, and `Filament.Test.navigations/1` returns what a view's
+  components asked for.
 - `Filament.Test.mount/3` takes `static: true` to render as a LiveView's
   static (HTTP) render does, for checking a page's initial HTML and that
   its static render starts nothing.

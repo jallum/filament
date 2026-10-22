@@ -255,6 +255,49 @@ use_effect(fn ->
 end, [id])
 ```
 
+A static (HTTP) render runs no effects; the connected render does.
+
+## use_navigate
+
+```elixir
+navigate = use_navigate()
+navigate.(patch: "/?page=2")
+```
+
+Returns a function that asks the page to change its URL. It takes the
+options Phoenix's `<.link>` does:
+
+- `patch: path` — the URL changes and the LiveView stays
+  (`push_patch`); its `handle_params/3` hears the new URL.
+- `navigate: path` — another LiveView in the same `live_session`
+  (`push_navigate`).
+- `href: url` — a full page load (`redirect`); a URL not starting with
+  `/` is external.
+- `replace: true` — with `patch:` or `navigate:`, replaces the current
+  history entry instead of adding one.
+
+Call it from an event handler or an effect, never during render. It sends
+the page a message, so the navigation happens once the current event is
+done. `Filament.LiveView` applies it; no `handle_info/2` of your own is
+needed.
+
+The URL comes back to components as props: the view's `handle_params/3`
+puts what they need with `Filament.LiveView.put_props/2`. A page that keeps
+its state both in a process and in the URL can tell the echo of its own
+patch from the browser's Back, Forward or a link with
+`Filament.LiveView.own_patch?/1`:
+
+```elixir
+def handle_params(params, _uri, socket) do
+  own = Filament.LiveView.own_patch?(socket)
+  {:noreply, Filament.LiveView.put_props(socket, chips: params["c"], own_patch: own)}
+end
+```
+
+In a `Filament.LiveComponent`, the navigation arrives at the host
+LiveView, which applies it with `Filament.LiveView.navigate/2`; see
+`Filament.LiveComponent`.
+
 ## Composing hooks into custom hooks
 
 Any module function that calls `use_state`, `use_value`, or `use_effect`
@@ -445,4 +488,4 @@ contract.
 ## API reference
 
 See `Filament.Hooks` for the full `@spec` signatures of `use_state/1`,
-`use_source/1`, `use_value/2`, and `use_effect/2`.
+`use_source/1`, `use_value/2`, `use_effect/2` and `use_navigate/0`.

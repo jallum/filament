@@ -32,6 +32,15 @@ defmodule Filament.LiveComponent do
   Forwarding to every Filament LiveComponent on the page is safe: a message
   that isn't a component's own is ignored by it.
 
+  ## Navigation
+
+  A navigation a component asks for with `Filament.Hooks.use_navigate/0`
+  arrives at the parent too, as `{:filament_navigate, opts}`. The parent
+  applies it to its own socket:
+
+      def handle_info({:filament_navigate, opts}, socket),
+        do: {:noreply, Filament.LiveView.navigate(socket, opts)}
+
   ## Removing the component
 
   LiveView tells a LiveComponent nothing when the parent stops rendering it,

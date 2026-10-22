@@ -97,7 +97,9 @@ defmodule Filament.MixProject do
       {:phoenix_live_view, "~> 1.2.0"},
       {:phoenix_html, "~> 4.0"},
       {:plug, "~> 1.16"},
-      {:plug_cowboy, "~> 2.7", only: :test}
+      {:plug_cowboy, "~> 2.7", only: :test},
+      # Phoenix.LiveViewTest parses HTML with it
+      {:lazy_html, "~> 0.1", only: :test}
     ]
   end
 

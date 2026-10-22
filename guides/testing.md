@@ -124,6 +124,17 @@ assert view.rendered_html =~ "What needs to be done?"
 
 The view holds that one render; there's no live process to send events to.
 
+## Navigation
+
+A view in a test has no page to navigate. `navigations/1` returns what its
+components asked for with `use_navigate/0` since the last call, oldest
+first:
+
+```elixir
+view = click!(view, "button.next")
+assert navigations(view) == [[patch: "/?page=2"]]
+```
+
 ## Keyboard events
 
 `on_key` is Filament's window-level keyboard binding. Handlers receive the key

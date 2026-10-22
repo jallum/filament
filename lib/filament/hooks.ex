@@ -55,6 +55,74 @@ defmodule Filament.Hooks do
   end
 
   @doc """
+  Returns a function that asks the page to change its URL, taking the same
+  options as Phoenix's `<.link>`:
+
+    * `patch: path` - the URL changes and the LiveView stays, as
+      `Phoenix.LiveView.push_patch/2`; its `handle_params/3` hears the new
+      URL, and `Filament.LiveView.own_patch?/1` tells it apart from the
+      browser's Back, Forward or a link
+    * `navigate: path` - another LiveView in the same `live_session`, as
+      `Phoenix.LiveView.push_navigate/2`
+    * `href: url` - a full page load, as `Phoenix.LiveView.redirect/2`; a
+      URL not starting with `/` is external
+    * `replace: true` - with `patch:` or `navigate:`, replaces the browser's
+      current history entry instead of adding one
+
+  Call it from an event handler or an effect, not during render. It sends
+  the page a message, so the navigation happens once the current event or
+  render is done; a static (HTTP) render runs neither, so it never navigates.
+
+      navigate = use_navigate()
+      next_page = fn -> navigate.(patch: "/?page=2") end
+      ~F"<button on_click={next_page}>Next</button>"
+
+  `Filament.LiveView` applies it. A `Filament.LiveComponent`'s host LiveView
+  applies it with `Filament.LiveView.navigate/2`; see `Filament.LiveComponent`.
+  In tests, `Filament.Test.navigations/1` returns what was asked for.
+  """
+  @spec use_navigate() :: (keyword() -> :ok)
+  def use_navigate do
+    ctx =
+      current_context() ||
+        raise ArgumentError, "hook called outside a render pass — hooks may only be called from render/1"
+
+    owner_pid = ctx.owner_pid
+
+    fn opts when is_list(opts) ->
+      _ = navigation!(opts)
+
+      if is_nil(owner_pid) do
+        raise ArgumentError,
+              "use_navigate function called but the render had no :owner_pid; " <>
+                "Reconciler.mount/3 was invoked without the owner_pid: self() option."
+      end
+
+      send(owner_pid, {:filament_navigate, opts})
+      :ok
+    end
+  end
+
+  # `use_navigate/0`'s options as `{kind, to, replace}`. A caller's mistake
+  # raises where it navigates, not later in the page.
+  @doc false
+  @spec navigation!(keyword()) :: {:patch | :navigate | :href, String.t(), boolean()}
+  def navigation!(opts) do
+    {targets, rest} = Keyword.split(opts, [:patch, :navigate, :href])
+    {replace, rest} = Keyword.pop(rest, :replace, false)
+
+    case {targets, rest} do
+      {[{kind, to}], []} when is_binary(to) and is_boolean(replace) and not (kind == :href and replace) ->
+        {kind, to, replace}
+
+      _ ->
+        raise ArgumentError,
+              "expected one of patch:, navigate: or href: with a path, and replace: " <>
+                "only with patch: or navigate:, got: #{inspect(opts)}"
+    end
+  end
+
+  @doc """
   Returns the current state value and a setter function.
 
   On the first render of this fiber, returns {initial, setter}.
