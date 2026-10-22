@@ -13,7 +13,7 @@ defmodule Filament.Source do
 
   Application code accesses the underlying server via `source.data`:
 
-      source = use_source(fn -> Cart.Server.cell(session_id) end)
+      source = use_source(fn -> Cart.Server.cell(Cart.Server.ensure_started(session_id)) end)
       cart   = use_value(source, fn :disconnected -> nil; s -> s end)
       on_click = fn -> Cart.Server.add_item(source.data, item) end
 

@@ -77,9 +77,9 @@ end)
 
 `use_source/1` binds a reactive source for the calling fiber and returns
 a stable `%Filament.Source{}` struct. HTTP renders read each source's
-current value without subscribing; with `static_subscribe: false` they
-don't read sources, and `use_source/1` returns `nil` until the WebSocket
-connects.
+current value without subscribing, but don't call factories: a factory's
+`use_source/1` returns `nil` until the WebSocket connects. With
+`static_subscribe: false` they don't read sources at all.
 
 `use_value/2` subscribes this fiber's hook slot to the source and
 returns the projected value. The projection function receives
@@ -118,7 +118,7 @@ actions resolve the stable session ID for commands. Components handle neither
 ```elixir
 # In CartWeb.Hooks
 def use_cart(session_id) do
-  case use_source(fn -> Cart.Server.cell(session_id) end, session_id) do
+  case use_source(fn -> Cart.Server.cell(Cart.Server.ensure_started(session_id)) end, session_id) do
     nil -> nil
     source -> source.data
   end
@@ -141,8 +141,8 @@ end
 count = use_cart_count(session_id)
 on_click={fn -> CartWeb.Hooks.add_item(session_id, item) end}
 
-# Component owns the server lifecycle — no `cell/1` override needed; the
-# default constructor wraps any server reference
+# Component owns the server lifecycle; the default constructor wraps any
+# server reference
 source = use_source(fn ->
   {:ok, pid} = Todo.Store.start_link([])
   Todo.Store.cell(pid)
@@ -159,6 +159,8 @@ end)
 Passing `session_id` as a prop lets each child apply its own domain hook
 without repeating the factory code or touching transport internals. The
 supervised `ensure_started` lookup is idempotent, so the hooks agree on one cart.
+Both factories run only once the view is live: a static render starts neither
+the session's cart nor the todo store.
 
 ### Projection runs client-side and can close over local state
 

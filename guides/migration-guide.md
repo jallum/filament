@@ -140,8 +140,9 @@ Key differences from the LiveView template:
   the `%Filament.Source{}` struct Filament expects.
 - `use_value(source, fn :disconnected -> nil; s -> s end)` subscribes this
   component to the source and returns the current projected value. The
-  function receives `:disconnected` during HTTP renders and returns a
-  safe default.
+  function receives `:disconnected` when the source can't be read, such as
+  a `use_source/1,2` factory's source on the static (HTTP) render, and
+  returns a safe default.
 - `~F"""` templates use `{expression}` interpolation and `{for ... do}` / `{end}`
   loops instead of `<%= %>` and `<% %>`.
 - The component re-renders automatically when `notify_observers/1` is called on
@@ -157,7 +158,7 @@ same underlying server, each with its own projection slot:
 ```elixir
 # Parent: bind once with use_source/1
 def render(%{session_id: session_id}) do
-  source = use_source(fn -> MyApp.CartServer.cell(session_id) end)
+  source = use_source(fn -> MyApp.CartServer.cell(MyApp.CartServer.ensure_started(session_id)) end)
 
   ~F"""
   <CartBadge source={source} />
@@ -259,7 +260,7 @@ in an event handler, reach through `source.data`.
 count = use_observable(CartServer, fn :disconnected -> 0; s -> s.count end)
 
 # After
-source = use_source(fn -> CartServer.cell(session_id) end, session_id)
+source = use_source(fn -> CartServer.cell(CartServer.ensure_started(session_id)) end, session_id)
 count  = use_value(source, fn :disconnected -> 0; s -> s.count end)
 on_click = fn -> CartServer.add_item(source.data, item) end
 ```

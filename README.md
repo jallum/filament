@@ -11,7 +11,7 @@ defmodule CartWeb.Hooks do
 
   # The factory and its identity live in one domain hook.
   def use_cart(cart_ref) do
-    case use_source(fn -> Cart.Server.cell(cart_ref) end, cart_ref) do
+    case use_source(fn -> Cart.Server.cell(Cart.Server.ensure_started(cart_ref)) end, cart_ref) do
       nil -> nil
       source -> source.data
     end

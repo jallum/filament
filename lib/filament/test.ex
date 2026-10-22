@@ -79,16 +79,25 @@ defmodule Filament.Test do
 
       The key is the server as the source holds it: the pid, name or
       `{:via, ...}` tuple passed to `cell/1`.
+
+    * `:static` - `true` renders as a LiveView's static (HTTP) render does:
+      `use_value/2` reads each source's current value without subscribing,
+      `use_source/1,2` factories aren't called, and effects don't run. Use it
+      to check a page's initial HTML and that its static render starts
+      nothing. The view holds that one render; there is no live process
+      behind it to send events to.
   """
   @spec mount(component :: module(), props :: map(), opts :: keyword()) :: {:ok, t()}
   def mount(component, props, opts \\ []) do
     owner_pid = self()
     cells = Map.new(Keyword.get(opts, :cells, %{}))
+    static? = Keyword.get(opts, :static, false)
+    sources = if static?, do: :current, else: :subscribe
 
     {tree, rendered, pending_effects} =
-      Filament.Reconciler.mount(component, props, owner_pid: owner_pid, cells: cells)
+      Filament.Reconciler.mount(component, props, owner_pid: owner_pid, cells: cells, sources: sources)
 
-    tree = run_effects(tree, pending_effects)
+    tree = if static?, do: tree, else: run_effects(tree, pending_effects)
 
     html = walked_to_string(rendered)
 
@@ -103,7 +112,7 @@ defmodule Filament.Test do
     }
 
     # Rendered already: apply only what its effects sent.
-    {:ok, flush_messages(view, 2)}
+    if static?, do: {:ok, view}, else: {:ok, flush_messages(view, 2)}
   end
 
   @doc "Return the rendered HTML as a plain string (with HTML tags stripped)."

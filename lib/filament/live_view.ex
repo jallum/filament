@@ -22,7 +22,9 @@ defmodule Filament.LiveView do
   which is beneficial for SEO and perceived performance. The static render
   doesn't subscribe: it calls `handle_current/1`, not `handle_subscribe/2`, and
   leaves no subscription behind on the HTTP connection's process. The
-  connected process subscribes on mount.
+  connected process subscribes on mount. It doesn't call `use_source/1,2`
+  factories either, so a factory that starts a process starts it only once
+  the socket connects; its `use_value` returns `:disconnected` until then.
 
   When `false`, all `use_value` calls return their `:disconnected`
   value during the static render; real data appears after the WebSocket connects.
@@ -484,10 +486,13 @@ defmodule Filament.LiveView do
   end
 
   # Effects run after LiveView renders, so several renders before one, as a
-  # mount and `handle_params/3` are, each add theirs.
+  # mount and `handle_params/3` are, each add theirs. A static render drops
+  # them: Phoenix runs a LiveComponent's `:after_render` hooks during it, and
+  # its tree is thrown away without running cleanups.
   @doc false
   def assign_render(socket, tree, rendered, pending_effects) do
     queued = Map.get(socket.assigns, :_filament_pending_effects, [])
+    pending_effects = if Phoenix.LiveView.connected?(socket), do: pending_effects, else: []
 
     socket
     |> Phoenix.Component.assign(:_filament_tree, tree)

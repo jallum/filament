@@ -132,11 +132,11 @@ defmodule Filament.Observable.GenServer do
           source = use_source(fn -> __MODULE__.cell(server) end)
           server = source.data
 
-      Override if you want a different default (e.g. ensure-started lookup):
+      Components call `cell/1` during render, including a static (HTTP)
+      render, so keep it free of side effects. Start a server from a
+      `use_source/1,2` factory, which only runs once the view is live:
 
-          def cell(session_id) do
-            Filament.Observable.GenServer.cell(ensure_started(session_id))
-          end
+          source = use_source(fn -> __MODULE__.cell(ensure_started(session_id)) end, session_id)
       """
       @spec cell(term()) :: Filament.Source.t()
       def cell(server), do: Filament.Observable.GenServer.cell(server)

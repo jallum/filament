@@ -9,13 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Filament.Test.mount/3` takes `static: true` to render as a LiveView's
+  static (HTTP) render does, for checking a page's initial HTML and that
+  its static render starts nothing.
+
 ### Changed
+
+- **Breaking:** a static (HTTP) render has no side effects (#71). A static
+  render's tree is thrown away without unmounting, and under HTTP/2 Bandit
+  runs each request in a process that exits `:normal`, so a process linked
+  to it outlived the request for good.
+  - It no longer calls `use_source/1,2` factories. They return `nil`, so
+    that source's `use_value/2` gets `:disconnected` until the socket
+    connects. `use_value/2` on a ready source still reads its current
+    value, so `static_subscribe: true` is safe with process-backed sources.
+    A factory that only looks up an existing source can pass the struct
+    instead: `use_source(MyServer.cell(name))`.
+  - Keep `cell/1` free of side effects: components call it during render,
+    including the static one. Start a server from the factory instead,
+    `use_source(fn -> MyServer.cell(MyServer.ensure_started(id)) end, id)`,
+    rather than overriding `cell/1` to ensure-start it, as the guides used
+    to suggest.
 
 ### Deprecated
 
 ### Removed
 
 ### Fixed
+
+- A `Filament.LiveComponent`'s static render no longer runs its effects.
+  Phoenix runs a component's `:after_render` hooks during the static render,
+  and the cleanups never ran (#71).
 
 ### Security
 

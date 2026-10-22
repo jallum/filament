@@ -118,6 +118,57 @@ defmodule Filament.LiveComponentTest do
     end
   end
 
+  defmodule FactoryComp do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      prop(:test_pid, :any, required: true)
+
+      def render(%{test_pid: test_pid}) do
+        use_effect(fn -> send(test_pid, :effect_ran) end, [])
+
+        source =
+          use_source(fn ->
+            send(test_pid, :factory_called)
+            Filament.Source.new(Filament.Observable.GenServer, test_pid)
+          end)
+
+        ~F"""
+        <span>{inspect(source)}</span>
+        """
+      end
+    end
+  end
+
+  describe "update/2 — static render" do
+    # Phoenix runs a LiveComponent's :after_render hooks during the static
+    # render, so its effects must not be queued.
+    test "a disconnected socket calls no use_source factories and runs no effects" do
+      socket = %{test_socket() | transport_pid: nil}
+      {:ok, socket} = Filament.LiveComponent.mount(socket)
+
+      assigns = %{id: "t", component: FactoryComp, test_pid: self()}
+      {:ok, socket} = Filament.LiveComponent.update(assigns, socket)
+      _socket = Filament.LiveView.run_pending_effects(socket)
+
+      assert socket.assigns._filament_rendered |> Safe.to_iodata() |> IO.iodata_to_binary() =~ "nil"
+      refute_received :factory_called
+      refute_received :effect_ran
+    end
+
+    test "a connected socket runs its effects" do
+      {:ok, socket} = Filament.LiveComponent.mount(test_socket())
+
+      assigns = %{id: "t", component: FactoryComp, test_pid: self()}
+      {:ok, socket} = Filament.LiveComponent.update(assigns, socket)
+      _socket = Filament.LiveView.run_pending_effects(socket)
+
+      assert_received :factory_called
+      assert_received :effect_ran
+    end
+  end
+
   describe "update/2 — re-render with new props" do
     test "reconciles with updated props" do
       {:ok, socket} = Filament.LiveComponent.mount(test_socket())

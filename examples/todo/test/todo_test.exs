@@ -58,6 +58,15 @@ defmodule Todo.Test do
       refute view.rendered_html =~ "<li"
     end
 
+    # The store is linked to the process that starts it.
+    test "the static render shows the form and starts no store" do
+      {:links, before} = Process.info(self(), :links)
+      {:ok, view} = mount(TodoList, %{}, static: true)
+
+      assert view.rendered_html =~ "What needs to be done?"
+      assert Process.info(self(), :links) == {:links, before}
+    end
+
     test "adding a todo renders it in the list" do
       {:ok, view} = mount(TodoList, %{})
       {:ok, view} = submit(view, "form", %{"text" => "Buy milk"})

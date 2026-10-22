@@ -124,17 +124,13 @@ source = Cart.Server.cell(Cart.Server)
 # %Filament.Source{transport: Filament.Observable.GenServer, data: Cart.Server}
 ```
 
-Servers commonly override `cell/1` to take a domain identifier and
-ensure-start the underlying process:
+`cell/1` only builds the struct. Components call it during render, including
+a static (HTTP) render, so keep it free of side effects. A server started on
+demand is started from a `use_source/1,2` factory, which runs only once the
+view is live:
 
 ```elixir
-defmodule Cart.Server do
-  use Filament.Observable.GenServer
-
-  def cell(session_id) when is_binary(session_id) do
-    Filament.Observable.GenServer.cell(ensure_started(session_id))
-  end
-end
+source = use_source(fn -> Cart.Server.cell(Cart.Server.ensure_started(session_id)) end, session_id)
 ```
 
 ## The `use_value/2` hook
