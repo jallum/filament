@@ -1101,6 +1101,20 @@ defmodule Filament.TagEngine do
         [{name, true}]
     end)
     |> Enum.flat_map(&transform_event_attr_for_vnode/1)
+    |> Kernel.++(event_target_attr(attrs))
+  end
+
+  # Inside a `Filament.LiveComponent`, an element's events must name the
+  # component, or LiveView sends them to the parent LiveView. `on_key`'s hook
+  # pushes to its own element, which needs no target in the browser, but
+  # `Phoenix.LiveViewTest` routes a hook's event by it. An explicit
+  # `phx-target` is kept.
+  defp event_target_attr(attrs) do
+    events? = Enum.any?(attrs, fn {name, _, _} -> is_binary(name) and String.starts_with?(name, "on_") end)
+
+    if events? and not List.keymember?(attrs, "phx-target", 0),
+      do: [{"phx-target", quote(do: Filament.Hooks.event_target())}],
+      else: []
   end
 
   # A literal attribute value is HTML source, as in HEEx: its entities are
@@ -1125,9 +1139,9 @@ defmodule Filament.TagEngine do
     # list at element-build time.
     # Match legacy HTMLEngine convention: `data-filament-wire` carries the
     # raw `fiber_id:slot` ref without the `filament:` prefix. The Filament
-    # JS hook on the client side prepends it before calling pushEvent;
+    # JS hook on the client side prepends it before pushing the event;
     # `Filament.Test.key_down/2` does the same. The `id` attr is the same
-    # raw ref so the hook and element id stay aligned.
+    # raw ref, prefixed with the component's id inside a LiveComponent.
     group_ast =
       quote generated: true do
         case unquote(v) do
@@ -1147,7 +1161,10 @@ defmodule Filament.TagEngine do
                 handler.(params["key"], mods)
               end)
 
-            [{"phx-hook", "FilamentKey"}, {"data-filament-wire", wire}, {"id", wire}]
+            # Each tree's refs start at "root", so inside a LiveComponent the
+            # id is prefixed with the component's, for one id per page.
+            id = with cid when is_integer(cid) <- Filament.Hooks.event_target(), do: "#{cid}:#{wire}"
+            [{"phx-hook", "FilamentKey"}, {"data-filament-wire", wire}, {"id", id || wire}]
         end
       end
 

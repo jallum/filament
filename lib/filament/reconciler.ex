@@ -21,6 +21,9 @@ defmodule Filament.Reconciler do
     * `:cells` - `%{server => stub_pid}`: a `Filament.Observable.GenServer` source
       for `server` subscribes to and reads `stub_pid` instead (default: `%{}`).
       `Filament.Test.mount/3` passes its `:cells` option here.
+    * `:event_target` - the LiveComponent id that elements with `on_*`
+      events target, as their `phx-target`; `nil` sends them to the
+      LiveView (default: `nil`)
   """
   @spec mount(module(), map(), keyword()) ::
           {fiber_tree(), walked_vnode(), list()}
@@ -53,6 +56,7 @@ defmodule Filament.Reconciler do
       owner_pid: Keyword.get(opts, :owner_pid),
       sources: Keyword.get(opts, :sources, :subscribe),
       cells: Keyword.get(opts, :cells, %{}),
+      event_target: Keyword.get(opts, :event_target),
       target: Keyword.get(opts, :target, Filament.VNode)
     }
 

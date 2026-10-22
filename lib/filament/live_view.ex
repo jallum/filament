@@ -549,9 +549,15 @@ defmodule Filament.LiveView do
   # the way its mount did.
   defp render_root(socket, tree, props) do
     sources = Map.get(socket.assigns, :_filament_sources, :subscribe)
+    event_target = Map.get(socket.assigns, :_filament_event_target)
 
     {tree, rendered, pending_effects} =
-      Reconciler.update(tree, "root", props, owner_pid: self(), target: Filament.Web, sources: sources)
+      Reconciler.update(tree, "root", props,
+        owner_pid: self(),
+        target: Filament.Web,
+        sources: sources,
+        event_target: event_target
+      )
 
     assign_render(socket, tree, rendered, pending_effects)
   end

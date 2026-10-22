@@ -11,8 +11,11 @@ defmodule Filament.Experimental.Hooks do
 
   @doc """
   Registers an event handler and returns a stable wire ref for use as a `data-ref`
-  attribute. JS hooks send events to this fiber via `this.pushEvent(ref, payload)`;
-  Filament dispatches directly to the handler closure.
+  attribute. JS hooks send events to this fiber via
+  `this.pushEventTo(this.el, ref, payload)`, which reaches it in a
+  `Filament.LiveView` and in a `Filament.LiveComponent` alike;
+  `this.pushEvent` always goes to the LiveView. Filament dispatches directly
+  to the handler closure.
 
   The ref string (e.g. `"filament:root.MyComponent[0]:0"`) is stable across re-renders
   as long as `use_event_ref/1` is called in the same order each render.

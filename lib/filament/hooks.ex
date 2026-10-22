@@ -488,6 +488,17 @@ defmodule Filament.Hooks do
 
   defp retry_subscribe(_owner, _subscriber, _attempts), do: :ok
 
+  # The `phx-target` of an element with `on_*` events: the LiveComponent the
+  # render is for, or nil in a LiveView, which omits the attribute.
+  @doc false
+  @spec event_target() :: non_neg_integer() | nil
+  def event_target do
+    case current_context() do
+      %{event_target: target} -> target
+      nil -> nil
+    end
+  end
+
   @doc """
   Register a bubble or capture-phase event handler at the next slot.
 

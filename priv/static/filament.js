@@ -16,10 +16,13 @@ window.filament = window.filament || {
 
 // FilamentKey: window-level keydown hook for the `on_key` template attr.
 // Registered via `data-phx-runtime-hook="FilamentKey"` on the script tag.
+// Pushed to its own element, so the event reaches the LiveComponent the
+// element is in, or the LiveView when it's in none.
 window.phx_hook_FilamentKey = window.phx_hook_FilamentKey || function() {
   return {
     mounted() {
-      this._handler = (e) => this.pushEvent(
+      this._handler = (e) => this.pushEventTo(
+        this.el,
         "filament:" + this.el.dataset.filamentWire,
         { key: e.key, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey }
       );

@@ -46,6 +46,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A `Filament.LiveComponent`'s events reach it. Its elements carried no
+  `phx-target`, so a click went to the parent LiveView, which had no
+  handler for it. Each element with an `on_*` event now names the
+  component, and `on_key`'s hook pushes to its own element, so its key
+  events reach the component too.
+- `on_key`'s element id is prefixed with the component's id inside a
+  `Filament.LiveComponent`, so two of them on a page don't both render
+  `id="root:0"`, which LiveView rejects.
 - A `Filament.LiveComponent`'s static render no longer runs its effects.
   Phoenix runs a component's `:after_render` hooks during the static render,
   and the cleanups never ran (#71).
