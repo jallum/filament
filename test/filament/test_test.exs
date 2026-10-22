@@ -334,6 +334,43 @@ defmodule Filament.TestTest do
     refute_receive {:cell_update, _, _}, 50
   end
 
+  defmodule NavComp do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      prop(:opts, :any, required: true)
+
+      def render(%{opts: opts}) do
+        navigate = use_navigate()
+        go = fn -> navigate.(opts) end
+
+        ~F"""
+        <button on_click={go}>go</button>
+        """
+      end
+    end
+  end
+
+  test "navigations/1 returns what the components asked for, once" do
+    view = mount!(NavComp, %{opts: [patch: "/?page=2", replace: true]})
+    assert navigations(view) == []
+
+    view = click!(view, "button")
+    view = click!(view, "button")
+    assert navigations(view) == [[patch: "/?page=2", replace: true], [patch: "/?page=2", replace: true]]
+    assert navigations(view) == []
+  end
+
+  test "use_navigate's function raises on options Phoenix can't take" do
+    for opts <- [[], [patch: "/a", navigate: "/b"], [href: "/a", replace: true], [patch: :a], [patch: "/a", to: "/b"]] do
+      view = mount!(NavComp, %{opts: opts})
+      assert_raise ArgumentError, ~r/expected one of patch:, navigate: or href:/, fn -> click(view, "button") end
+    end
+
+    refute_received {:filament_navigate, _}
+  end
+
   test "stub push updates rendered output" do
     {:ok, stub} = Stub.start(fn _req -> 0 end)
     {:ok, view} = mount(ObservableComp.Observable, %{server: stub})

@@ -292,6 +292,25 @@ defmodule Filament.Test do
   @spec unmount(t()) :: :ok
   def unmount(%__MODULE__{fiber_tree: tree}), do: Filament.Reconciler.unmount(tree)
 
+  @doc """
+  The navigations the view's components asked for with
+  `Filament.Hooks.use_navigate/0` since the last call, oldest first, each
+  as its options. A view has no page to navigate, so the test checks them:
+
+      view = click!(view, "button.next")
+      assert navigations(view) == [[patch: "/?page=2"]]
+  """
+  @spec navigations(t()) :: [keyword()]
+  def navigations(%__MODULE__{}), do: receive_navigations([])
+
+  defp receive_navigations(acc) do
+    receive do
+      {:filament_navigate, opts} -> receive_navigations([opts | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
+  end
+
   @doc "Like `click/2` but returns the view directly, raising on error."
   @spec click!(t(), String.t()) :: t()
   def click!(%__MODULE__{} = view, selector) do
