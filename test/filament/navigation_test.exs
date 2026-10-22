@@ -12,11 +12,12 @@ defmodule Filament.NavigationTest do
     defcomponent do
       prop(:page, :integer, default: 1)
       prop(:own, :boolean, default: false)
+      prop(:base, :string, default: "/")
 
-      def render(%{page: page, own: own}) do
+      def render(%{page: page, own: own, base: base}) do
         navigate = use_navigate()
-        next = fn -> navigate.(patch: "/?page=#{page + 1}") end
-        same = fn -> navigate.(patch: "/?page=#{page}", replace: true) end
+        next = fn -> navigate.(patch: "#{base}?page=#{page + 1}") end
+        same = fn -> navigate.(patch: "#{base}?page=#{page}", replace: true) end
         away = fn -> navigate.(navigate: "/other") end
         out = fn -> navigate.(href: "https://example.com/") end
 
@@ -46,34 +47,6 @@ defmodule Filament.NavigationTest do
     end
   end
 
-  # Patches from page 1 to 2 as it connects. An effect, not a click: a
-  # LiveComponent's clicks don't reach it yet (no phx-target).
-  defmodule Turner do
-    @moduledoc false
-    use Filament.Component
-
-    defcomponent do
-      prop(:page, :integer, default: 1)
-      prop(:own, :boolean, default: false)
-
-      def render(%{page: page, own: own}) do
-        navigate = use_navigate()
-
-        use_effect(
-          fn ->
-            if page == 1, do: navigate.(patch: "/host?page=2")
-            nil
-          end,
-          [page]
-        )
-
-        ~F"""
-        <p id="state">page {page} own {inspect(own)}</p>
-        """
-      end
-    end
-  end
-
   # A LiveView of its own, with a Filament LiveComponent in it.
   defmodule HostLive do
     @moduledoc false
@@ -91,7 +64,7 @@ defmodule Filament.NavigationTest do
 
     def render(assigns) do
       ~H"""
-      <.live_component module={Filament.LiveComponent} id="turner" component={Turner} page={@page} own={@own} />
+      <.live_component module={Filament.LiveComponent} id="pager" component={Pager} page={@page} own={@own} base="/host" />
       """
     end
   end
@@ -174,7 +147,10 @@ defmodule Filament.NavigationTest do
   end
 
   test "a LiveComponent's host applies its navigations with navigate/2" do
-    {:ok, view, _html} = live(build_conn(), "/host")
+    {:ok, view, html} = live(build_conn(), "/host")
+    assert html =~ "page 1 own false"
+
+    view |> element("#next") |> render_click()
     assert_patch(view, "/host?page=2")
     assert render(view) =~ "page 2 own true"
 

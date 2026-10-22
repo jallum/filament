@@ -16,6 +16,13 @@ defmodule Filament.LiveComponent do
   All assigns other than `id` and `component` are passed as props to the Filament
   component.
 
+  ## Events
+
+  Its elements' events, `on_key` included, come back to the component: each
+  element with an `on_*` event carries the component's `phx-target`. A JS
+  hook of your own inside it pushes with `this.pushEventTo(this.el, ...)`,
+  since `this.pushEvent` always goes to the parent LiveView.
+
   ## Observable updates
 
   Because `Filament.LiveComponent` runs inside the parent LiveView process,
@@ -86,17 +93,22 @@ defmodule Filament.LiveComponent do
     component = Map.fetch!(assigns, :component)
     props = Filament.LiveView.extract_props(assigns, component)
 
+    # Its elements' events come back to it, not to the parent LiveView.
+    event_target = with %{cid: cid} <- socket.assigns[:myself], do: cid
+    opts = [owner_pid: self(), target: Filament.Web, event_target: event_target]
+
     {tree, rendered, pending_effects} =
       case socket.assigns._filament_tree do
         %{"root" => %{component: ^component}} = tree ->
-          Reconciler.update(tree, "root", props, owner_pid: self(), target: Filament.Web)
+          Reconciler.update(tree, "root", props, opts)
 
         tree ->
           if tree, do: Reconciler.unmount(tree)
           sources = if Phoenix.LiveView.connected?(socket), do: :subscribe, else: :current
-          Reconciler.mount(component, props, owner_pid: self(), target: Filament.Web, sources: sources)
+          Reconciler.mount(component, props, [sources: sources] ++ opts)
       end
 
+    socket = Phoenix.Component.assign(socket, :_filament_event_target, event_target)
     {:ok, Filament.LiveView.assign_render(socket, tree, rendered, pending_effects)}
   end
 
