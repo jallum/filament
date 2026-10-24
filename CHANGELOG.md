@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Filament.LiveComponent` the event's value now names the component, as
   `JS.push(event, target: @myself)` would, and a LiveView's markup is as
   before.
+- An element with `on_key` or an attribute spread (`{@attrs}`) and everything
+  inside it are rendered from the compiled template, like any other element,
+  rather than walked again on every render. `on_key` usually sits on a
+  component's outermost element, so this applied to the whole component.
 
 ### Security
 

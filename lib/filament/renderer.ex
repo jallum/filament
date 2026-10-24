@@ -177,7 +177,7 @@ defmodule Filament.Renderer do
   def walk_vnode({:safe, _iodata} = safe, _context), do: safe
 
   def walk_vnode({:element, tag, attrs, children}, context) do
-    resolved_attrs = Enum.map(attrs, &resolve_event_attr/1)
+    resolved_attrs = walk_attrs(attrs)
     walked = Enum.map(children, &walk_child(&1, context))
     {:element, tag, resolved_attrs, walked}
   end
@@ -227,6 +227,9 @@ defmodule Filament.Renderer do
   defp walk_child(children, context) when is_list(children), do: Enum.map(children, &walk_child(&1, context))
   defp walk_child(child, context) when is_tuple(child), do: walk_vnode(child, context)
   defp walk_child(child, _context), do: child
+
+  @doc false
+  def walk_attrs(attrs), do: Enum.map(attrs, &resolve_event_attr/1)
 
   # Substrate-side resolution of `on_*` attribute handlers: registers the
   # closure as an event handler under the active fiber and replaces the

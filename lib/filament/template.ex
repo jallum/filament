@@ -22,6 +22,9 @@ defmodule Filament.Template do
         {{:rows, _keyed?}, _key}, rows ->
           Enum.map(rows, fn {key, row} -> {key, walk(row, context)} end)
 
+        {:attributes, _key}, attrs ->
+          Filament.Renderer.walk_attrs(attrs)
+
         _, value ->
           value
       end)
