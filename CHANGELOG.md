@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Rendering is as fast as in 0.6.0-rc.6 again. 0.6.0-rc.7 gave every element
+  with an `on_*` event a `phx-target`, which cost a slot even in a LiveView,
+  where it's empty: about 9% more allocation per render. Inside a
+  `Filament.LiveComponent` the event's value now names the component, as
+  `JS.push(event, target: @myself)` would, and a LiveView's markup is as
+  before.
+
 ### Security
 
 ## [0.6.0-rc.7] - 2026-10-22
