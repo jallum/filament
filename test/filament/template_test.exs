@@ -5,6 +5,7 @@ defmodule Filament.TemplateTest do
   alias Phoenix.HTML.Safe
   alias Phoenix.LiveView.Comprehension
   alias Phoenix.LiveView.Rendered
+  alias Phoenix.LiveView.Socket
 
   defmodule Row do
     @moduledoc false
@@ -227,12 +228,34 @@ defmodule Filament.TemplateTest do
     end
   end
 
+  test "a keyed list sends only the bindings of the rows that changed" do
+    alias Phoenix.LiveView.Diff
+
+    items = fn labels ->
+      %{items: Enum.map(Enum.with_index(labels, 1), fn {label, id} -> %{id: id, label: label} end)}
+    end
+
+    first = items.(["one", "two", "three"])
+    second = items.(["one", "TWO", "three"])
+    assert {html, html} = client_after(Rows, first, second)
+
+    socket = %Socket{assigns: %{__changed__: %{}}, private: %{live_temp: %{}}}
+    {tree, r1, _} = Reconciler.mount(Rows, first, target: Filament.Web)
+    {_, prints, components} = Diff.render(socket, r1, Diff.new_fingerprints(), Diff.new_components())
+    {tree, r2, _} = Reconciler.update(tree, "root", second, target: Filament.Web)
+    {diff, prints, components} = Diff.render(socket, r2, prints, components)
+    assert %{0 => %{k: %{1 => %{1 => "TWO"}, kc: 3}}} = diff
+    {tree, r3, _} = Reconciler.update(tree, "root", second, target: Filament.Web)
+    assert {%{}, _, _} = Diff.render(socket, r3, prints, components)
+    Reconciler.unmount(tree)
+  end
+
   # The client's HTML after applying both diffs, and the server's.
   defp client_after(component, first, second) do
     alias Phoenix.LiveView.Diff
     alias Phoenix.LiveViewTest.Diff, as: Client
 
-    socket = %Phoenix.LiveView.Socket{assigns: %{__changed__: %{}}, private: %{live_temp: %{}}}
+    socket = %Socket{assigns: %{__changed__: %{}}, private: %{live_temp: %{}}}
     {tree, r1, _} = Reconciler.mount(component, first, target: Filament.Web)
     {d1, prints, components} = Diff.render(socket, r1, Diff.new_fingerprints(), Diff.new_components())
     {tree, r2, _} = Reconciler.update(tree, "root", second, target: Filament.Web)

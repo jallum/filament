@@ -90,23 +90,29 @@ defmodule Filament.Web.Template do
     %Comprehension{static: first.static, fingerprint: fingerprint, has_key?: keyed?, entries: entries}
   end
 
-  # LiveView keeps each entry's variables and passes the ones that changed,
-  # with their previous values when composite; nested output is tracked
-  # against its previous value.
+  # An entry's one variable is its row's template. LiveView compares it with
+  # the previous one, so a row equal to the last render's costs a single
+  # comparison and is encoded only when it changes. A changed row comes with
+  # its previous template, and sends the bindings that differ from it; nested
+  # output is tracked against its previous value.
   defp entry(key, template) do
-    bindings = prepare(template)
-    variables = Map.new(bindings, fn {key, value, mode} -> {key, {mode, value}} end)
-
-    {key, variables, fn changed, track? -> Enum.map(bindings, &changed_binding(&1, changed, track?)) end}
+    {key, %{row: template},
+     fn
+       %{row: %Template{values: previous}}, true -> changed_values(template, previous)
+       _changed, true -> Enum.map(template.values, fn _ -> nil end)
+       _changed, false -> template |> prepare() |> Enum.map(&encode/1)
+     end}
   end
 
-  defp changed_binding(binding, _changed, false), do: encode(binding)
-
-  defp changed_binding({key, value, mode} = binding, changed, true) do
-    case changed do
-      %{^key => {:opaque, previous}} when mode == :opaque -> Filament.Web.track(value, previous)
-      %{^key => _} -> encode(binding)
-      _ -> nil
-    end
+  defp changed_values(template, previous) do
+    Enum.zip_with([template.bindings, template.values, previous], fn
+      [_binding, same, same] -> nil
+      [binding, value, previous] -> changed_value(prepare_binding(binding, value), binding, previous)
+    end)
   end
+
+  defp changed_value({_key, value, :opaque}, binding, previous),
+    do: Filament.Web.track(value, elem(prepare_binding(binding, previous), 1))
+
+  defp changed_value(binding, _binding, _previous), do: encode(binding)
 end

@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A component that renders a keyed list re-renders faster: a row equal to
+  the last render's is skipped with one comparison rather than encoded and
+  compared binding by binding, and a child whose props are unchanged is
+  reused without setting up a render. In the benchmarks, an unchanged
+  re-render of 1,000 rows takes about half the time and a third of the
+  allocation, and changing one row's state about 0.6x the time.
+
 - Rendering is as fast as in 0.6.0-rc.6 again. 0.6.0-rc.7 gave every element
   with an `on_*` event a `phx-target`, which cost a slot even in a LiveView,
   where it's empty: about 9% more allocation per render. Inside a
