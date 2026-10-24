@@ -41,7 +41,7 @@ defmodule Filament.RenderContext do
     # a key subscribes to its stub instead
     cells: %{},
     # non_neg_integer() | nil - the LiveComponent's id that elements' events
-    # target (`phx-target`); nil sends them to the LiveView
+    # are pushed to; nil sends them to the LiveView
     event_target: nil,
     # %{non_neg_integer() => term()} - existing hook slot state for new child fibers
     hook_slots: %{},

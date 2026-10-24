@@ -488,14 +488,28 @@ defmodule Filament.Hooks do
 
   defp retry_subscribe(_owner, _subscriber, _attempts), do: :ok
 
-  # The `phx-target` of an element with `on_*` events: the LiveComponent the
-  # render is for, or nil in a LiveView, which omits the attribute.
+  # The LiveComponent the render is for, whose id its events target, or nil
+  # in a LiveView.
   @doc false
   @spec event_target() :: non_neg_integer() | nil
   def event_target do
     case current_context() do
       %{event_target: target} -> target
       nil -> nil
+    end
+  end
+
+  # An `on_*` attribute's value. Inside a LiveComponent it's a JS push with the
+  # component as its target, so the event needs no `phx-target` of its own and
+  # a LiveView's elements render exactly as they would without components.
+  @doc false
+  @spec event(function()) :: String.t()
+  def event(handler) do
+    event = "filament:" <> register_event_handler(handler)
+
+    case event_target() do
+      nil -> event
+      target -> Phoenix.json_library().encode!([["push", %{event: event, target: target}]])
     end
   end
 

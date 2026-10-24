@@ -19,7 +19,7 @@ defmodule Filament.LiveComponent do
   ## Events
 
   Its elements' events, `on_key` included, come back to the component: each
-  element with an `on_*` event carries the component's `phx-target`. A JS
+  `on_*` event is pushed with the component as its target. A JS
   hook of your own inside it pushes with `this.pushEventTo(this.el, ...)`,
   since `this.pushEvent` always goes to the parent LiveView.
 
