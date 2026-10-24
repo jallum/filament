@@ -1101,20 +1101,6 @@ defmodule Filament.TagEngine do
         [{name, true}]
     end)
     |> Enum.flat_map(&transform_event_attr_for_vnode/1)
-    |> Kernel.++(event_target_attr(attrs))
-  end
-
-  # Inside a `Filament.LiveComponent`, an element's events must name the
-  # component, or LiveView sends them to the parent LiveView. `on_key`'s hook
-  # pushes to its own element, which needs no target in the browser, but
-  # `Phoenix.LiveViewTest` routes a hook's event by it. An explicit
-  # `phx-target` is kept.
-  defp event_target_attr(attrs) do
-    events? = Enum.any?(attrs, fn {name, _, _} -> is_binary(name) and String.starts_with?(name, "on_") end)
-
-    if events? and not List.keymember?(attrs, "phx-target", 0),
-      do: [{"phx-target", quote(do: Filament.Hooks.event_target())}],
-      else: []
   end
 
   # A literal attribute value is HTML source, as in HEEx: its entities are
@@ -1130,8 +1116,8 @@ defmodule Filament.TagEngine do
   # render pass, while the component context is active.
   # A `nil` or `false` handler omits the attribute, as HEEx omits `phx-*={nil}`.
   defp transform_event_attr_for_vnode({"on_key", v}) do
-    # `on_key` expands into THREE attrs (`phx-hook`, `data-filament-wire`,
-    # `id`) that all need to share the same wire-ref string. Each attr in the
+    # `on_key` expands into four attrs (`phx-hook`, `data-filament-wire`,
+    # `id`, `phx-target`) that share the wire ref and target. Each attr in the
     # vnode's attrs list compiles to an independent expression context, so a
     # `wire_var = ...` binding in one attr's value isn't visible from the
     # next. Emit them as a single `:__attr_group__` whose AST evaluates to a
@@ -1162,9 +1148,12 @@ defmodule Filament.TagEngine do
               end)
 
             # Each tree's refs start at "root", so inside a LiveComponent the
-            # id is prefixed with the component's, for one id per page.
-            id = with cid when is_integer(cid) <- Filament.Hooks.event_target(), do: "#{cid}:#{wire}"
-            [{"phx-hook", "FilamentKey"}, {"data-filament-wire", wire}, {"id", id || wire}]
+            # id is prefixed with the component's, for one id per page. The
+            # hook pushes to its own element, which needs no target in the
+            # browser, but `Phoenix.LiveViewTest` routes a hook's event by it.
+            target = Filament.Hooks.event_target()
+            id = if target, do: "#{target}:#{wire}", else: wire
+            [{"phx-hook", "FilamentKey"}, {"data-filament-wire", wire}, {"id", id}, {"phx-target", target}]
         end
       end
 
@@ -1176,7 +1165,7 @@ defmodule Filament.TagEngine do
       quote generated: true do
         case unquote(v) do
           handler when handler in [nil, false] -> nil
-          handler -> "filament:" <> Filament.Hooks.register_event_handler(handler)
+          handler -> Filament.Hooks.event(handler)
         end
       end
 
