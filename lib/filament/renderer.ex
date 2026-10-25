@@ -100,19 +100,11 @@ defmodule Filament.Renderer do
       Map.get(parent_ctx.fiber_tree, child_id) ||
         Fiber.new(id: child_id, component: mod, parent_id: parent_ctx.fiber_id)
 
-    child_ctx = %RenderContext{
-      fiber_id: child_id,
-      fiber_tree: parent_ctx.fiber_tree,
-      owner_pid: parent_ctx.owner_pid,
-      sources: parent_ctx.sources,
-      cells: parent_ctx.cells,
-      event_target: parent_ctx.event_target,
-      target: parent_ctx.target,
-      new_fibers: parent_ctx.new_fibers,
-      pending_effects: parent_ctx.pending_effects
-    }
-
-    {child, ctx} = render_fiber(fiber, props, child_ctx)
+    # A clean child is reused as it is, so it needs no context of its own.
+    {child, ctx} =
+      if reusable?(fiber, props) and fiber.dirty == nil,
+        do: {fiber, parent_ctx},
+        else: render_fiber(fiber, props, child_context(parent_ctx, child_id))
 
     Process.put(:filament_render_context, %{
       parent_ctx
@@ -123,6 +115,20 @@ defmodule Filament.Renderer do
     })
 
     child.rendered
+  end
+
+  defp child_context(parent_ctx, child_id) do
+    %RenderContext{
+      fiber_id: child_id,
+      fiber_tree: parent_ctx.fiber_tree,
+      owner_pid: parent_ctx.owner_pid,
+      sources: parent_ctx.sources,
+      cells: parent_ctx.cells,
+      event_target: parent_ctx.event_target,
+      target: parent_ctx.target,
+      new_fibers: parent_ctx.new_fibers,
+      pending_effects: parent_ctx.pending_effects
+    }
   end
 
   # Walked output keeps event refs resolved and child output inline, so only
