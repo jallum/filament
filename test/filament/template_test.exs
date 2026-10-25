@@ -89,6 +89,15 @@ defmodule Filament.TemplateTest do
     end
   end
 
+  defmodule Groups do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      def render(props), do: ~F|<div class="box" {props.attrs} on_key={props.on_key}><span>{props.label}</span></div>|
+    end
+  end
+
   defmodule Opaque do
     @moduledoc false
     use Filament.Component
@@ -120,6 +129,22 @@ defmodule Filament.TemplateTest do
       {web_tree, web, []} = Reconciler.mount(Attributes, props, target: Filament.Web)
       assert is_tuple(portable)
       assert %Rendered{} = web
+      assert html(web) == html(portable)
+      Reconciler.unmount(portable_tree)
+      Reconciler.unmount(web_tree)
+    end
+  end
+
+  test "attribute groups are one slot each, and the element around them stays compiled" do
+    for attrs <- [%{}, %{"data-x" => "1", "title" => "a & b"}, [hidden: true, id: nil], [on_click: fn -> :ok end]],
+        on_key <- [nil, fn _key, _mods -> :ok end] do
+      props = %{attrs: attrs, on_key: on_key, label: "<hello>"}
+      {portable_tree, portable, []} = Reconciler.mount(Groups, props)
+      {web_tree, web, []} = Reconciler.mount(Groups, props, target: Filament.Web)
+
+      assert %Rendered{static: [~s(<div class="box"), "", "><span>", "</span></div>"]} =
+               Filament.Web.to_rendered(web)
+
       assert html(web) == html(portable)
       Reconciler.unmount(portable_tree)
       Reconciler.unmount(web_tree)

@@ -48,17 +48,18 @@ defmodule Filament.TemplateCompiler do
     {vnode, append(%{state | optimized?: true}, text)}
   end
 
-  defp node({:{}, _, [:element, name, attrs, children]} = ast, state)
-       when is_binary(name) and is_list(attrs) and is_list(children) do
-    if Enum.all?(attrs, &match?({name, _} when is_binary(name) or is_atom(name), &1)) do
-      state = append(%{state | optimized?: true}, "<" <> name)
-      {attrs, state} = attributes(attrs, state)
-      state = append(state, ">")
-      {children, state} = Enum.map_reduce(children, state, &node/2)
-      state = if Filament.Web.void_element?(name), do: state, else: append(state, "</" <> name <> ">")
-      {{:element, name, attrs, children}, state}
-    else
-      binding(ast, :child, state)
+  defp node({:{}, _, [:element, name, attrs, children]} = ast, state) when is_binary(name) and is_list(children) do
+    case attribute_list(attrs) do
+      {:ok, attrs} ->
+        state = append(%{state | optimized?: true}, "<" <> name)
+        {attrs, state} = attributes(attrs, state)
+        state = append(state, ">")
+        {children, state} = Enum.map_reduce(children, state, &node/2)
+        state = if Filament.Web.void_element?(name), do: state, else: append(state, "</" <> name <> ">")
+        {{:element, name, attrs, children}, state}
+
+      :error ->
+        binding(ast, :child, state)
     end
   end
 
@@ -129,19 +130,41 @@ defmodule Filament.TemplateCompiler do
     end
   end
 
-  defp attributes(attrs, state) do
-    Enum.map_reduce(attrs, state, fn {name, value}, state ->
-      name = to_string(name)
+  # VNodeEngine splices attribute groups, `on_key`'s and `{@attrs}`, in with
+  # `Enum.concat/1`. Each group is one slot, as `{@rest}` is in HEEx.
+  defp attribute_list({{:., _, [{:__aliases__, _, [:Enum]}, :concat]}, _, [parts]}) when is_list(parts) do
+    parts
+    |> Enum.flat_map(fn
+      pairs when is_list(pairs) -> pairs
+      group -> [{:__attr_group__, group}]
+    end)
+    |> attribute_list()
+  end
 
-      # A dynamic attribute is one slot, as in HEEx: nil, false, true and
-      # keyword lists change its whole text, not just its value.
-      if literal_attribute?(value) do
-        {value, []} = Code.eval_quoted(value)
-        {{name, value}, append(state, name |> Filament.Web.attribute(value) |> IO.iodata_to_binary())}
-      else
-        {value, state} = binding(value, {:attribute, name}, state)
-        {{name, value}, state}
-      end
+  defp attribute_list(attrs) when is_list(attrs) do
+    if Enum.all?(attrs, &match?({name, _} when is_binary(name) or is_atom(name), &1)), do: {:ok, attrs}, else: :error
+  end
+
+  defp attribute_list(_attrs), do: :error
+
+  defp attributes(attrs, state) do
+    Enum.map_reduce(attrs, state, fn
+      {:__attr_group__, group}, state ->
+        {value, state} = binding(group, :attributes, state)
+        {{:__attr_group__, value}, state}
+
+      {name, value}, state ->
+        name = to_string(name)
+
+        # A dynamic attribute is one slot, as in HEEx: nil, false, true and
+        # keyword lists change its whole text, not just its value.
+        if literal_attribute?(value) do
+          {value, []} = Code.eval_quoted(value)
+          {{name, value}, append(state, name |> Filament.Web.attribute(value) |> IO.iodata_to_binary())}
+        else
+          {value, state} = binding(value, {:attribute, name}, state)
+          {{name, value}, state}
+        end
     end)
   end
 

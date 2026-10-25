@@ -45,6 +45,10 @@ defmodule Filament.Web.Template do
 
   defp encode({_key, value, mode}) when mode in [:encoded, :opaque], do: value
   defp encode({_key, value, {:attribute, name}}), do: Filament.Web.attribute(name, value)
+
+  defp encode({_key, attrs, :attributes}),
+    do: Enum.map(attrs, fn {name, value} -> Filament.Web.attribute(name, value) end)
+
   defp encode({_key, value, :child}) when value in [nil, false], do: []
   defp encode({_key, value, :child}) when is_tuple(value) or is_list(value), do: Filament.Web.to_rendered(value)
   defp encode({_key, value, :child}), do: Safe.to_iodata(value)
