@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `navigate` and `patch` on an `<a>` in `~F` are HEEx's `<.link>`:
+  `<a navigate={~p"/vendors"}>` renders the `href` and the
+  `data-phx-link` attributes LiveView's client follows over the socket,
+  and `replace` replaces the history entry instead of adding one.
+  `Filament.Test.click/2` on such a link records the navigation for
+  `navigations/1`.
+
 ### Changed
 
 ### Deprecated

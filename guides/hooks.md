@@ -298,6 +298,21 @@ In a `Filament.LiveComponent`, the navigation arrives at the host
 LiveView, which applies it with `Filament.LiveView.navigate/2`; see
 `Filament.LiveComponent`.
 
+A link needs no handler. In `~F`, `navigate` and `patch` on an `<a>` are
+`<.link>`'s, and `replace` goes with either:
+
+```elixir
+~F"""
+<a navigate={~p"/vendors"}>Vendors</a>
+<a patch={"/?page=#{page + 1}"} replace>Next</a>
+"""
+```
+
+They render the `href` and the attributes LiveView's client follows over
+the socket, so a click navigates without a round trip through the
+component. Only the `href` is dynamic, as with `<.link>`, so a list of
+links sends each row's path and nothing more.
+
 ## Composing hooks into custom hooks
 
 Any module function that calls `use_state`, `use_value`, or `use_effect`

@@ -28,6 +28,8 @@ defmodule Filament.NavigationTest do
           <button id="same" on_click={same}>same</button>
           <button id="away" on_click={away}>away</button>
           <button id="out" on_click={out}>out</button>
+          <a id="link-next" patch={"#{base}?page=#{page + 1}"}>next</a>
+          <a id="link-away" navigate="/other">away</a>
         </div>
         """
       end
@@ -155,6 +157,17 @@ defmodule Filament.NavigationTest do
     assert render(view) =~ "page 2 own true"
 
     assert render_patch(view, "/host?page=7") =~ "page 7 own false"
+  end
+
+  test "<a patch> patches, as the browser's, not the page's own", %{view: view} do
+    view |> element("#link-next") |> render_click()
+    assert_patch(view, "/?page=2")
+    assert render(view) =~ "page 2 own false"
+  end
+
+  test "<a navigate> goes to another LiveView", %{view: view} do
+    view |> element("#link-away") |> render_click()
+    assert_redirect(view, "/other")
   end
 
   test "href: loads another page", %{view: view} do

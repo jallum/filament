@@ -362,6 +362,33 @@ defmodule Filament.TestTest do
     assert navigations(view) == []
   end
 
+  defmodule LinkComp do
+    @moduledoc false
+    use Filament.Component
+
+    defcomponent do
+      def render(_props) do
+        ~F"""
+        <nav>
+          <a class="next" patch="/?page=2">next</a>
+          <a class="away" navigate="/other" replace>away</a>
+          <a class="out" href="/plain">out</a>
+        </nav>
+        """
+      end
+    end
+  end
+
+  test "a click on a live link is a navigation" do
+    view = mount!(LinkComp, %{})
+
+    view = click!(view, "a.next")
+    view = click!(view, "a.away")
+    assert navigations(view) == [[patch: "/?page=2"], [navigate: "/other", replace: true]]
+
+    assert click(view, "a.out") == {:error, {:no_attribute, "phx-click", "a.out"}}
+  end
+
   test "use_navigate's function raises on options Phoenix can't take" do
     for opts <- [[], [patch: "/a", navigate: "/b"], [href: "/a", replace: true], [patch: :a], [patch: "/a", to: "/b"]] do
       view = mount!(NavComp, %{opts: opts})

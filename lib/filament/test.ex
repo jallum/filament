@@ -157,14 +157,48 @@ defmodule Filament.Test do
   A handler taking a push function, as `Filament.Experimental.Hooks.use_event_ref/1`
   allows, sends `{:push_event, event, payload}` to the test process for each
   push, where LiveView would call `Phoenix.LiveView.push_event/3`.
+
+  A click on an `<a navigate>` or `<a patch>` link is a navigation, which
+  `navigations/1` returns, as it does `Filament.Hooks.use_navigate/0`'s:
+
+      view = click!(view, "a.next")
+      assert navigations(view) == [[patch: "/?page=2"]]
   """
   @spec click(t(), selector :: String.t()) :: {:ok, t()} | {:error, term()}
   def click(%__MODULE__{} = view, selector) do
     require_floki!()
 
     case find_event_ref(view.rendered_html, selector, "phx-click") do
-      {:ok, ref} -> dispatch_event(view, ref, %{})
-      {:error, _} = err -> err
+      {:ok, ref} ->
+        dispatch_event(view, ref, %{})
+
+      {:error, {:no_attribute, _, _}} = err ->
+        case live_link(view.rendered_html, selector) do
+          {:ok, opts} ->
+            send(self(), {:filament_navigate, opts})
+            {:ok, view}
+
+          :error ->
+            err
+        end
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
+  # The navigation an `<a navigate>` or `<a patch>` link asks for, as
+  # `use_navigate/0`'s options.
+  defp live_link(html, selector) do
+    [link | _] = html |> Floki.parse_fragment!() |> Floki.find(selector)
+
+    with [kind] when kind in ["redirect", "patch"] <- Floki.attribute(link, "data-phx-link"),
+         [to] <- Floki.attribute(link, "href") do
+      kind = if kind == "redirect", do: :navigate, else: :patch
+      replace = Floki.attribute(link, "data-phx-link-state") == ["replace"]
+      {:ok, if(replace, do: [{kind, to}, replace: true], else: [{kind, to}])}
+    else
+      _ -> :error
     end
   end
 
