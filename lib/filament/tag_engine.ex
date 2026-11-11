@@ -1028,7 +1028,7 @@ defmodule Filament.TagEngine do
   # `terminal?` distinguishes "no separate close coming" (void `<br>`,
   # self-closing `<br/>`) from "open tag whose close is a separate token".
   defp handle_tag_and_attrs(state, name, attrs, meta, terminal? \\ false) do
-    structured_attrs = collect_structured_attrs(attrs, state)
+    structured_attrs = attrs |> collect_structured_attrs(state) |> live_link(name)
     update_subengine(state, :handle_tag, [{:open, name, structured_attrs, terminal?}, meta])
   end
 
@@ -1173,6 +1173,34 @@ defmodule Filament.TagEngine do
   end
 
   defp transform_event_attr_for_vnode(pair), do: [pair]
+
+  # `<a navigate={to}>` and `<a patch={to}>` are HEEx's `<.link>`: the
+  # attributes LiveView's client follows over the socket, `replace`
+  # replacing the browser's history entry instead of adding one. Only the
+  # href is dynamic, so a list of links sends each row's path alone.
+  defp live_link(attrs, "a") do
+    case Enum.find(attrs, &match?({kind, _} when kind in ["navigate", "patch"], &1)) do
+      nil ->
+        attrs
+
+      {kind, to} ->
+        {replace, attrs} = List.keytake(attrs, "replace", 0) || {nil, attrs}
+        link_attrs = link_attrs(if(kind == "navigate", do: "redirect", else: "patch"), to, history(replace))
+
+        Enum.flat_map(attrs, fn
+          {^kind, _} -> link_attrs
+          pair -> [pair]
+        end)
+    end
+  end
+
+  defp live_link(attrs, _name), do: attrs
+
+  defp history(nil), do: "push"
+  defp history({"replace", true}), do: "replace"
+  defp history({"replace", value}), do: quote(do: if(unquote(value), do: "replace", else: "push"))
+
+  defp link_attrs(link, to, history), do: [{"href", to}, {"data-phx-link", link}, {"data-phx-link-state", history}]
 
   defp parse_expr!({:expr, value, %{line: line, column: col}}, file) do
     Code.string_to_quoted!(value, line: line, column: col, file: file)
@@ -1583,6 +1611,28 @@ defmodule Filament.TagEngine do
       _ ->
         :ok
     end
+  end
+
+  defp validate_tag_attrs!(attrs, %{tag_name: "a"}, state) do
+    case Enum.filter(attrs, &match?({name, _, _} when name in ["navigate", "patch"], &1)) do
+      [] ->
+        with {"replace", _value, attr_meta} <- List.keyfind(attrs, "replace", 0) do
+          raise_syntax_error!("replace goes with navigate or patch on an <a>", attr_meta, state)
+        end
+
+      [{name, nil, attr_meta}] ->
+        raise_syntax_error!("#{name} on an <a> needs the path to go to: #{name}={...}", attr_meta, state)
+
+      [{name, _value, _attr_meta}] ->
+        with {"href", _value, attr_meta} <- List.keyfind(attrs, "href", 0) do
+          raise_syntax_error!("an <a> with #{name} takes its href from it; remove href", attr_meta, state)
+        end
+
+      [_, {_name, _value, attr_meta} | _] ->
+        raise_syntax_error!("an <a> takes one of navigate and patch", attr_meta, state)
+    end
+
+    :ok
   end
 
   defp validate_tag_attrs!(_attrs, _meta, _state), do: :ok

@@ -135,6 +135,13 @@ view = click!(view, "button.next")
 assert navigations(view) == [[patch: "/?page=2"]]
 ```
 
+A click on an `<a navigate>` or `<a patch>` link is a navigation too:
+
+```elixir
+view = click!(view, "a.next")
+assert navigations(view) == [[patch: "/?page=2"]]
+```
+
 ## Keyboard events
 
 `on_key` is Filament's window-level keyboard binding. Handlers receive the key
