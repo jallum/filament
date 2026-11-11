@@ -15,8 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `replace` replaces the history entry instead of adding one.
   `Filament.Test.click/2` on such a link records the navigation for
   `navigations/1`.
+- `use_head/1` declares the document's title, canonical URL and meta
+  tags. The deepest declaration of each wins: a layout gives the site's,
+  a page its own. `Filament.LiveView` puts the title in `page_title`, for
+  `<.live_title>`, and the root layout renders the rest with
+  `Filament.LiveView.head_tags/1`. The view's runtime script keeps them
+  current as they change and across live navigation, which LiveView
+  doesn't do for a root layout. A view that assigns `page_title` itself
+  keeps it. `Filament.Test.head/1` returns what a view declares.
 
 ### Changed
+
+- The runtime script every `Filament.LiveView` sends on mount is sent
+  without its comments, indentation and blank lines: about half its size.
 
 ### Deprecated
 

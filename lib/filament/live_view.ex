@@ -48,8 +48,17 @@ defmodule Filament.LiveView do
 
   @callback root_component() :: module()
 
-  @runtime_assets_js File.read!(Path.join(:code.priv_dir(:filament), "static/filament.js"))
-  @external_resource Path.join(:code.priv_dir(:filament), "static/filament.js")
+  @runtime_assets_path Path.join(:code.priv_dir(:filament), "static/filament.js")
+  @external_resource @runtime_assets_path
+
+  # Sent on every mount, so without its comments, indentation and blank
+  # lines. Lines stay lines, so automatic semicolon insertion is unchanged.
+  @runtime_assets_js @runtime_assets_path
+                     |> File.read!()
+                     |> String.split("\n")
+                     |> Enum.map(&String.trim/1)
+                     |> Enum.reject(&(&1 == "" or String.starts_with?(&1, "//")))
+                     |> Enum.join("\n")
 
   # The runtime script is the view's trailing static. LiveView sends statics
   # once per mount and caches them by fingerprint, so diffs never carry it.
@@ -185,6 +194,7 @@ defmodule Filament.LiveView do
         socket =
           socket
           |> Phoenix.Component.assign(:_filament_sources, sources)
+          |> Filament.LiveView.own_head()
           |> Filament.LiveView.assign_render(tree, rendered, pending_effects)
           |> Phoenix.LiveView.attach_hook(:filament_effects, :after_render, &Filament.LiveView.run_pending_effects/1)
 
@@ -575,6 +585,68 @@ defmodule Filament.LiveView do
     |> Phoenix.Component.assign(:_filament_tree, tree)
     |> Phoenix.Component.assign(:_filament_rendered, rendered)
     |> Phoenix.Component.assign(:_filament_pending_effects, queued ++ pending_effects)
+    |> put_head(tree)
+  end
+
+  # ── The document's head (`Filament.Hooks.use_head/1`) ────────────────────
+
+  # A view's head is its components' from its mount on; its title too,
+  # unless the view assigned `page_title` before it mounted them.
+  @doc false
+  def own_head(socket) do
+    socket
+    |> Phoenix.Component.assign(:_filament_title, not Map.has_key?(socket.assigns, :page_title))
+    |> Phoenix.Component.assign(:filament_head, nil)
+  end
+
+  # The title is an assign LiveView sends as it changes, the rest an event
+  # the runtime script applies: the root layout, where the first page load
+  # rendered them, isn't rendered again. A LiveComponent's tree owns no head.
+  defp put_head(%{assigns: %{_filament_title: title?, filament_head: previous}} = socket, tree) do
+    head = Filament.Head.collect(tree)
+    socket = if title?, do: Phoenix.Component.assign(socket, :page_title, head.title), else: socket
+
+    cond do
+      head == previous ->
+        socket
+
+      Phoenix.LiveView.connected?(socket) and (previous == nil or tags_changed?(head, previous)) ->
+        tags = for {tag, attrs} <- Filament.Head.tags(head), do: Map.new([{"tag", tag} | attrs])
+
+        socket
+        |> Phoenix.Component.assign(:filament_head, head)
+        |> Phoenix.LiveView.push_event("filament:head", %{tags: tags})
+
+      true ->
+        Phoenix.Component.assign(socket, :filament_head, head)
+    end
+  end
+
+  defp put_head(socket, _tree), do: socket
+
+  defp tags_changed?(head, previous), do: %{head | title: nil} != %{previous | title: nil}
+
+  @doc """
+  Renders the head a `Filament.LiveView`'s components declare with
+  `Filament.Hooks.use_head/1`, but its title: the canonical link and the
+  meta tags. Render it in the root layout's `<head>`, beside the title,
+  passing the view's `filament_head` assign:
+
+      <.live_title default="brasscheck.bot">{assigns[:page_title]}</.live_title>
+      <Filament.LiveView.head_tags head={assigns[:filament_head]} />
+
+  The tags are marked `data-filament-head`. As the components declare
+  others, on the page or another it navigates to live, the view's runtime
+  script replaces them, leaving the layout's own tags be. A page that
+  isn't a `Filament.LiveView` has no `filament_head` and renders none.
+  """
+  def head_tags(assigns) do
+    assigns = Phoenix.Component.assign(assigns, :tags, Filament.Head.tags(assigns[:head]))
+
+    ~H"""
+    <link :for={{"link", attrs} <- @tags} {attrs} data-filament-head />
+    <meta :for={{"meta", attrs} <- @tags} {attrs} data-filament-head />
+    """
   end
 
   @doc false

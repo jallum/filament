@@ -25,7 +25,10 @@ defmodule Filament.Fiber do
     rendered: :unrendered,
     # nil | :self | :descendants — :self when the fiber's own state or a
     # value it reads changed; :descendants on its ancestors
-    dirty: nil
+    dirty: nil,
+    # map() | nil — the head this fiber and its descendants declare with
+    # use_head/1, kept with `rendered` so a reused subtree's is too
+    head: nil
   ]
 
   @type t :: %__MODULE__{
@@ -37,6 +40,7 @@ defmodule Filament.Fiber do
           capture_handlers: %{non_neg_integer() => function()},
           rendered: term() | :unrendered,
           dirty: nil | :self | :descendants,
+          head: map() | nil,
           children: [String.t()],
           parent_id: String.t() | nil
         }

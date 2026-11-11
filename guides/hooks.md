@@ -313,6 +313,45 @@ the socket, so a click navigates without a round trip through the
 component. Only the `href` is dynamic, as with `<.link>`, so a list of
 links sends each row's path and nothing more.
 
+## use_head
+
+```elixir
+use_head(
+  title: "#{product.name} · brasscheck.bot",
+  canonical: url(~p"/products/#{product.slug}"),
+  meta: [description: product.summary, "og:title": product.name]
+)
+```
+
+Declares the document's head: its title, canonical URL and meta tags. Each
+component declares what it knows. A layout declares the site's title and
+description, and a page declares its own. The deepest declaration of each
+wins, and among siblings the last one wins. A `nil` declares nothing, so
+the value above it stays. A meta name that begins `og:` is rendered as an
+Open Graph `property`; any other is rendered as a `name`.
+
+`Filament.LiveView` puts the title in the `page_title` assign. The root
+layout renders it with `<.live_title>`, and the rest with
+`Filament.LiveView.head_tags/1`:
+
+```heex
+<head>
+  <.live_title default="brasscheck.bot">{assigns[:page_title]}</.live_title>
+  <Filament.LiveView.head_tags head={assigns[:filament_head]} />
+  ...
+</head>
+```
+
+LiveView never renders the root layout again after the first page load.
+LiveView itself keeps the title current. Filament's runtime script
+replaces the canonical link and the meta tags as the components change
+them and when a live navigation reaches another `Filament.LiveView`. A view
+that assigns `page_title` in its own `mount/3` keeps that title.
+
+A component in a `Filament.LiveComponent` declares nothing, because the
+LiveView that hosts it owns the head. In tests, `Filament.Test.head/1`
+returns what a view declares.
+
 ## Composing hooks into custom hooks
 
 Any module function that calls `use_state`, `use_value`, or `use_effect`
@@ -503,4 +542,4 @@ contract.
 ## API reference
 
 See `Filament.Hooks` for the full `@spec` signatures of `use_state/1`,
-`use_source/1`, `use_value/2`, `use_effect/2` and `use_navigate/0`.
+`use_source/1`, `use_value/2`, `use_effect/2`, `use_navigate/0` and `use_head/1`.

@@ -45,6 +45,9 @@ defmodule Filament.RenderContext do
     event_target: nil,
     # %{non_neg_integer() => term()} - existing hook slot state for new child fibers
     hook_slots: %{},
+    # map() | nil - the head the current fiber, and the children it has
+    # rendered so far, declare with use_head/1
+    head: nil,
     # %{module() => non_neg_integer()} - per-module counter for stable child fiber IDs.
     # Using a per-module counter means the Nth instance of a given component keeps a
     # stable ID regardless of how many other component types were rendered before it.
@@ -70,6 +73,7 @@ defmodule Filament.RenderContext do
           cells: %{term() => pid()},
           event_target: non_neg_integer() | nil,
           hook_slots: %{non_neg_integer() => term()},
+          head: map() | nil,
           child_component_indices: %{module() => non_neg_integer()}
         }
 end

@@ -31,3 +31,19 @@ window.phx_hook_FilamentKey = window.phx_hook_FilamentKey || function() {
     destroyed() { window.removeEventListener("keydown", this._handler); }
   };
 };
+
+// The head a Filament.LiveView's components declare (use_head/1), but its
+// title, which LiveView keeps: the tags marked data-filament-head replaced
+// with the ones the view pushes, on its mount and as they change.
+if (!window.filament.head) {
+  window.filament.head = true;
+  window.addEventListener("phx:filament:head", (e) => {
+    document.head.querySelectorAll("[data-filament-head]").forEach((el) => el.remove());
+    for (const { tag, ...attrs } of e.detail.tags) {
+      const el = document.createElement(tag);
+      for (const [name, value] of Object.entries(attrs)) el.setAttribute(name, value);
+      el.setAttribute("data-filament-head", "");
+      document.head.appendChild(el);
+    }
+  });
+}
