@@ -10,6 +10,7 @@ defmodule Filament.Hooks do
     - `use_source/1,2` — bind a reactive source (optionally keyed); returns a stable handle
     - `use_value/2` — read a projected value from a source and subscribe to its updates
     - `use_effect/2` — side-effect with optional cleanup
+    - `use_head/1` — the document's title, canonical URL and meta tags
 
   ## Pattern: domain hooks
 
@@ -120,6 +121,41 @@ defmodule Filament.Hooks do
               "expected one of patch:, navigate: or href: with a path, and replace: " <>
                 "only with patch: or navigate:, got: #{inspect(opts)}"
     end
+  end
+
+  @doc ~S"""
+  Declares the document's head: its title, canonical URL and meta tags.
+
+      use_head(
+        title: "#{product.name} · brasscheck.bot",
+        canonical: url(~p"/products/#{product.slug}"),
+        meta: [description: product.summary, "og:title": product.name]
+      )
+
+  Each component that calls it declares what it knows: a layout the site's
+  title and description, a page its own. The deepest declaration of each
+  wins, and of siblings the last; a `nil` declares nothing, leaving what's
+  above. A meta name beginning `og:` is Open Graph's, a `property`; others
+  are a `name`.
+
+  `Filament.LiveView` sets the `page_title` assign to the title, and
+  `Phoenix.Component.live_title/1` in the root layout shows it, kept
+  current as it changes and across live navigation. The rest the root
+  layout renders with `Filament.LiveView.head_tags/1`, on the first page
+  load; after that, the page's runtime script keeps them as they change.
+  A view that assigns `page_title` in its own `mount/3` keeps it.
+
+  In a `Filament.LiveComponent` it declares nothing: the LiveView hosting
+  it owns the head. `Filament.Test.head/1` returns what a view declares.
+  """
+  @spec use_head(keyword()) :: :ok
+  def use_head(opts) when is_list(opts) do
+    declaration = Filament.Head.declaration!(opts)
+    {index, _previous, _ctx} = use_slot(nil)
+    commit_slot(index, {:head, declaration})
+    ctx = Process.get(:filament_render_context)
+    Process.put(:filament_render_context, %{ctx | head: Filament.Head.merge(ctx.head, declaration)})
+    :ok
   end
 
   @doc """

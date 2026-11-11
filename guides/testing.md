@@ -142,6 +142,18 @@ view = click!(view, "a.next")
 assert navigations(view) == [[patch: "/?page=2"]]
 ```
 
+## The document's head
+
+`head/1` returns the head the view's components declare with
+`use_head/1`: its `:title`, `:canonical` and `:meta`, the deepest
+declaration of each winning.
+
+```elixir
+view = mount!(ProductPage, %{id: 13})
+assert head(view).title == "Federal 9mm 115gr · brasscheck.bot"
+assert head(view).meta["description"] =~ "per round"
+```
+
 ## Keyboard events
 
 `on_key` is Filament's window-level keyboard binding. Handlers receive the key

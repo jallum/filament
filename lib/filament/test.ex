@@ -327,6 +327,17 @@ defmodule Filament.Test do
   def unmount(%__MODULE__{fiber_tree: tree}), do: Filament.Reconciler.unmount(tree)
 
   @doc """
+  The head the view's components declare with `Filament.Hooks.use_head/1`:
+  its `:title`, `:canonical` and `:meta`, the deepest declaration of each
+  winning, as the page's would.
+
+      assert head(view).title == "Federal 9mm 115gr · brasscheck.bot"
+      assert head(view).meta["description"] =~ "per round"
+  """
+  @spec head(t()) :: %{title: String.t() | nil, canonical: String.t() | nil, meta: %{String.t() => String.t()}}
+  def head(%__MODULE__{fiber_tree: tree}), do: Filament.Head.collect(tree)
+
+  @doc """
   The navigations the view's components asked for with
   `Filament.Hooks.use_navigate/0` since the last call, oldest first, each
   as its options. A view has no page to navigate, so the test checks them:

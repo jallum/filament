@@ -29,6 +29,7 @@ defmodule Filament.Renderer do
              capture_handlers: ctx.new_capture_handlers,
              children: Enum.reverse(ctx.children),
              rendered: rendered,
+             head: ctx.head,
              dirty: nil
          }, ctx}
 
@@ -38,8 +39,9 @@ defmodule Filament.Renderer do
       # Only descendants are dirty: walk the stored output again so each
       # child component renders or is reused.
       true ->
+        context = %{context | head: Filament.Head.own(fiber.hook_slots)}
         {rendered, ctx} = in_context(context, fn -> rewalk(fiber.rendered) end)
-        {%{fiber | children: Enum.reverse(ctx.children), rendered: rendered, dirty: nil}, ctx}
+        {%{fiber | children: Enum.reverse(ctx.children), rendered: rendered, head: ctx.head, dirty: nil}, ctx}
     end
   end
 
@@ -111,7 +113,8 @@ defmodule Filament.Renderer do
       | new_fibers: Map.put(ctx.new_fibers, child_id, child),
         pending_effects: ctx.pending_effects,
         children: [child_id | parent_ctx.children],
-        child_component_indices: indices
+        child_component_indices: indices,
+        head: Filament.Head.merge(parent_ctx.head, child.head)
     })
 
     child.rendered
